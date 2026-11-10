@@ -193,19 +193,11 @@ class LinuxRuntime extends ChangeNotifier {
       );
     }
 
-    // Fast path: Android ships toybox tar, which is far quicker than a
-    // pure-Dart extractor for a ~30 MB compressed rootfs.
-    final usedSystemTar = await _extractWithSystemTar(tarFile.path, target.path);
-    if (!usedSystemTar) {
-      // toybox tar may have written part of the tree before failing. Start
-      // clean so the Dart fallback cannot collide with partial files or links.
-      if (target.existsSync()) {
-        await target.delete(recursive: true);
-      }
-      await target.create(recursive: true);
-      _appendLog('system tar unavailable, falling back to Dart extractor');
-      await _extractWithDart(tarFile.path, target.path);
-    }
+    // Android toybox tar rejects some Ubuntu absolute symlink targets (for
+    // example /etc/rmt -> /usr/sbin/rmt). Use the Dart extractor so those
+    // links can be rewritten as safe relative links inside the rootfs.
+    // Never allow an archive path to escape the private app directory.
+    await _extractWithDart(tarFile.path, target.path);
 
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');

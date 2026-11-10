@@ -58,7 +58,14 @@ EOF
 rm -f /etc/apt/sources.list.d/ubuntu.sources
 
 log "apt-get update"
-apt-get update -y || warn "apt update failed (offline?)"
+apt_updated=0
+for attempt in 1 2 3; do
+  log "apt-get update attempt $attempt/3"
+  if apt-get update -y; then apt_updated=1; break; fi
+  warn "apt update attempt $attempt failed; retrying after network delay"
+  sleep $((attempt * 4))
+done
+[ "$apt_updated" -eq 1 ] || warn "apt update failed after retries (offline?)"
 
 APT_OPTS=(-y --no-install-recommends -o Dpkg::Options::="--force-confold")
 
@@ -156,11 +163,19 @@ chmod 755 /usr/local/bin/microos-mem
 # -----------------------------------------------------------------------------
 stage 91 "Installing OpenCode"
 if ! command -v opencode >/dev/null 2>&1; then
-  if curl -fsSL --max-time 120 https://opencode.ai/install -o /tmp/opencode-install.sh; then
-    bash /tmp/opencode-install.sh || warn "OpenCode installer failed"
-  else
-    warn "could not reach opencode.ai"
-  fi
+  installed=0
+  for attempt in 1 2 3; do
+    log "OpenCode download attempt $attempt/3"
+    if curl -fL --retry 2 --retry-delay 3 --connect-timeout 20 --max-time 180 \\
+        https://opencode.ai/install -o /tmp/opencode-install.sh; then
+      if bash /tmp/opencode-install.sh; then installed=1; break; fi
+      warn "OpenCode installer failed on attempt $attempt"
+    else
+      warn "could not reach opencode.ai on attempt $attempt"
+    fi
+    sleep $((attempt * 5))
+  done
+  [ "$installed" -eq 1 ] || warn "OpenCode unavailable; install later with the official installer"
 fi
 
 # -----------------------------------------------------------------------------

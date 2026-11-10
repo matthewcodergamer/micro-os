@@ -22,7 +22,7 @@ dependencies:
   device_info_plus: ^10.1.2
   permission_handler: ^11.3.1
   webview_flutter: ^4.9.0
-  http: ^1.2.2
+  http: ^1.2.2\n  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

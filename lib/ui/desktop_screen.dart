@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'dart:io';\n\nimport 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../models/window_state.dart';
@@ -46,7 +46,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
             builder: (context, _) {
               return Stack(
                 children: [
-                  const Positioned.fill(child: _Wallpaper()),
+                  Positioned.fill(child: _Wallpaper(settings: scope.settings)),
                   for (final window in scope.desktop.ordered)
                     if (!window.minimized)
                       Positioned(

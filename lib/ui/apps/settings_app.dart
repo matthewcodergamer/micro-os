@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';\nimport 'package:image_picker/image_picker.dart';\nimport 'package:path_provider/path_provider.dart';\nimport 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app_scope.dart';
@@ -19,7 +19,7 @@ class SettingsApp extends StatefulWidget {
 class _SettingsAppState extends State<SettingsApp> {
   final TextEditingController _token = TextEditingController();
 
-  bool _busy = false;
+  bool _busy = false;\n  final ImagePicker _picker = ImagePicker();
   String? _message;
   bool _messageIsError = false;
   String? _login;
@@ -104,7 +104,7 @@ class _SettingsAppState extends State<SettingsApp> {
     _notify('GitHub credentials removed.');
   }
 
-  Future<void> _requestStorage() async {
+  Future<void> _chooseWallpaper() async {\n    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 90);\n    if (picked == null || !mounted) return;\n    final directory = await getApplicationSupportDirectory();\n    final target = File('${directory.path}/microos-wallpaper-${DateTime.now().millisecondsSinceEpoch}.jpg');\n    await File(picked.path).copy(target.path);\n    if (!mounted) return;\n    await AppScope.of(context).settings.setCustomWallpaperPath(target.path);\n  }\n\n  Future<void> _requestStorage() async {
     final status = await Permission.manageExternalStorage.request();
     if (!mounted) return;
     _notify(
