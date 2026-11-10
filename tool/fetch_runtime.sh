@@ -61,6 +61,21 @@ else
   echo "==> rootfs from $fetched"
 fi
 
+# Android's toybox tar cannot reliably create hard links while unpacking the
+# Ubuntu base archive. Repack it with --hard-dereference so each linked path is
+# stored as an ordinary file. Keep root ownership metadata for the guest.
+mkdir -p "$TMP/rootfs"
+tar -xzf "$ROOTFS_OUT" -C "$TMP/rootfs"
+tar --hard-dereference --numeric-owner --owner=0 --group=0 \
+    -czf "$TMP/rootfs-normalized.tar.gz" -C "$TMP/rootfs" .
+mv "$TMP/rootfs-normalized.tar.gz" "$ROOTFS_OUT"
+
+# Fail CI if a hard-link entry survived normalization.
+if tar -tvzf "$ROOTFS_OUT" | awk 'substr($1, 1, 1) == "h" { found=1 } END { exit found ? 0 : 1 }'; then
+  echo "!! rootfs still contains hard-link entries after normalization"
+  exit 1
+fi
+
 # -----------------------------------------------------------------------------
 # 2. proot (Termux arm64 packages)
 # -----------------------------------------------------------------------------

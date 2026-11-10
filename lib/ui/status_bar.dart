@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 import '../core/theme.dart';
 import '../services/system_stats.dart';
@@ -31,7 +32,7 @@ class StatusBar extends StatelessWidget {
               final focused = desktop.focused;
               return Row(
                 children: [
-                  const Icon(Icons.laptop_mac, size: 15, color: MicroColors.text),
+                  const Icon(CupertinoIcons.apple_logo, size: 15, color: MicroColors.text),
                   const SizedBox(width: 8),
                   Text(
                     focused?.title ?? 'MicroOS',

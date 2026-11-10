@@ -65,6 +65,51 @@ if "EnableImpeller" not in xml:
 with open(manifest, "w") as f:
     f.write(xml)
 
+# ---- Adaptive launcher icon -------------------------------------------------
+# android/ is generated during CI, so create the icon resources after flutter create.
+res = os.path.join(root, "android/app/src/main/res")
+os.makedirs(os.path.join(res, "mipmap-anydpi-v26"), exist_ok=True)
+os.makedirs(os.path.join(res, "drawable"), exist_ok=True)
+os.makedirs(os.path.join(res, "values"), exist_ok=True)
+
+with open(os.path.join(res, "mipmap-anydpi-v26/ic_launcher.xml"), "w") as f:
+    f.write("""<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/microos_icon_background"/>
+    <foreground android:drawable="@drawable/microos_icon_foreground"/>
+</adaptive-icon>
+""")
+
+with open(os.path.join(res, "drawable/microos_icon_foreground.xml"), "w") as f:
+    f.write("""<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4" android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M24,29 Q24,24 29,24 L79,24 Q84,24 84,29 L84,75 Q84,80 79,80 L29,80 Q24,80 24,75 Z"/>
+    <path android:fillColor="#FF66B7FF"
+        android:pathData="M37,43 L47,52 L37,61 L41,65 L55,52 L41,39 Z"/>
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M59,62 L75,62 L75,67 L59,67 Z"/>
+    <path android:fillColor="#FF66B7FF"
+        android:pathData="M32,88 L76,88 L76,92 L32,92 Z"/>
+</vector>
+""")
+
+colors = os.path.join(res, "values/colors.xml")
+if os.path.exists(colors):
+    with open(colors) as f:
+        color_xml = f.read()
+else:
+    color_xml = '<resources>\n</resources>\n'
+if "microos_icon_background" not in color_xml:
+    color_xml = color_xml.replace(
+        "</resources>",
+        '    <color name="microos_icon_background">#101522</color>\n</resources>',
+    )
+with open(colors, "w") as f:
+    f.write(color_xml)
+
 # ---- Gradle: minSdk 26, targetSdk 28 ---------------------------------------
 # targetSdk 28 is deliberate and is what Termux does: Android 10+ forbids
 # execve() of files inside the app data dir for targetSdk >= 29, and the proot

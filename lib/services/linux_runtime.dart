@@ -85,6 +85,9 @@ class LinuxRuntime extends ChangeNotifier {
     }
 
     try {
+      // Application Support is app-private internal storage on Android.
+      // Do not unpack the Linux guest into shared external storage, which
+      // cannot represent the Unix links and permissions used by Ubuntu.
       final support = await getApplicationSupportDirectory();
       _base = Directory(p.join(support.path, 'linux'));
       await _base!.create(recursive: true);
@@ -194,6 +197,12 @@ class LinuxRuntime extends ChangeNotifier {
     // pure-Dart extractor for a ~30 MB compressed rootfs.
     final usedSystemTar = await _extractWithSystemTar(tarFile.path, target.path);
     if (!usedSystemTar) {
+      // toybox tar may have written part of the tree before failing. Start
+      // clean so the Dart fallback cannot collide with partial files or links.
+      if (target.existsSync()) {
+        await target.delete(recursive: true);
+      }
+      await target.create(recursive: true);
       _appendLog('system tar unavailable, falling back to Dart extractor');
       await _extractWithDart(tarFile.path, target.path);
     }

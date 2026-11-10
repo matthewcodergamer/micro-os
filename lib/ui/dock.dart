@@ -78,7 +78,7 @@ class _DockItem {
   final Color color;
 }
 
-class _DockButton extends StatelessWidget {
+class _DockButton extends StatefulWidget {
   const _DockButton({
     required this.item,
     required this.compact,
@@ -92,64 +92,86 @@ class _DockButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_DockButton> createState() => _DockButtonState();
+}
+
+class _DockButtonState extends State<_DockButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final size = compact ? 44.0 : 52.0;
+    final size = widget.compact ? 44.0 : 52.0;
+    final enlarged = _hovered || _pressed;
 
     return Semantics(
       button: true,
-      label: item.app.title,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 5),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color.lerp(item.color, Colors.white, 0.18)!,
-                      item.color,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0x22FFFFFF)),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x44000000),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
+      label: widget.item.app.title,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: InkWell(
+          onTap: widget.onTap,
+          onHighlightChanged: (value) => setState(() => _pressed = value),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: widget.compact ? 3 : 5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedScale(
+                  scale: enlarged ? 1.12 : 1,
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 140),
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color.lerp(widget.item.color, Colors.white, 0.18)!,
+                          widget.item.color,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0x22FFFFFF)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x44000000),
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: Icon(item.icon, color: Colors.white, size: size * 0.5),
-              ),
-              const SizedBox(height: 3),
-              Container(
-                width: 4,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: running ? MicroColors.accent : Colors.transparent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              if (!compact)
-                Text(
-                  item.app.title,
-                  style: const TextStyle(
-                    color: MicroColors.subtle,
-                    fontSize: 9,
-                    height: 1.1,
+                    child: Icon(widget.item.icon,
+                        color: Colors.white, size: size * 0.5),
                   ),
                 ),
-            ],
+                const SizedBox(height: 3),
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: widget.running
+                        ? MicroColors.accent
+                        : Colors.transparent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (!widget.compact)
+                  Text(
+                    widget.item.app.title,
+                    style: const TextStyle(
+                      color: MicroColors.subtle,
+                      fontSize: 9,
+                      height: 1.1,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -26,10 +27,14 @@ class InstallScreen extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
-            child: Container(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: MicroColors.panelSolid,
+                color: const Color(0xE615171F),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: MicroColors.border),
                 boxShadow: const [
@@ -165,6 +170,8 @@ class InstallScreen extends StatelessWidget {
                     ],
                   ),
                 ],
+              ),
+                ),
               ),
             ),
           ),
