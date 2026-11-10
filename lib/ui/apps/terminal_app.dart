@@ -89,12 +89,6 @@ class _TerminalAppState extends State<TerminalApp> {
               title: const Text('Paste from clipboard'),
               onTap: () => Navigator.pop(context, 'paste'),
             ),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('Copy text using terminal selection'),
-              subtitle: const Text('Select text in the terminal; supported OSC 52 copy requests sync automatically.'),
-              onTap: () => Navigator.pop(context, 'copy'),
-            ),
           ],
         ),
       ),
@@ -170,19 +164,6 @@ class _TerminalAppState extends State<TerminalApp> {
                   visualDensity: VisualDensity.compact,
                   onPressed: _pasteFromClipboard,
                   icon: const Icon(Icons.content_paste, size: 17),
-                  color: MicroColors.text,
-                ),
-                IconButton(
-                  tooltip: 'Copy terminal selection (when supported by the running app)',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => Clipboard.getData(Clipboard.kTextPlain).then((data) {
-                    if (data?.text != null && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Clipboard text is ready to paste into the terminal.')),
-                      );
-                    }
-                  }),
-                  icon: const Icon(Icons.copy, size: 16),
                   color: MicroColors.text,
                 ),
               ],
