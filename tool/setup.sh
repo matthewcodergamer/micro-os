@@ -112,12 +112,9 @@ apt-get install "${APT_OPTS[@]}" \
 #    is ever available it is preferred automatically by microos-browse.
 # -----------------------------------------------------------------------------
 stage 84 "Installing desktop browser"
-if apt-get install "${APT_OPTS[@]}" chromium 2>/dev/null; then
-  log "chromium installed"
-else
-  warn "no chromium .deb in this release; installing Falkon (QtWebEngine)"
-  apt-get install "${APT_OPTS[@]}" falkon || warn "browser install failed"
-fi
+# Do not install Ubuntu's chromium transitional package: on arm64 it
+# points to Snap, and snapd cannot operate inside this proot guest.
+apt-get install "${APT_OPTS[@]}" falkon || warn "Falkon/QtWebEngine install failed"
 
 # -----------------------------------------------------------------------------
 # 6. ZRAM
@@ -289,12 +286,12 @@ BASE_FLAGS=(
 export QTWEBENGINE_CHROMIUM_FLAGS="${BASE_FLAGS[*]}"
 
 URL="${1:-}"
-if command -v chromium >/dev/null 2>&1; then
+if command -v falkon >/dev/null 2>&1; then
+  exec falkon ${URL:+"$URL"}
+elif command -v chromium >/dev/null 2>&1; then
   exec chromium "${BASE_FLAGS[@]}" ${URL:+"$URL"}
 elif command -v chromium-browser >/dev/null 2>&1; then
   exec chromium-browser "${BASE_FLAGS[@]}" ${URL:+"$URL"}
-elif command -v falkon >/dev/null 2>&1; then
-  exec falkon ${URL:+"$URL"}
 fi
 echo "No desktop browser is installed. Run: apt-get install falkon" >&2
 exit 1
