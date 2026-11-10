@@ -22,8 +22,12 @@ trap 'rm -rf "$TMP"' EXIT
 ROOTFS_OUT="$ROOT/assets/rootfs/rootfs.tar.gz"
 
 # Ubuntu base tarballs may or may not prefix members with "./", so match both.
+# The listing is captured first: piping tar into `grep -q` trips pipefail with
+# SIGPIPE as soon as grep finds the match.
 valid_rootfs() {
-  tar -tzf "$1" 2>/dev/null | grep -qE '^(\./)?etc/os-release$'
+  local listing
+  listing="$(tar -tzf "$1" 2>/dev/null)" || return 1
+  grep -qxE '(\./)?etc/os-release' <<< "$listing"
 }
 
 # -----------------------------------------------------------------------------
