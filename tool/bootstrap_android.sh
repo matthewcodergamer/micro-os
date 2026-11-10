@@ -105,9 +105,9 @@ if "ndkVersion" not in g:
 # the Play-Store target-SDK lint rule so sideload release APKs can be built;
 # this does not make the APK Play-Store compliant.
 if target.endswith(".kts"):
-    g += '\\nandroid { lint { disable += "ExpiredTargetSdkVersion" } }\\n'
+    g += '\nandroid { lint { disable += "ExpiredTargetSdkVersion" } }\n'
 else:
-    g += "\\nandroid { lint { disable 'ExpiredTargetSdkVersion' } }\\n"
+    g += "\nandroid { lint { disable 'ExpiredTargetSdkVersion' } }\n"
 
 with open(target, "w") as f:
     f.write(g)
