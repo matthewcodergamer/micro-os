@@ -1,0 +1,64 @@
+name: Build iOS IPA (unsigned)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.9"
+          channel: stable
+          cache: true
+
+      - name: Scaffold the iOS project
+        run: |
+          chmod +x tool/bootstrap_ios.sh
+          ./tool/bootstrap_ios.sh
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Build (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          rm -rf Payload MicroOS.ipa
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          # Zip the raw .app bundle: AltStore/SideStore re-sign it on device, and
+          # Xcode's Devices window accepts Runner.app directly for a free-account
+          # signing run.
+          zip -qry MicroOS.ipa Payload
+          cp -R build/ios/iphoneos/Runner.app ./Runner.app
+          ls -lh MicroOS.ipa
+
+      - name: Upload IPA and .app
+        uses: actions/upload-artifact@v4
+        with:
+          name: MicroOS-ios
+          path: |
+            MicroOS.ipa
+            Runner.app
+          if-no-files-found: error
+          retention-days: 30

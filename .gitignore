@@ -1,0 +1,38 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.vscode/
+
+# Generated platform projects (created in CI by tool/bootstrap_*.sh)
+android/
+ios/
+macos/
+linux/
+windows/
+web/
+
+# Binary payloads fetched at build time
+assets/rootfs/*.tar.gz
+assets/rootfs/*.tar.xz
+assets/proot/proot
+assets/proot/loader
+assets/proot/*.so
+!assets/proot/.gitkeep
+
+# Build output
+out/
+Payload/
+*.ipa
+*.apk
+*.aab
+Runner.app
+
+# macOS
+.DS_Store
