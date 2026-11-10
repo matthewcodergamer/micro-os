@@ -178,6 +178,17 @@ if ! command -v opencode >/dev/null 2>&1; then
   [ "$installed" -eq 1 ] || warn "OpenCode unavailable; install later with the official installer"
 fi
 
+# Verify the binary exists; a successful download attempt alone is not proof.
+if command -v opencode >/dev/null 2>&1; then
+  log "OpenCode verified: $(command -v opencode)"
+  opencode --version 2>&1 | head -n 1 || true
+elif [ -x /root/.opencode/bin/opencode ]; then
+  log "OpenCode verified: /root/.opencode/bin/opencode"
+  /root/.opencode/bin/opencode --version 2>&1 | head -n 1 || true
+else
+  warn "OpenCode verification failed: executable not found; Linux setup will continue without it"
+fi
+
 # -----------------------------------------------------------------------------
 # 8. Shell defaults, git, projects
 # -----------------------------------------------------------------------------

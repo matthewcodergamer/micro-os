@@ -193,10 +193,8 @@ class LinuxRuntime extends ChangeNotifier {
       );
     }
 
-    // Android toybox tar rejects some Ubuntu absolute symlink targets (for
-    // example /etc/rmt -> /usr/sbin/rmt). Use the Dart extractor so those
-    // links can be rewritten as safe relative links inside the rootfs.
-    // Never allow an archive path to escape the private app directory.
+    // Use the in-process extractor: Android toybox tar rejects Ubuntu
+    // absolute symlink targets. The Dart extractor re-roots them in rootfs.
     await _extractWithDart(tarFile.path, target.path);
 
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
@@ -235,9 +233,7 @@ class LinuxRuntime extends ChangeNotifier {
     final archive = TarDecoder().decodeBytes(decompressed);
 
     for (final entry in archive.files) {
-      final name = p.posix.normalize(
-        entry.name.replaceFirst(RegExp(r'^\\./'), ''),
-      );
+      final name = p.posix.normalize(entry.name.replaceFirst(RegExp(r'^\\./'), ''));
       if (name.isEmpty || name == '.' || name.startsWith('/') ||
           name == '..' || name.startsWith('../')) continue;
       final outPath = p.join(destination, ...name.split('/'));
@@ -246,14 +242,13 @@ class LinuxRuntime extends ChangeNotifier {
         final link = Link(outPath);
         await link.parent.create(recursive: true);
         if (link.existsSync()) await link.delete();
-        final rawTarget = entry.nameOfLinkedFile;
-        // Re-root absolute Linux links inside the extracted Ubuntu tree.
-        final safeTarget = rawTarget.startsWith('/')
+        final target = entry.nameOfLinkedFile;
+        final safeTarget = target.startsWith('/')
             ? p.posix.relative(
-                p.posix.normalize(rawTarget),
+                p.posix.normalize(target),
                 from: p.posix.dirname('/$name'),
               )
-            : rawTarget;
+            : target;
         await link.create(safeTarget);
         continue;
       }
@@ -270,6 +265,7 @@ class LinuxRuntime extends ChangeNotifier {
       if (mode != 0) await _chmod(outPath, mode.toRadixString(8));
     }
   }
+
 
   Uint8List _bytesOf(ArchiveFile entry) {
     final content = entry.content;

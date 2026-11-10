@@ -1,10 +1,7 @@
 import 'dart:math' as math;
-import 'dart:io';
 
-import 'package:flutter/material.dart';\nimport 'package:image_picker/image_picker.dart';\nimport 'package:path_provider/path_provider.dart';\nimport 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../app_scope.dart';
 import '../../core/theme.dart';
@@ -23,7 +20,6 @@ class _SettingsAppState extends State<SettingsApp> {
   final TextEditingController _token = TextEditingController();
 
   bool _busy = false;
-  final ImagePicker _picker = ImagePicker();\n  final ImagePicker _picker = ImagePicker();
   String? _message;
   bool _messageIsError = false;
   String? _login;
@@ -106,16 +102,6 @@ class _SettingsAppState extends State<SettingsApp> {
     _token.clear();
     setState(() => _login = null);
     _notify('GitHub credentials removed.');
-  }
-
-  Future<void> _chooseWallpaper() async {\n    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 90);\n    if (picked == null || !mounted) return;\n    final directory = await getApplicationSupportDirectory();\n    final target = File('${directory.path}/microos-wallpaper-${DateTime.now().millisecondsSinceEpoch}.jpg');\n    await File(picked.path).copy(target.path);\n    if (!mounted) return;\n    await AppScope.of(context).settings.setCustomWallpaperPath(target.path);\n  }\n\n  Future<void> _chooseWallpaper() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
-    if (picked == null || !mounted) return;
-    final directory = await getApplicationSupportDirectory();
-    final target = File('${directory.path}/microos-wallpaper-${DateTime.now().millisecondsSinceEpoch}.jpg');
-    await File(picked.path).copy(target.path);
-    if (!mounted) return;
-    await AppScope.of(context).settings.setCustomWallpaperPath(target.path);
   }
 
   Future<void> _requestStorage() async {
@@ -290,28 +276,6 @@ class _SettingsAppState extends State<SettingsApp> {
                   ),
                   const SizedBox(height: 10),
                   _LogView(runtime: widget.runtime),
-                ],
-              ),
-              _Section(
-                title: 'Wallpaper',
-                subtitle: 'Choose a desktop background',
-                children: [
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    for (final option in const [
-                      ('big_sur', 'Big Sur'), ('monterey', 'Monterey'), ('ventura', 'Ventura')
-                    ])
-                      ChoiceChip(
-                        label: Text(option.$2),
-                        selected: scope.settings.wallpaper == option.$1,
-                        onSelected: (_) => scope.settings.setWallpaper(option.$1),
-                      ),
-                  ]),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _chooseWallpaper,
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Choose photo from phone'),
-                  ),
                 ],
               ),
               _Section(
