@@ -49,6 +49,11 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
+      - name: Align plugin compileSdk (AAR metadata)
+        run: |
+          chmod +x tool/patch_plugins.sh
+          ./tool/patch_plugins.sh 36
+
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 

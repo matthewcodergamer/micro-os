@@ -106,48 +106,13 @@ with open(target, "w") as f:
 print("patched:", manifest)
 print("patched:", target)
 
-# ---- Root Gradle: align every plugin module on compileSdk 36 ---------------
-# Some plugins pin an older compileSdk. AGP's AAR metadata check then fails
-# because a transitive dependency (flutter_plugin_android_lifecycle) requires
-# API 36. Reflection keeps this working across AGP versions without adding the
-# Android Gradle plugin to the root buildscript classpath.
-root_kts = os.path.join(root, "android/build.gradle.kts")
-root_groovy = os.path.join(root, "android/build.gradle")
-
-if os.path.exists(root_kts):
-    with open(root_kts, "a") as f:
-        f.write('''
-
-// MicroOS: keep plugin modules on the same compileSdk as the app.
-subprojects {
-    afterEvaluate {
-        val androidExtension = extensions.findByName("android") ?: return@afterEvaluate
-        for (method in listOf("compileSdkVersion", "setCompileSdkVersion")) {
-            runCatching {
-                androidExtension.javaClass
-                    .getMethod(method, Int::class.javaPrimitiveType!!)
-                    .invoke(androidExtension, 36)
-            }
-        }
-    }
-}
-''')
-    print("patched:", root_kts)
-elif os.path.exists(root_groovy):
-    with open(root_groovy, "a") as f:
-        f.write('''
-
-// MicroOS: keep plugin modules on the same compileSdk as the app.
-subprojects { subproject ->
-    subproject.afterEvaluate {
-        def androidExtension = subproject.extensions.findByName('android')
-        if (androidExtension != null) {
-            try { androidExtension.compileSdkVersion 36 } catch (Exception ignored) { }
-        }
-    }
-}
-''')
-    print("patched:", root_groovy)
+# ---- compileSdk alignment lives in tool/patch_plugins.sh ----------------
+# Plugin modules that pin an old compileSdk break AGP's AAR metadata check, but
+# the fix has to run *before* Gradle configures anything, so the workflow calls
+# tool/patch_plugins.sh right after `flutter pub get`. Patching Gradle from here
+# is not possible: the root build script is evaluated after the plugin projects
+# ("Cannot run Project.afterEvaluate(Action) when the project is already
+# evaluated").
 PY
 
 grep -q "targetSdk = 28\|targetSdkVersion 28" android/app/build.gradle.kts android/app/build.gradle 2>/dev/null \
