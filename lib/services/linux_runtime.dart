@@ -233,10 +233,10 @@ class LinuxRuntime extends ChangeNotifier {
     final archive = TarDecoder().decodeBytes(decompressed);
 
     for (final entry in archive.files) {
-      final name = p.posix.normalize(entry.name.replaceFirst(RegExp(r'^\\./'), ''));
+      final name = p.posix.normalize(entry.name.replaceFirst(RegExp(r'^\./'), ''));
       if (name.isEmpty || name == '.' || name.startsWith('/') ||
           name == '..' || name.startsWith('../')) continue;
-      final outPath = p.join(destination, ...name.split('/'));
+      final outPath = p.join(destination, name);
 
       if (entry.isSymbolicLink) {
         final link = Link(outPath);
