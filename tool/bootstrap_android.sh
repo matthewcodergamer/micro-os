@@ -87,18 +87,27 @@ g = re.sub(r"compileSdkVersion\s+flutter\.compileSdkVersion", "compileSdkVersion
 # Pin the NDK to the version the workflow installs, whichever form the
 # template uses.
 g = re.sub(r'ndkVersion\s*=\s*flutter\.ndkVersion',
-           'ndkVersion = "27.0.12077973"', g)
+           'ndkVersion = "28.2.13676358"', g)
 g = re.sub(r'ndkVersion\s+flutter\.ndkVersion',
-           'ndkVersion "27.0.12077973"', g)
+           'ndkVersion "28.2.13676358"', g)
 
 if "ndkVersion" not in g:
     g = re.sub(r"(compileSdk\s*=\s*flutter\.compileSdkVersion)",
-               r"\1\n    ndkVersion = \"27.0.12077973\"", g, count=1)
+               r"\1\n    ndkVersion = \"28.2.13676358\"", g, count=1)
     g = re.sub(r"(compileSdkVersion\s+flutter\.compileSdkVersion)",
-               r"\1\n    ndkVersion \"27.0.12077973\"", g, count=1)
+               r"\1\n    ndkVersion \"28.2.13676358\"", g, count=1)
 
 # Release builds already use the debug signing key in the Flutter template,
 # which is exactly what a sideload-only APK needs.
+
+
+# targetSdk 28 is required by the current proot execution model. Suppress only
+# the Play-Store target-SDK lint rule so sideload release APKs can be built;
+# this does not make the APK Play-Store compliant.
+if target.endswith(".kts"):
+    g += '\\nandroid { lint { disable += "ExpiredTargetSdkVersion" } }\\n'
+else:
+    g += "\\nandroid { lint { disable 'ExpiredTargetSdkVersion' } }\\n"
 
 with open(target, "w") as f:
     f.write(g)
