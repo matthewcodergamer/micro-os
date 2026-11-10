@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'package:xterm/xterm.dart';
 
-import '../core/theme.dart';
-import '../services/linux_runtime.dart';
+import '../../core/theme.dart';
+import '../../services/linux_runtime.dart';
 
 /// A real PTY inside the Linux guest, rendered with xterm.dart.
 ///

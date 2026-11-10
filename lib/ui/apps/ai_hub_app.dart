@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme.dart';
-import '../services/linux_runtime.dart';
+import '../../core/theme.dart';
+import '../../services/linux_runtime.dart';
 import 'terminal_app.dart';
 
 /// OpenCode, running inside the guest with the developer toolchain and the

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
-import '../core/theme.dart';
 import '../models/window_state.dart';
 import 'apps/ai_hub_app.dart';
 import 'apps/desktop_session_app.dart';
