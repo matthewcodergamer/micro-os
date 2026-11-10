@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'package:xterm/xterm.dart';
 
@@ -40,6 +41,13 @@ class _TerminalAppState extends State<TerminalApp> {
     super.initState();
     _terminal.onOutput = _send;
     _terminal.onResize = _resize;
+    _terminal.onClipboardStore = (name, value) {
+      Clipboard.setData(ClipboardData(text: value));
+    };
+    _terminal.onClipboardQuery = (selector) async {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      return data?.text;
+    };
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
@@ -61,6 +69,37 @@ class _TerminalAppState extends State<TerminalApp> {
     } catch (e) {
       setState(() => _error = '$e');
     }
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text != null && text.isNotEmpty) _terminal.paste(text);
+  }
+
+  Future<void> _showTerminalMenu() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: MicroColors.panelSolid,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.content_paste),
+              title: const Text('Paste from clipboard'),
+              onTap: () => Navigator.pop(context, 'paste'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Copy text using terminal selection'),
+              subtitle: const Text('Select text in the terminal; supported OSC 52 copy requests sync automatically.'),
+              onTap: () => Navigator.pop(context, 'copy'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == 'paste') await _pasteFromClipboard();
   }
 
   void _send(String data) {
@@ -110,12 +149,58 @@ class _TerminalAppState extends State<TerminalApp> {
 
     return Container(
       color: const Color(0xFF0B0E14),
-      child: TerminalView(
-        _terminal,
-        autofocus: true,
-        padding: const EdgeInsets.all(8),
-        backgroundOpacity: 1,
-        theme: _theme,
+      child: Column(
+        children: [
+          Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: const BoxDecoration(
+              color: Color(0xFF141822),
+              border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF))),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.terminal, size: 15, color: MicroColors.subtle),
+                const SizedBox(width: 7),
+                const Expanded(
+                  child: Text('Terminal', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+                ),
+                IconButton(
+                  tooltip: 'Paste from Android clipboard',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _pasteFromClipboard,
+                  icon: const Icon(Icons.content_paste, size: 17),
+                  color: MicroColors.text,
+                ),
+                IconButton(
+                  tooltip: 'Copy terminal selection (when supported by the running app)',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => Clipboard.getData(Clipboard.kTextPlain).then((data) {
+                    if (data?.text != null && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Clipboard text is ready to paste into the terminal.')),
+                      );
+                    }
+                  }),
+                  icon: const Icon(Icons.copy, size: 16),
+                  color: MicroColors.text,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onLongPress: _showTerminalMenu,
+              child: TerminalView(
+                _terminal,
+                autofocus: true,
+                padding: const EdgeInsets.all(8),
+                backgroundOpacity: 1,
+                theme: _theme,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

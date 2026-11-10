@@ -149,6 +149,25 @@ class InstallScreen extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 18),
+                  if (runtime.canContinueManually) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          if (runtime.continueToDesktop()) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Continuing to the desktop. Some optional packages may be missing.'),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.arrow_forward),
+                        label: const Text('Continue to desktop anyway'),
+                      ),
+                    ),
+                  ],
                   Row(
                     children: [
                       Expanded(

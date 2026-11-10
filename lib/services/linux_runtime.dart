@@ -42,10 +42,27 @@ class LinuxRuntime extends ChangeNotifier {
 
   Directory? _base;
   bool _displayRequested = false;
+  bool _provisioningFinished = false;
   bool _disposed = false;
 
   bool get isReady => status == RuntimeStatus.ready;
   bool get isBusy => status == RuntimeStatus.installing;
+  bool get canContinueManually =>
+      _provisioningFinished &&
+      File(p.join(rootfsPath, 'etc/os-release')).existsSync() &&
+      File(prootPath).existsSync();
+
+  /// Allows access to the desktop after provisioning has exited, even if a
+  /// non-critical package failed. The user explicitly chooses this fallback.
+  bool continueToDesktop() {
+    if (!canContinueManually) return false;
+    status = RuntimeStatus.ready;
+    stage = 'Linux ready (continued manually)';
+    progress = 1;
+    error = null;
+    _notify();
+    return true;
+  }
 
   Directory get base {
     final dir = _base;
@@ -109,6 +126,7 @@ class LinuxRuntime extends ChangeNotifier {
     if (isBusy || !Platform.isAndroid) return;
 
     status = RuntimeStatus.installing;
+    _provisioningFinished = false;
     error = null;
     logLines.clear();
     progress = 0.01;

@@ -159,8 +159,13 @@ EOF
 chmod 755 /usr/local/bin/microos-mem
 
 # -----------------------------------------------------------------------------
-# 7. OpenCode agent
+# 7. TLS certificates + OpenCode agent
 # -----------------------------------------------------------------------------
+stage 90 "Refreshing TLS certificates"
+apt-get install "${APT_OPTS[@]}" ca-certificates || warn "ca-certificates package failed"
+update-ca-certificates --fresh || warn "certificate refresh failed; retrying once"
+update-ca-certificates || true
+
 stage 91 "Installing OpenCode"
 if ! command -v opencode >/dev/null 2>&1; then
   installed=0

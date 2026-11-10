@@ -77,7 +77,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     if (widget.launchBrowser) {
       setState(() => _status = 'Launching the browser…');
       await widget.runtime.launchBrowser(
-        url: widget.url,
+        url: widget.url ?? 'https://www.google.com',
         singleProcess: widget.singleProcess,
       );
       // Give the browser a moment to map its window before the client connects.
