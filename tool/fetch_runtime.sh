@@ -21,10 +21,15 @@ trap 'rm -rf "$TMP"' EXIT
 
 ROOTFS_OUT="$ROOT/assets/rootfs/rootfs.tar.gz"
 
+# Ubuntu base tarballs may or may not prefix members with "./", so match both.
+valid_rootfs() {
+  tar -tzf "$1" 2>/dev/null | grep -qE '^(\./)?etc/os-release$'
+}
+
 # -----------------------------------------------------------------------------
 # 1. Ubuntu base rootfs
 # -----------------------------------------------------------------------------
-if [ -s "$ROOTFS_OUT" ] && tar -tzf "$ROOTFS_OUT" ./etc/os-release >/dev/null 2>&1; then
+if [ -s "$ROOTFS_OUT" ] && valid_rootfs "$ROOTFS_OUT"; then
   echo "==> rootfs already present ($(du -h "$ROOTFS_OUT" | cut -f1))"
 else
   ROOTFS_URLS=(
@@ -39,7 +44,7 @@ else
   for url in "${ROOTFS_URLS[@]}"; do
     echo "==> trying $url"
     if curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 -o "$TMP/rootfs.tar.gz" "$url"; then
-      if tar -tzf "$TMP/rootfs.tar.gz" ./etc/os-release >/dev/null 2>&1; then
+      if valid_rootfs "$TMP/rootfs.tar.gz"; then
         mv "$TMP/rootfs.tar.gz" "$ROOTFS_OUT"
         fetched="$url"
         break
