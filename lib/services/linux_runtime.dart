@@ -235,15 +235,26 @@ class LinuxRuntime extends ChangeNotifier {
     final archive = TarDecoder().decodeBytes(decompressed);
 
     for (final entry in archive.files) {
-      final name = entry.name.replaceFirst(RegExp(r'^\./'), '');
-      if (name.isEmpty || name.startsWith('/')) continue;
-      final outPath = p.join(destination, name);
+      final name = p.posix.normalize(
+        entry.name.replaceFirst(RegExp(r'^\\./'), ''),
+      );
+      if (name.isEmpty || name == '.' || name.startsWith('/') ||
+          name == '..' || name.startsWith('../')) continue;
+      final outPath = p.join(destination, ...name.split('/'));
 
       if (entry.isSymbolicLink) {
         final link = Link(outPath);
         await link.parent.create(recursive: true);
         if (link.existsSync()) await link.delete();
-        await link.create(entry.nameOfLinkedFile);
+        final rawTarget = entry.nameOfLinkedFile;
+        // Re-root absolute Linux links inside the extracted Ubuntu tree.
+        final safeTarget = rawTarget.startsWith('/')
+            ? p.posix.relative(
+                p.posix.normalize(rawTarget),
+                from: p.posix.dirname('/$name'),
+              )
+            : rawTarget;
+        await link.create(safeTarget);
         continue;
       }
 
@@ -255,11 +266,8 @@ class LinuxRuntime extends ChangeNotifier {
       final file = File(outPath);
       await file.parent.create(recursive: true);
       await file.writeAsBytes(_bytesOf(entry), flush: false);
-
       final mode = entry.unixPermissions;
-      if (mode != 0) {
-        await _chmod(outPath, mode.toRadixString(8));
-      }
+      if (mode != 0) await _chmod(outPath, mode.toRadixString(8));
     }
   }
 

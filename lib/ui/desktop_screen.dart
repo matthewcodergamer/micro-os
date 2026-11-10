@@ -1,4 +1,6 @@
-import 'dart:io';\n\nimport 'package:flutter/material.dart';
+import 'dart:io';\n\nimport 'dart:io';
+
+import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../models/window_state.dart';
@@ -119,16 +121,27 @@ class _DesktopScreenState extends State<DesktopScreen> {
 /// Cheap gradient wallpaper with two soft light sources. Drawn with plain
 /// containers so it costs nothing while windows are being dragged.
 class _Wallpaper extends StatelessWidget {
-  const _Wallpaper();
+  const _Wallpaper({required this.settings});
+
+  final dynamic settings;
 
   @override
   Widget build(BuildContext context) {
+    final path = settings.customWallpaperPath as String?;
+    if (settings.wallpaper == 'custom' && path != null && File(path).existsSync()) {
+      return Image.file(File(path), fit: BoxFit.cover);
+    }
+    final colors = switch (settings.wallpaper as String) {
+      'monterey' => const [Color(0xFF172554), Color(0xFF6D28D9), Color(0xFFBE185D)],
+      'ventura' => const [Color(0xFF0F766E), Color(0xFF2563EB), Color(0xFF312E81)],
+      _ => const [Color(0xFF10131B), Color(0xFF1A1430), Color(0xFF07131A)],
+    };
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF10131B), Color(0xFF1A1430), Color(0xFF07131A)],
+          colors: colors,
         ),
       ),
       child: Stack(
