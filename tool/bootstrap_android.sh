@@ -78,6 +78,13 @@ g = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 26", g)
 g = re.sub(r"targetSdk\s*=\s*flutter\.targetSdkVersion", "targetSdk = 28", g)
 g = re.sub(r"targetSdkVersion\s+flutter\.targetSdkVersion", "targetSdkVersion 28", g)
 
+# Pin the NDK to the version the workflow installs, whichever form the
+# template uses.
+g = re.sub(r'ndkVersion\s*=\s*flutter\.ndkVersion',
+           'ndkVersion = "27.0.12077973"', g)
+g = re.sub(r'ndkVersion\s+flutter\.ndkVersion',
+           'ndkVersion "27.0.12077973"', g)
+
 if "ndkVersion" not in g:
     g = re.sub(r"(compileSdk\s*=\s*flutter\.compileSdkVersion)",
                r"\1\n    ndkVersion = \"27.0.12077973\"", g, count=1)

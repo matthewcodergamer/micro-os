@@ -99,7 +99,7 @@ command -v npm >/dev/null && npm config set fund false --global 2>/dev/null
 # -----------------------------------------------------------------------------
 stage 76 "Installing X11 and VNC"
 apt-get install "${APT_OPTS[@]}" \
-  xvfb openbox xterm x11vnc novnc websockify xauth dbus-x11 \
+  xvfb openbox xterm x11-xserver-utils x11vnc novnc websockify xauth dbus-x11 \
   libgl1-mesa-dri mesa-utils \
   fonts-dejavu-core fonts-liberation \
   || warn "some X11 packages failed to install"
@@ -239,7 +239,7 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
   </menu>
 </openbox_menu>
 MENU
-openbox --config-file /root/.config/openbox/rc.xml >"$LOG/openbox.log" 2>&1 &
+openbox >"$LOG/openbox.log" 2>&1 &
 
 x11vnc -display :1 -forever -shared -rfbport 5900 -localhost -nopw \
        -repeat -wait 15 -defer 15 >"$LOG/x11vnc.log" 2>&1 &

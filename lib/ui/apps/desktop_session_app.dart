@@ -34,6 +34,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   String _status = 'Connecting to the X11 display…';
   bool _failed = false;
   bool _booting = false;
+  int _attempts = 0;
 
   @override
   void initState() {
@@ -59,7 +60,8 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       _status = 'Starting Xvfb and the window manager…';
     });
 
-    final up = await widget.runtime.ensureDisplay();
+    final up = await widget.runtime.ensureDisplay(restart: _attempts > 0);
+    _attempts++;
     if (!mounted) return;
 
     if (!up) {

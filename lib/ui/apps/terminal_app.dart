@@ -75,7 +75,7 @@ class _TerminalAppState extends State<TerminalApp> {
 
   void _resize(int width, int height, int pixelWidth, int pixelHeight) {
     try {
-      _pty?.resize(width, height);
+      _pty?.resize(height, width);
     } catch (_) {
       // Ignore resize after exit.
     }

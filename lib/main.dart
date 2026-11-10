@@ -62,7 +62,13 @@ class MicroOSApp extends StatefulWidget {
 }
 
 class _MicroOSAppState extends State<MicroOSApp> {
-  late final DesktopState _desktop = DesktopState(widget.runtime);
+  late final DesktopState _desktop;
+
+  @override
+  void initState() {
+    super.initState();
+    _desktop = DesktopState(widget.runtime);
+  }
 
   @override
   void dispose() {

@@ -76,10 +76,17 @@ class _SettingsAppState extends State<SettingsApp> {
       }
 
       await scope.auth.saveToken(token, identity.login);
-      await widget.runtime.applyGitCredentials(token, identity.login);
+      if (widget.runtime.isReady) {
+        await widget.runtime.applyGitCredentials(token, identity.login);
+      }
       if (!mounted) return;
       setState(() => _login = identity.login);
-      _notify('Connected as ${identity.login}. git push will not prompt.');
+      _notify(
+        widget.runtime.isReady
+            ? 'Connected as ${identity.login}. git push will not prompt.'
+            : 'Token saved for ${identity.login}. It is written into the guest '
+                'as soon as Linux finishes installing.',
+      );
     } catch (e) {
       _notify('Could not store the token: $e', isError: true);
     } finally {

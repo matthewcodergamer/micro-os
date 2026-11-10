@@ -5,7 +5,7 @@ window manager, a PTY terminal, a desktop browser, and a pre-installed developer
 toolchain (Python, Node, Rust, git, GitHub CLI, OpenCode).
 
 The UI and the Linux guest are deliberately separated: `lib/` is pure Flutter,
-`assets/scripts/setup.sh` is pure bash running inside the guest.
+`tool/setup.sh` is pure bash running inside the guest.
 
 ---
 
@@ -142,6 +142,6 @@ lib/
     dock.dart                   Dock
     install_screen.dart         first-run provisioning UI
     apps/                       terminal, desktop session, files, settings, AI hub
-assets/scripts/setup.sh         guest provisioning (apt, browser, X11, OpenCode)
+tool/setup.sh                   guest provisioning (apt, browser, X11, OpenCode)
 tool/                           CI helpers (runtime fetch, platform scaffolding)
 ```

@@ -59,7 +59,7 @@ class DesktopState extends ChangeNotifier {
       rect: _initialRect(app, screen),
       zIndex: ++_zCounter,
       args: args,
-    );
+    )..pinned = screen.width < 720;
 
     windows.add(window);
     notifyListeners();

@@ -20,7 +20,7 @@ enum RuntimeStatus { checking, missing, installing, ready, failed }
 /// remote host.
 class LinuxRuntime extends ChangeNotifier {
   static const String _rootfsAsset = 'assets/rootfs/rootfs.tar.gz';
-  static const String _setupAsset = 'assets/scripts/setup.sh';
+  static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -43,6 +43,7 @@ class LinuxRuntime extends ChangeNotifier {
 
   Directory? _base;
   bool _displayRequested = false;
+  bool _disposed = false;
 
   bool get isReady => status == RuntimeStatus.ready;
   bool get isBusy => status == RuntimeStatus.installing;
@@ -80,7 +81,7 @@ class LinuxRuntime extends ChangeNotifier {
       status = RuntimeStatus.failed;
       error = 'The bundled Linux guest requires Android. On iOS the same UI '
           'runs against a remote host instead.';
-      notifyListeners();
+      _notify();
       return;
     }
 
@@ -99,7 +100,7 @@ class LinuxRuntime extends ChangeNotifier {
       status = RuntimeStatus.failed;
       error = '$e';
     }
-    notifyListeners();
+    _notify();
   }
 
   Future<void> install() async {
@@ -110,19 +111,19 @@ class LinuxRuntime extends ChangeNotifier {
     logLines.clear();
     progress = 0.01;
     stage = 'Preparing storage';
-    notifyListeners();
+    _notify();
 
     try {
       await _extractProot();
 
       progress = 0.08;
       stage = 'Unpacking Ubuntu rootfs';
-      notifyListeners();
+      _notify();
       await _extractRootfs();
 
       progress = 0.55;
       stage = 'Installing developer toolchain';
-      notifyListeners();
+      _notify();
       await _installSetupScript();
       await _runProvisioning();
 
@@ -140,7 +141,7 @@ class LinuxRuntime extends ChangeNotifier {
       _appendLog('install failed: $e\n$stack');
     }
 
-    notifyListeners();
+    _notify();
   }
 
   Future<void> reinstall() async {
@@ -152,7 +153,7 @@ class LinuxRuntime extends ChangeNotifier {
       _appendLog('could not remove old rootfs: $e');
     }
     status = RuntimeStatus.missing;
-    notifyListeners();
+    _notify();
     await install();
   }
 
@@ -237,13 +238,12 @@ class LinuxRuntime extends ChangeNotifier {
       final name = entry.name.replaceFirst(RegExp(r'^\./'), '');
       if (name.isEmpty || name.startsWith('/')) continue;
       final outPath = p.join(destination, name);
-      final type = entry.mode & 0xF000;
 
-      if (type == 0xA000) {
+      if (entry.isSymbolicLink) {
         final link = Link(outPath);
         await link.parent.create(recursive: true);
         if (link.existsSync()) await link.delete();
-        await link.create(utf8.decode(_bytesOf(entry), allowMalformed: true));
+        await link.create(entry.nameOfLinkedFile);
         continue;
       }
 
@@ -256,7 +256,7 @@ class LinuxRuntime extends ChangeNotifier {
       await file.parent.create(recursive: true);
       await file.writeAsBytes(_bytesOf(entry), flush: false);
 
-      final mode = entry.mode & 0x1FF;
+      final mode = entry.unixPermissions;
       if (mode != 0) {
         await _chmod(outPath, mode.toRadixString(8));
       }
@@ -316,28 +316,33 @@ class LinuxRuntime extends ChangeNotifier {
 
   // ------------------------------------------------------------------ sessions
 
-  List<String> _prootArgs(List<String> argv) => <String>[
-        '--link2symlink',
-        '-0',
-        '-r',
-        rootfsPath,
-        '-b',
-        '/dev',
-        '-b',
-        '/proc',
-        '-b',
-        '/sys',
-        // Android shared storage, so the guest sees the phone's real files.
-        '-b',
-        '/storage/emulated/0:/mnt/android',
-        '-b',
-        '/storage/emulated/0/Download:/root/Downloads',
-        '-b',
-        '${base.path}/tmp:/tmp',
-        '-w',
-        '/root',
-        ...argv,
-      ];
+  List<String> _prootArgs(List<String> argv) {
+    final shared = Directory('/storage/emulated/0');
+    final downloads = Directory('/storage/emulated/0/Download');
+
+    return <String>[
+      '--link2symlink',
+      '-0',
+      '-r',
+      rootfsPath,
+      '-b',
+      '/dev',
+      '-b',
+      '/proc',
+      '-b',
+      '/sys',
+      // Android shared storage, so the guest sees the phone's real files.
+      // Binds are only added when the path exists: a missing bind aborts proot.
+      if (shared.existsSync()) ...<String>['-b', '/storage/emulated/0:/mnt/android'],
+      if (downloads.existsSync())
+        ...<String>['-b', '/storage/emulated/0/Download:/root/Downloads'],
+      '-b',
+      '${base.path}/tmp:/tmp',
+      '-w',
+      '/root',
+      ...argv,
+    ];
+  }
 
   /// Starts an interactive shell (or [argv]) inside the guest.
   Pty startShell({List<String>? argv}) {
@@ -366,15 +371,26 @@ class LinuxRuntime extends ChangeNotifier {
 
   /// Boots Xvfb + openbox + x11vnc + noVNC, then waits until the web socket
   /// port actually accepts connections before the UI tries to connect.
-  Future<bool> ensureDisplay() async {
+  Future<bool> ensureDisplay({bool restart = false}) async {
     if (!isReady) return false;
 
-    if (!_displayRequested) {
+    void start() {
       _displayRequested = true;
       runDetached(<String>['/bin/bash', '-lc', '/root/.microos/start-gui.sh']);
     }
 
-    return _waitForPort(6080, const Duration(seconds: 25));
+    if (!_displayRequested || restart) start();
+
+    var up = await _waitForPort(6080, const Duration(seconds: 14));
+
+    // A previous attempt may have died (or Xvfb lost a race with the socket).
+    // Give it one clean restart before reporting failure to the UI.
+    if (!up) {
+      _appendLog('[microos] display bridge not up, restarting it once');
+      start();
+      up = await _waitForPort(6080, const Duration(seconds: 18));
+    }
+    return up;
   }
 
   Future<bool> _waitForPort(int port, Duration timeout) async {
@@ -453,14 +469,14 @@ class LinuxRuntime extends ChangeNotifier {
       final progressMatch = RegExp(r'^\[progress\]\s*(\d+)').firstMatch(line);
       if (progressMatch != null) {
         progress = (int.parse(progressMatch.group(1)!) / 100).clamp(0.0, 1.0);
-        notifyListeners();
+        _notify();
         continue;
       }
 
       final stageMatch = RegExp(r'^\[stage\]\s*(.+)$').firstMatch(line);
       if (stageMatch != null) {
         stage = stageMatch.group(1)!;
-        notifyListeners();
+        _notify();
         continue;
       }
 
@@ -470,11 +486,17 @@ class LinuxRuntime extends ChangeNotifier {
     if (logLines.length > 800) {
       logLines.removeRange(0, logLines.length - 800);
     }
+    _notify();
+  }
+
+  void _notify() {
+    if (_disposed) return;
     notifyListeners();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     for (final pty in _background) {
       try {
         pty.kill();
