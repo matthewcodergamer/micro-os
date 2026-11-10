@@ -44,7 +44,7 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" --install "ndk;27.0.12077973" >/dev/null
+          "$SDKMANAGER" --install "ndk;28.2.13676358" >/dev/null
 
       - name: Dependencies
         run: flutter pub get
