@@ -156,26 +156,63 @@ class LinuxRuntime extends ChangeNotifier {
     _notify();
 
     try {
-      await _extractProot();
-
-      progress = 0.08;
-      stage = 'Unpacking Ubuntu rootfs';
-      _notify();
-      await _extractRootfs();
-
-      progress = 0.55;
-      stage = 'Installing developer toolchain';
-      _notify();
-      await _installSetupScript();
-      await _runProvisioning();
-
-      if (File(_readyPath).existsSync()) {
+      // Do not unpack over an installation that is already complete. This
+      // protects the user's Linux files and makes Install safe to tap again.
+      final existingReady = File(_readyPath).existsSync() &&
+          File(p.join(rootfsPath, 'usr/bin/bash')).existsSync() &&
+          File(p.join(rootfsPath, 'etc/os-release')).existsSync();
+      if (existingReady) {
+        stage = 'Checking existing Linux installation';
+        progress = 0.9;
+        _notify();
+        await _extractProot();
+        await _refreshGuestDns();
         status = RuntimeStatus.ready;
         progress = 1;
         stage = 'Linux ready';
       } else {
-        status = RuntimeStatus.failed;
-        error = 'Provisioning stopped before it finished. Check the log below.';
+        // A partial/corrupt install is not reusable. Remove only that
+        // incomplete rootfs before unpacking; never delete a ready install.
+        final rootfs = Directory(rootfsPath);
+        if (rootfs.existsSync()) {
+          await rootfs.delete(recursive: true);
+        }
+
+        await _extractProot();
+
+        progress = 0.08;
+        stage = 'Unpacking Ubuntu rootfs';
+        _notify();
+        await _extractRootfs();
+
+        // CI-prepared guests skip all apt provisioning on the phone.
+        final preBaked = File(_readyPath).existsSync() &&
+            File(p.join(rootfsPath, 'usr/bin/bash')).existsSync() &&
+            File(p.join(rootfsPath, 'etc/os-release')).existsSync();
+        if (preBaked) {
+          progress = 0.96;
+          stage = 'Starting prepared Linux environment';
+          _notify();
+          await _refreshGuestDns();
+          status = RuntimeStatus.ready;
+          progress = 1;
+          stage = 'Linux ready';
+        } else {
+          progress = 0.55;
+          stage = 'Installing developer toolchain';
+          _notify();
+          await _installSetupScript();
+          await _runProvisioning();
+
+          if (File(_readyPath).existsSync()) {
+            status = RuntimeStatus.ready;
+            progress = 1;
+            stage = 'Linux ready';
+          } else {
+            status = RuntimeStatus.failed;
+            error = 'Provisioning stopped before it finished. Check the log below.';
+          }
+        }
       }
     } catch (e, stack) {
       status = RuntimeStatus.failed;
@@ -233,9 +270,13 @@ class LinuxRuntime extends ChangeNotifier {
       );
     }
 
-    // Use the in-process extractor: Android toybox tar rejects Ubuntu
-    // absolute symlink targets. The Dart extractor re-roots them in rootfs.
-    await _extractWithDart(tarFile.path, target.path);
+    // The CI pre-bake normalizes absolute symlinks to relative targets, so
+    // Android's system tar can stream the archive without loading a 1GB guest
+    // into Dart heap memory.
+    final extracted = await _extractWithSystemTar(tarFile.path, target.path);
+    if (!extracted) {
+      throw StateError('rootfs extraction failed; system tar could not unpack the prepared guest');
+    }
 
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');
