@@ -68,15 +68,40 @@ class WindowFrame extends StatelessWidget {
                 child: Stack(
                   children: [
                     Positioned.fill(child: child),
-                    if (!compact)
+                    if (!compact) ...[
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        child: ResizeHandle(
+                          alignment: Alignment.topLeft,
+                          onDrag: (delta) => desktop.resizeFrom(window.id, delta, screen, fromLeft: true, fromTop: true),
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: ResizeHandle(
+                          alignment: Alignment.topRight,
+                          onDrag: (delta) => desktop.resizeFrom(window.id, delta, screen, fromLeft: false, fromTop: true),
+                        ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        bottom: 0,
+                        child: ResizeHandle(
+                          alignment: Alignment.bottomLeft,
+                          onDrag: (delta) => desktop.resizeFrom(window.id, delta, screen, fromLeft: true, fromTop: false),
+                        ),
+                      ),
                       Positioned(
                         right: 0,
                         bottom: 0,
                         child: ResizeHandle(
-                          onDrag: (delta) =>
-                              desktop.resize(window.id, delta, screen),
+                          alignment: Alignment.bottomRight,
+                          onDrag: (delta) => desktop.resizeFrom(window.id, delta, screen, fromLeft: false, fromTop: false),
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -186,9 +211,10 @@ class _TrafficLight extends StatelessWidget {
 
 /// Bottom-right resize grip.
 class ResizeHandle extends StatelessWidget {
-  const ResizeHandle({super.key, required this.onDrag});
+  const ResizeHandle({super.key, required this.onDrag, required this.alignment});
 
   final ValueChanged<Offset> onDrag;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -197,10 +223,10 @@ class ResizeHandle extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanUpdate: (details) => onDrag(details.delta),
-        child: const SizedBox(
-          width: 22,
-          height: 22,
-          child: CustomPaint(painter: _GripPainter()),
+        child: SizedBox(
+          width: 26,
+          height: 26,
+          child: CustomPaint(painter: _GripPainter(alignment)),
         ),
       ),
     );
@@ -208,7 +234,9 @@ class ResizeHandle extends StatelessWidget {
 }
 
 class _GripPainter extends CustomPainter {
-  const _GripPainter();
+  const _GripPainter(this.alignment);
+
+  final Alignment alignment;
 
   @override
   void paint(Canvas canvas, Size size) {
