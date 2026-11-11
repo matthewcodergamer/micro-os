@@ -128,6 +128,6 @@ tar --hard-dereference --numeric-owner --owner=0 --group=0 \
 tar -tzf "$OUT" > "$TMP/rootfs-archive.list"
 grep -qxE '(\./)?root/\.microos/ready' "$TMP/rootfs-archive.list"
 grep -qxE '(\./)?opt/firefox/firefox' "$TMP/rootfs-archive.list"
-grep -qxE '(\\./)?usr/local/bin/microos-jar' "$TMP/rootfs-archive.list"
-grep -qxE '(\\./)?root/.opencode/bin/opencode' "$TMP/rootfs-archive.list"
+grep -qxE '(\./)?usr/local/bin/microos-jar' "$TMP/rootfs-archive.list"
+grep -qxE '(\./)?root/.opencode/bin/opencode' "$TMP/rootfs-archive.list"
 echo "==> Pre-baked ARM64 rootfs: $(du -h "$OUT" | cut -f1)"
