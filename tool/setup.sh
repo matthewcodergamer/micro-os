@@ -43,7 +43,7 @@ if [ ! -f /etc/os-release ]; then
 fi
 
 # Android has no resolv.conf inside the rootfs; without this apt cannot resolve.
-printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 9.9.9.9\n' > /etc/resolv.conf
+printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf
 
 # Do not let package postinst scripts try to start services (there is no init).
 printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d

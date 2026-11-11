@@ -9,6 +9,7 @@ import 'package:xterm/xterm.dart';
 
 import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
+import '../../services/settings_store.dart';
 
 /// A real PTY inside the Linux guest, rendered with xterm.dart.
 ///
@@ -20,10 +21,12 @@ class TerminalApp extends StatefulWidget {
     super.key,
     required this.runtime,
     this.argv,
+    required this.settings,
   });
 
   final LinuxRuntime runtime;
   final List<String>? argv;
+  final SettingsStore settings;
 
   @override
   State<TerminalApp> createState() => _TerminalAppState();
@@ -36,6 +39,8 @@ class _TerminalAppState extends State<TerminalApp> {
   StreamSubscription? _output;
   String? _error;
   bool _ctrlArmed = false;
+  final StringBuffer _pendingOutput = StringBuffer();
+  Timer? _outputFlushTimer;
 
   @override
   void initState() {
@@ -56,13 +61,27 @@ class _TerminalAppState extends State<TerminalApp> {
       final pty = widget.runtime.startShell(argv: widget.argv);
       _pty = pty;
       _output = pty.output.listen(
-        (data) => _terminal.write(utf8.decode(data, allowMalformed: true)),
+        (data) => _queueOutput(utf8.decode(data, allowMalformed: true)),
         onError: (Object e) => _terminal.write('\r\n[pty error: $e]\r\n'),
         onDone: () => _terminal.write('\r\n[process exited]\r\n'),
       );
     } catch (e) {
       setState(() => _error = '$e');
     }
+  }
+
+  void _queueOutput(String chunk) {
+    if (chunk.isEmpty) return;
+    _pendingOutput.write(chunk);
+    _outputFlushTimer ??= Timer(const Duration(milliseconds: 16), _flushOutput);
+  }
+
+  void _flushOutput() {
+    _outputFlushTimer = null;
+    if (!mounted || _pendingOutput.isEmpty) return;
+    final chunk = _pendingOutput.toString();
+    _pendingOutput.clear();
+    _terminal.write(chunk);
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -144,6 +163,11 @@ class _TerminalAppState extends State<TerminalApp> {
 
   @override
   void dispose() {
+    _outputFlushTimer?.cancel();
+    if (_pendingOutput.isNotEmpty) {
+      _terminal.write(_pendingOutput.toString());
+      _pendingOutput.clear();
+    }
     _output?.cancel();
     try {
       _pty?.kill();
@@ -207,6 +231,8 @@ class _TerminalAppState extends State<TerminalApp> {
                 padding: const EdgeInsets.all(8),
                 backgroundOpacity: 1,
                 theme: _theme,
+                textStyle: TerminalStyle(fontSize: widget.settings.terminalFontSize),
+                simulateScroll: true,
                 ),
               ),
             ),
@@ -225,6 +251,8 @@ class _TerminalAppState extends State<TerminalApp> {
                   _extraKey('Tab', '\t'),
                   _extraKey('↑', '\x1b[A'),
                   _extraKey('↓', '\x1b[B'),
+                  _extraKey('PgUp', '\x1b[5~'),
+                  _extraKey('PgDn', '\x1b[6~'),
                   _extraKey('←', '\x1b[D'),
                   _extraKey('→', '\x1b[C'),
                   _extraKey('Ctrl', '', selected: _ctrlArmed, onPressed: () {

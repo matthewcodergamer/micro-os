@@ -97,7 +97,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
   Widget _contentFor(ManagedWindow window, AppScope scope) {
     switch (window.app) {
       case AppId.terminal:
-        return TerminalApp(runtime: scope.runtime, argv: window.args);
+        return TerminalApp(runtime: scope.runtime, argv: window.args, settings: scope.settings);
       case AppId.desktop:
         return DesktopSessionApp(runtime: scope.runtime);
       case AppId.browser:

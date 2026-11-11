@@ -325,6 +325,33 @@ class _SettingsAppState extends State<SettingsApp> {
                 ],
               ),
               _Section(
+                title: 'Terminal',
+                subtitle: 'Text size and navigation',
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('Font size', style: TextStyle(color: MicroColors.text, fontSize: 12)),
+                      ),
+                      Text('${scope.settings.terminalFontSize.round()} px',
+                          style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
+                    ],
+                  ),
+                  Slider(
+                    value: scope.settings.terminalFontSize,
+                    min: 10,
+                    max: 18,
+                    divisions: 8,
+                    label: '${scope.settings.terminalFontSize.round()} px',
+                    onChanged: scope.settings.setTerminalFontSize,
+                  ),
+                  const Text(
+                    'Swipe to scroll terminal history. PgUp and PgDn send page-navigation keys to full-screen terminal apps.',
+                    style: TextStyle(color: MicroColors.subtle, fontSize: 10, height: 1.45),
+                  ),
+                ],
+              ),
+              _Section(
                 title: 'OpenCode appearance',
                 subtitle: 'Forced light theme',
                 children: [

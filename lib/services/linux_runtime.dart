@@ -115,11 +115,33 @@ class LinuxRuntime extends ChangeNotifier {
           : RuntimeStatus.missing;
       stage = status == RuntimeStatus.ready ? 'Linux ready' : 'Linux not installed';
       progress = status == RuntimeStatus.ready ? 1 : 0;
+      if (status == RuntimeStatus.ready) await _refreshGuestDns();
     } catch (e) {
       status = RuntimeStatus.failed;
       error = '$e';
     }
     _notify();
+  }
+
+  Future<void> _refreshGuestDns() async {
+    try {
+      final result = await Process.run(
+        prootPath,
+        _prootArgs(<String>[
+          '/bin/bash',
+          '-lc',
+          "printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > /etc/resolv.conf",
+        ]),
+        environment: _prootEnv,
+      );
+      if (result.exitCode != 0) {
+        _appendLog('[microos] DNS refresh failed: ${result.stderr}');
+      } else {
+        _appendLog('[microos] guest DNS refreshed (8.8.8.8, 1.1.1.1)');
+      }
+    } catch (e) {
+      _appendLog('[microos] DNS refresh could not run: $e');
+    }
   }
 
   Future<void> install() async {
