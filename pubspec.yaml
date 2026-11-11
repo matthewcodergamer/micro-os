@@ -38,3 +38,10 @@ flutter:
     - tool/setup.sh
     - assets/rootfs/
     - assets/proot/
+  fonts:
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
