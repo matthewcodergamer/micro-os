@@ -14,12 +14,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apk:
+  prebake-rootfs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Pre-bake Ubuntu ARM64 rootfs and Firefox natively
+        run: |
+          chmod +x tool/prebake_rootfs.sh
+          ./tool/prebake_rootfs.sh
+
+      - name: Upload prepared ARM64 rootfs
+        uses: actions/upload-artifact@v4
+        with:
+          name: microos-prebaked-rootfs
+          path: assets/rootfs/rootfs.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  apk:
+    needs: prebake-rootfs
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download prepared ARM64 rootfs
+        uses: actions/download-artifact@v4
+        with:
+          name: microos-prebaked-rootfs
+          path: assets/rootfs
 
       - uses: actions/setup-java@v4
         with:
@@ -36,11 +61,6 @@ jobs:
         run: |
           chmod +x tool/fetch_runtime.sh tool/bootstrap_android.sh
           ./tool/fetch_runtime.sh
-
-      - name: Pre-bake Ubuntu ARM64 rootfs and Firefox
-        run: |
-          chmod +x tool/prebake_rootfs.sh
-          ./tool/prebake_rootfs.sh
 
       - name: Scaffold and patch the Android project
         run: ./tool/bootstrap_android.sh
