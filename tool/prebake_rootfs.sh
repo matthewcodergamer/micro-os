@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Build a fully provisioned Ubuntu ARM64 guest on the CI runner.
-# Runs on a native ARM64 GitHub-hosted Linux runner; no CPU emulation is needed.
+# Build a fully provisioned Ubuntu ARM64 guest on the native ARM64 CI runner.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,10 +7,9 @@ OUT="$ROOT/assets/rootfs/rootfs.tar.gz"
 TMP="$(mktemp -d)"
 NAME="microos-rootfs-prebake-$GITHUB_RUN_ID"
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
-
 mkdir -p "$(dirname "$OUT")"
 
-echo "==> Provisioning Ubuntu 24.04 ARM64 in Docker"
+echo "==> Provisioning Ubuntu 24.04 ARM64 in native Docker"
 docker run --platform linux/arm64 --name "$NAME" \
   -v "$ROOT/tool/setup.sh:/tmp/microos-setup.sh:ro" \
   ubuntu:24.04 /bin/bash -lc '
@@ -34,58 +32,53 @@ docker run --platform linux/arm64 --name "$NAME" \
     curl -fL --retry 3 --connect-timeout 20 \
       "https://download.mozilla.org/?lang=en-US&os=linux64-aarch64&product=firefox-latest-ssl" \
       -o /tmp/firefox.tar.xz
-    tar -tJf /tmp/firefox.tar.xz | grep -q "^firefox/firefox$"
+    # Do not use grep -q here: with pipefail it can SIGPIPE tar (exit 141).
+    tar -tJf /tmp/firefox.tar.xz | grep -x "firefox/firefox" >/dev/null
     mkdir -p /opt
     tar -xJf /tmp/firefox.tar.xz -C /opt
     ln -sf /opt/firefox/firefox /usr/local/bin/firefox
-    file /opt/firefox/firefox | grep -qi "ARM aarch64"
+    file /opt/firefox/firefox | grep -i "ARM aarch64" >/dev/null
     /opt/firefox/firefox --version
 
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
-
-    # Remove non-runtime documentation and translations to reduce the bundled
-    # guest size. Keep the system locale data needed for C.UTF-8 and English.
     rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*
-    find /usr/share/locale -mindepth 1 -maxdepth 1 \
-      ! -name 'en' ! -name 'en_US' ! -name 'en_US.UTF-8' \
-      -exec rm -rf {} + 2>/dev/null || true
-
+    if [ -d /usr/share/locale ]; then
+      find /usr/share/locale -mindepth 1 -maxdepth 1 \
+        ! -name en ! -name en_US ! -name C -exec rm -rf {} + || true
+    fi
+    apt-get autoremove -y
     apt-get clean
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
 
-echo "==> Exporting the prepared root filesystem"
+echo "==> Exporting prepared root filesystem"
 docker export "$NAME" -o "$TMP/rootfs.tar"
 mkdir -p "$TMP/rootfs"
 tar -xf "$TMP/rootfs.tar" -C "$TMP/rootfs"
 
-# Android's toybox tar handles relative symlinks reliably. Convert absolute
-# Linux guest symlinks to equivalent relative links before creating the asset.
 python3 - "$TMP/rootfs" <<'PY'
 import os, posixpath, sys
 root = os.path.abspath(sys.argv[1])
 for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
     for name in dirs + files:
         path = os.path.join(current, name)
-        if not os.path.islink(path):
-            continue
-        target = os.readlink(path)
-        if target.startswith("/"):
-            rel_path = os.path.relpath(path, root).replace(os.sep, "/")
-            relative = posixpath.relpath(
-                posixpath.normpath(target.lstrip("/")),
-                posixpath.dirname(rel_path) or ".",
-            )
-            os.unlink(path)
-            os.symlink(relative, path)
+        if os.path.islink(path):
+            target = os.readlink(path)
+            if target.startswith("/"):
+                rel_path = os.path.relpath(path, root).replace(os.sep, "/")
+                relative = posixpath.relpath(
+                    posixpath.normpath(target.lstrip("/")),
+                    posixpath.dirname(rel_path) or ".",
+                )
+                os.unlink(path)
+                os.symlink(relative, path)
 PY
 
-# Keep ownership metadata and ordinary files instead of hard-link records.
 tar --hard-dereference --numeric-owner --owner=0 --group=0 \
   -czf "$OUT" -C "$TMP/rootfs" .
-
-tar -tzf "$OUT" | grep -qxE '(\./)?root/\.microos/ready'
-tar -tzf "$OUT" | grep -qxE '(\./)?opt/firefox/firefox'
+# Avoid grep -q with a streaming tar producer under pipefail.
+tar -tzf "$OUT" | grep -xE '(\./)?root/\.microos/ready' >/dev/null
+tar -tzf "$OUT" | grep -xE '(\./)?opt/firefox/firefox' >/dev/null
 echo "==> Pre-baked ARM64 rootfs: $(du -h "$OUT" | cut -f1)"
