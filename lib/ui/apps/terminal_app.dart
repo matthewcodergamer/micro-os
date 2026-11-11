@@ -41,13 +41,6 @@ class _TerminalAppState extends State<TerminalApp> {
     super.initState();
     _terminal.onOutput = _send;
     _terminal.onResize = _resize;
-    _terminal.onClipboardStore = (name, value) {
-      Clipboard.setData(ClipboardData(text: value));
-    };
-    _terminal.onClipboardQuery = (selector) async {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
-      return data?.text;
-    };
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
