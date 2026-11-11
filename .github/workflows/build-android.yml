@@ -15,15 +15,12 @@ concurrency:
 
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    # Build and provision the guest on real ARM64 hardware; no QEMU emulation.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - uses: actions/setup-java@v4
         with:
@@ -40,6 +37,12 @@ jobs:
         run: |
           chmod +x tool/fetch_runtime.sh tool/bootstrap_android.sh tool/prebake_rootfs.sh
           ./tool/fetch_runtime.sh
+
+      - name: Verify native ARM64 runner
+        run: |
+          test "$(uname -m)" = "aarch64"
+          docker info >/dev/null
+          docker pull --platform linux/arm64 ubuntu:24.04
 
       - name: Build the fully provisioned ARM64 rootfs
         run: |
