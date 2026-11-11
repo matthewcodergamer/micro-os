@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
-import '../../app_scope.dart';
 import '../../services/linux_runtime.dart';
 import 'terminal_app.dart';
 
@@ -26,8 +25,7 @@ exec bash -l
 
   @override
   Widget build(BuildContext context) {
-    final preference = AppScope.of(context).settings.openCodeTheme;
-    final theme = preference == 'light' ? 'github' : preference == 'dark' ? 'opencode' : 'system';
+    const theme = 'github';
     return Container(
       color: const Color(0xFF0B0E14),
       child: Column(

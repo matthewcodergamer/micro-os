@@ -326,23 +326,12 @@ class _SettingsAppState extends State<SettingsApp> {
               ),
               _Section(
                 title: 'OpenCode appearance',
-                subtitle: 'Independent from the dark MicroOS desktop',
+                subtitle: 'Forced light theme',
                 children: [
-                  DropdownButtonFormField<String>(
-                    value: scope.settings.openCodeTheme,
-                    decoration: const InputDecoration(labelText: 'OpenCode theme'),
-                    items: const [
-                      DropdownMenuItem(value: 'light', child: Text('Light / White')),
-                      DropdownMenuItem(value: 'dark', child: Text('Dark')),
-                      DropdownMenuItem(value: 'system', child: Text('Follow system')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) scope.settings.setOpenCodeTheme(value);
-                    },
+                  const Text(
+                    'OpenCode always launches with the GitHub Light theme, independently of the MicroOS desktop theme.',
+                    style: TextStyle(color: MicroColors.subtle, fontSize: 11, height: 1.5),
                   ),
-                  const SizedBox(height: 6),
-                  const Text('The selected theme is written to OpenCode config when AI Hub launches.',
-                    style: TextStyle(color: MicroColors.subtle, fontSize: 10)),
                 ],
               ),
               _Section(
