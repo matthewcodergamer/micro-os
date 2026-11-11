@@ -456,8 +456,7 @@ class LinuxRuntime extends ChangeNotifier {
       prootPath,
       arguments: _prootArgs(<String>[
         '/bin/bash', '-lc',
-        'dpkg --configure -a; first=$?; apt-get install -f -y; second=$?; '
-            'if [ "$first" -ne 0 ]; then exit "$first"; else exit "$second"; fi',
+        'dpkg --configure -a && apt-get install -f -y',
       ]),
       environment: _prootEnv,
     );

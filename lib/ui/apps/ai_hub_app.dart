@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../app_scope.dart';
 import '../../services/linux_runtime.dart';
 import 'terminal_app.dart';
 
@@ -11,9 +12,11 @@ class AiHubApp extends StatelessWidget {
 
   final LinuxRuntime runtime;
 
-  static const String _command = r'''
+  static String _command(String theme) => '''
 export PATH="/root/.opencode/bin:/root/.local/bin:$PATH"
 if command -v opencode >/dev/null 2>&1; then
+  mkdir -p /root/.config/opencode
+  printf '{"\\$schema":"https://opencode.ai/config.json","theme":"$theme"}' > /root/.config/opencode/opencode.json
   exec opencode
 fi
 printf '\n\033[1mOpenCode is not installed in this guest yet.\033[0m\n'
@@ -23,6 +26,7 @@ exec bash -l
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppScope.of(context).settings.openCodeTheme;
     return Container(
       color: const Color(0xFF0B0E14),
       child: Column(
@@ -47,7 +51,7 @@ exec bash -l
           Expanded(
             child: TerminalApp(
               runtime: runtime,
-              argv: const <String>['/bin/bash', '-lc', _command],
+              argv: <String>['/bin/bash', '-lc', _command(theme)],
             ),
           ),
         ],
