@@ -56,6 +56,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Remove large preinstalled SDKs before setting up Java/Flutter/NDK.
+      # Toolchains needed by this job are installed again below.
+      - name: Free Disk Space (Ubuntu)
+        run: |
+          set -euxo pipefail
+          echo "Disk space before cleanup:"
+          df -h /
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          if [ -n "${AGENT_TOOLSDIRECTORY:-}" ]; then
+            sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          fi
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          echo "Disk space after cleanup:"
+          df -h /
+
       - name: Download native-built ARM64 rootfs
         uses: actions/download-artifact@v4
         with:
