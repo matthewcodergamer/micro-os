@@ -91,6 +91,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
+    printf "2\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
