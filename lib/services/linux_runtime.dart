@@ -44,6 +44,8 @@ class LinuxRuntime extends ChangeNotifier {
   bool _displayRequested = false;
   bool _provisioningFinished = false;
   bool _disposed = false;
+  String? _githubToken;
+  String? _huggingFaceToken;
 
   bool get isReady => status == RuntimeStatus.ready;
   bool get isBusy => status == RuntimeStatus.installing;
@@ -88,6 +90,12 @@ class LinuxRuntime extends ChangeNotifier {
         'DISPLAY': ':1',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
             '/root/.opencode/bin:/root/.local/bin',
+        if (_githubToken != null && _githubToken!.isNotEmpty) ...<String, String>{
+          'GH_TOKEN': _githubToken!,
+          'GITHUB_TOKEN': _githubToken!,
+        },
+        if (_huggingFaceToken != null && _huggingFaceToken!.isNotEmpty)
+          'HF_TOKEN': _huggingFaceToken!,
       };
 
   // ---------------------------------------------------------------- lifecycle
@@ -443,14 +451,19 @@ class LinuxRuntime extends ChangeNotifier {
 
   // --------------------------------------------------------------- credentials
 
-  /// Writes `~/.git-credentials` + `~/.gitconfig` straight into the rootfs so
-  /// git (and therefore OpenCode) can push without an interactive prompt.
-  Future<void> applyGitCredentials(String token, String login) async {
-    if (!isReady) return;
+  /// Keeps tokens in Android Keystore-backed storage and passes them to guest
+  /// processes at launch. Never writes a PAT into .git-credentials or shell files.
+  void setGithubToken(String? token) {
+    _githubToken = token?.trim().isEmpty == true ? null : token?.trim();
+  }
 
-    final credentials = File(p.join(rootfsPath, 'root/.git-credentials'));
-    await credentials.writeAsString('https://$login:$token@github.com\n');
-    await _chmod(credentials.path, '600');
+  void setHuggingFaceToken(String? token) {
+    _huggingFaceToken = token?.trim().isEmpty == true ? null : token?.trim();
+  }
+
+  Future<void> applyGitCredentials(String token, String login) async {
+    _githubToken = token;
+    if (!isReady) return;
 
     final gitconfig = File(p.join(rootfsPath, 'root/.gitconfig'));
     await gitconfig.writeAsString('''
@@ -458,22 +471,20 @@ class LinuxRuntime extends ChangeNotifier {
 \tname = $login
 \temail = $login@users.noreply.github.com
 [credential]
-\thelper = store
+\thelper = !gh auth git-credential
 [init]
 \tdefaultBranch = main
 [safe]
 \tdirectory = *
 ''');
     await _chmod(gitconfig.path, '600');
-
-    _appendLog('[microos] GitHub credentials stored for $login');
+    _appendLog('[microos] GitHub credential helper configured for $login (token not written to disk)');
   }
 
   Future<void> clearGitCredentials() async {
-    for (final name in <String>['root/.git-credentials']) {
-      final file = File(p.join(rootfsPath, name));
-      if (file.existsSync()) await file.delete();
-    }
+    _githubToken = null;
+    final credentials = File(p.join(rootfsPath, 'root/.git-credentials'));
+    if (credentials.existsSync()) await credentials.delete();
   }
 
   // --------------------------------------------------------------------- misc
