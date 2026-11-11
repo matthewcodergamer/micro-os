@@ -87,7 +87,8 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     if (!mounted) return;
     setState(() => _status = 'Attaching to :1…');
 
-    final controller = WebViewController()
+    late final WebViewController controller;
+    controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0B0E14))
       ..setNavigationDelegate(NavigationDelegate(
