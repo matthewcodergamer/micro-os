@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -60,7 +59,7 @@ class _TerminalAppState extends State<TerminalApp> {
     try {
       final pty = widget.runtime.startShell(argv: widget.argv);
       _pty = pty;
-      _output = pty.output.transform(const Utf8Decoder(allowMalformed: true)).listen(
+      _output = pty.output.map((bytes) => utf8.decode(bytes, allowMalformed: true)).listen(
         _queueOutput,
         onError: (Object e) => _terminal.write('\r\n[pty error: $e]\r\n'),
         onDone: () => _terminal.write('\r\n[process exited]\r\n'),
