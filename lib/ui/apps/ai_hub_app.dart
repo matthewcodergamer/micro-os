@@ -26,7 +26,8 @@ exec bash -l
 
   @override
   Widget build(BuildContext context) {
-    final theme = AppScope.of(context).settings.openCodeTheme;
+    final preference = AppScope.of(context).settings.openCodeTheme;
+    final theme = preference == 'light' ? 'github' : preference == 'dark' ? 'opencode' : 'system';
     return Container(
       color: const Color(0xFF0B0E14),
       child: Column(
