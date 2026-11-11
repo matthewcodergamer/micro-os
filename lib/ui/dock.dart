@@ -61,6 +61,10 @@ class Dock extends StatelessWidget {
                   compact: compact,
                   running: desktop.isRunning(item.app),
                   onTap: () => onOpen(item.app),
+                  onQuit: () {
+                    final window = desktop.windowFor(item.app);
+                    if (window != null) desktop.close(window.id);
+                  },
                 ),
             ],
           ),
@@ -84,12 +88,14 @@ class _DockButton extends StatefulWidget {
     required this.compact,
     required this.running,
     required this.onTap,
+    required this.onQuit,
   });
 
   final _DockItem item;
   final bool compact;
   final bool running;
   final VoidCallback onTap;
+  final VoidCallback onQuit;
 
   @override
   State<_DockButton> createState() => _DockButtonState();
@@ -112,6 +118,20 @@ class _DockButtonState extends State<_DockButton> {
         onExit: (_) => setState(() => _hovered = false),
         child: InkWell(
           onTap: widget.onTap,
+          onLongPress: () async {
+            final choice = await showModalBottomSheet<String>(
+              context: context,
+              backgroundColor: MicroColors.panelSolid,
+              builder: (context) => SafeArea(
+                child: ListTile(
+                  leading: const Icon(Icons.close),
+                  title: Text('Quit ${widget.item.app.title}'),
+                  onTap: () => Navigator.pop(context, 'quit'),
+                ),
+              ),
+            );
+            if (choice == 'quit') widget.onQuit();
+          },
           onHighlightChanged: (value) => setState(() => _pressed = value),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
