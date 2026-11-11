@@ -45,6 +45,7 @@ jobs:
           docker info >/dev/null
           docker pull --platform linux/arm64 ubuntu:24.04
 
+      # Firefox is pre-installed and smoke-tested in the rootfs before APK packaging.
       - name: Build the fully provisioned ARM64 rootfs
         run: |
           chmod +x tool/prebake_rootfs.sh
@@ -56,6 +57,7 @@ jobs:
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
+          grep -q 'root/.microos/browser-home' /tmp/rootfs-archive.list
           echo "Pre-baked rootfs:"
           ls -lh "$ROOTFS"
           sha256sum "$ROOTFS"
@@ -109,6 +111,7 @@ jobs:
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
+          grep -q 'root/.microos/browser-home' /tmp/rootfs-archive.list
           ls -lh assets/rootfs/rootfs.tar.gz
           sha256sum assets/rootfs/rootfs.tar.gz
 
