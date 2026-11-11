@@ -300,6 +300,8 @@ cat > /root/.microos/start-gui.sh <<'EOF'
 # Xvfb + openbox + x11vnc + noVNC. The Flutter app renders noVNC in a window.
 set -uo pipefail
 export DISPLAY=:1
+export XCURSOR_THEME=WhiteSur-cursors
+export XCURSOR_SIZE=24
 GEOMETRY="${MICROOS_GEOMETRY:-1024x768x24}"
 LOG=/tmp/.microos
 mkdir -p "$LOG"
@@ -313,7 +315,8 @@ sleep 0.5
 Xvfb :1 -screen 0 "$GEOMETRY" -nolisten tcp -dpi 96 >"$LOG/xvfb.log" 2>&1 &
 sleep 1.2
 
-xsetroot -solid '#0f131b' 2>/dev/null
+xrdb -merge /root/.Xresources 2>/dev/null || true
+xsetroot -solid '#0f131b' -cursor_name left_ptr 2>/dev/null || xsetroot -solid '#0f131b' 2>/dev/null
 
 # Minimal openbox config so the desktop has a right-click menu.
 mkdir -p /root/.config/openbox
@@ -390,6 +393,35 @@ echo "No desktop browser is installed. Run: apt-get install falkon" >&2
 exit 1
 EOF
 chmod 755 /usr/local/bin/microos-browse
+
+# Optional Steam/Box64 feasibility check. This intentionally does not install
+# Steam or alter the guest: the Steam Linux client has 32-bit components and
+# needs a compatible Box86/Box32 path in addition to Box64.
+cat > /usr/local/bin/microos-steam-check <<'STEAMCHECK'
+#!/usr/bin/env bash
+set -u
+echo "MicroOS Steam compatibility check"
+echo "Guest architecture: $(dpkg --print-architecture 2>/dev/null || uname -m)"
+if command -v box64 >/dev/null 2>&1; then
+  echo "Box64: $(box64 --version 2>&1 | head -n 1)"
+else
+  echo "Box64: not installed"
+fi
+if command -v box86 >/dev/null 2>&1; then
+  echo "Box86: $(box86 --version 2>&1 | head -n 1)"
+else
+  echo "Box86/Box32: not installed"
+fi
+echo
+echo "Steam package availability:"
+apt-cache policy steam 2>/dev/null | sed -n '1,8p' || true
+echo
+echo "No Steam install was attempted. Do not assume Box64 alone is enough:"
+echo "Steam's Linux client includes 32-bit components and Chromium/CEF processes."
+echo "A real test also needs compatible 32-bit userspace libraries, graphics"
+echo "drivers, and a working display/audio stack. PRoot may impose further limits."
+STEAMCHECK
+chmod 755 /usr/local/bin/microos-steam-check
 
 # -----------------------------------------------------------------------------
 # 10. Trim the image
