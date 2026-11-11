@@ -158,7 +158,7 @@ rm -rf /tmp/WhiteSur-cursors
 stage 84 "Preparing Firefox desktop browser"
 apt-get install "${APT_OPTS[@]}" passwd util-linux || warn "browser user tools unavailable"
 if ! id microos-browser >/dev/null 2>&1; then
-  useradd --system --create-home --home-dir /home/microos-browser \\
+  useradd --system --create-home --home-dir /home/microos-browser \
     --shell /usr/sbin/nologin microos-browser || warn "could not create Firefox user"
 fi
 
@@ -169,11 +169,11 @@ export DISPLAY="${DISPLAY:-:1}"
 
 if command -v firefox >/dev/null 2>&1; then
   # PRoot runs the desktop as guest root. Firefox must run as a normal user.
-  exec runuser -u microos-browser -- env \\
-    DISPLAY="$DISPLAY" \\
-    HOME=/home/microos-browser \\
-    MOZ_DISABLE_CONTENT_SANDBOX=1 \\
-    MOZ_DISABLE_GMP_SANDBOX=1 \\
+  exec runuser -u microos-browser -- env \
+    DISPLAY="$DISPLAY" \
+    HOME=/home/microos-browser \
+    MOZ_DISABLE_CONTENT_SANDBOX=1 \
+    MOZ_DISABLE_GMP_SANDBOX=1 \
     firefox "$@"
 fi
 
