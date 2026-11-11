@@ -16,7 +16,7 @@ concurrency:
 jobs:
   apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +36,16 @@ jobs:
         run: |
           chmod +x tool/fetch_runtime.sh tool/bootstrap_android.sh
           ./tool/fetch_runtime.sh
+
+      - name: Enable ARM64 emulation for rootfs provisioning
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Pre-bake Ubuntu ARM64 rootfs and Firefox
+        run: |
+          chmod +x tool/prebake_rootfs.sh
+          ./tool/prebake_rootfs.sh
 
       - name: Scaffold and patch the Android project
         run: ./tool/bootstrap_android.sh
