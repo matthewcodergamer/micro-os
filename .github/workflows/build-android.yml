@@ -49,6 +49,12 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
+      - name: Generate premium adaptive launcher icon
+        run: |
+          python3 -m pip install --quiet --user Pillow
+          python3 tool/generate_launcher_icon.py
+          dart run flutter_launcher_icons
+
       - name: Align plugin compileSdk (AAR metadata)
         run: |
           chmod +x tool/patch_plugins.sh
