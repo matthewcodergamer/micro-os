@@ -49,8 +49,8 @@ jobs:
           ./tool/prebake_rootfs.sh
           ROOTFS="assets/rootfs/rootfs.tar.gz"
           test -s "$ROOTFS"
-          tar -tzf "$ROOTFS" | grep -qxE '(\\./)?root/\\.microos/ready'
-          tar -tzf "$ROOTFS" | grep -qxE '(\\./)?opt/firefox/firefox'
+          tar -tzf "$ROOTFS" | grep -qxE '(\./)?root/\.microos/ready'
+          tar -tzf "$ROOTFS" | grep -qxE '(\./)?opt/firefox/firefox'
           echo "Pre-baked rootfs:"
           ls -lh "$ROOTFS"
           sha256sum "$ROOTFS"
@@ -95,7 +95,7 @@ jobs:
           test -s "$APK"
           unzip -l "$APK" | grep -q "AndroidManifest.xml"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/"
-          ROOTFS_BYTES="$(unzip -l "$APK" | awk '/assets\\/flutter_assets\\/assets\\/rootfs\\/rootfs.tar.gz$/ {print $1}')"
+          ROOTFS_BYTES="$(unzip -l "$APK" | awk '$4 == "assets/flutter_assets/assets/rootfs/rootfs.tar.gz" {print $1}')"
           if [ -z "$ROOTFS_BYTES" ] || [ "$ROOTFS_BYTES" -lt 1048576 ]; then
             echo "ERROR: bundled rootfs asset is missing or unexpectedly small (bytes: ${ROOTFS_BYTES:-0})"
             exit 1
