@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
+import '../../services/settings_store.dart';
 import 'terminal_app.dart';
 
 /// OpenCode, running inside the guest with the developer toolchain and the
 /// stored GitHub credentials.
 class AiHubApp extends StatelessWidget {
-  const AiHubApp({super.key, required this.runtime});
+  const AiHubApp({super.key, required this.runtime, required this.settings});
 
   final LinuxRuntime runtime;
+  final SettingsStore settings;
 
   static String _command(String theme) => '''
 export PATH="/root/.opencode/bin:/root/.local/bin:\$PATH"
@@ -50,6 +52,7 @@ exec bash -l
           Expanded(
             child: TerminalApp(
               runtime: runtime,
+              settings: settings,
               argv: <String>['/bin/bash', '-lc', _command(theme)],
             ),
           ),
