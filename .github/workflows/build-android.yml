@@ -14,28 +14,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apk:
-    # Build and provision the guest on real ARM64 hardware; no QEMU emulation.
+  rootfs:
+    # Provision the Linux guest on real ARM64 hardware, without QEMU.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
-
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Fetch Android proot runtime
-        run: |
-          chmod +x tool/fetch_runtime.sh tool/bootstrap_android.sh tool/prebake_rootfs.sh
-          ./tool/fetch_runtime.sh
 
       - name: Verify native ARM64 runner
         run: |
@@ -45,6 +29,7 @@ jobs:
 
       - name: Build the fully provisioned ARM64 rootfs
         run: |
+          chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh
           ROOTFS="assets/rootfs/rootfs.tar.gz"
           test -s "$ROOTFS"
@@ -53,6 +38,53 @@ jobs:
           echo "Pre-baked rootfs:"
           ls -lh "$ROOTFS"
           sha256sum "$ROOTFS"
+
+      - name: Upload pre-baked ARM64 rootfs
+        uses: actions/upload-artifact@v4
+        with:
+          name: MicroOS-rootfs-arm64
+          path: assets/rootfs/rootfs.tar.gz
+          if-no-files-found: error
+          retention-days: 2
+
+  apk:
+    # Flutter's Android SDK build runs on x64; output remains arm64-v8a.
+    runs-on: ubuntu-24.04
+    needs: rootfs
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download native-built ARM64 rootfs
+        uses: actions/download-artifact@v4
+        with:
+          name: MicroOS-rootfs-arm64
+          path: assets/rootfs
+
+      - name: Verify transferred rootfs
+        run: |
+          test -s assets/rootfs/rootfs.tar.gz
+          tar -tzf assets/rootfs/rootfs.tar.gz | grep -qxE '(\./)?root/\.microos/ready'
+          tar -tzf assets/rootfs/rootfs.tar.gz | grep -qxE '(\./)?opt/firefox/firefox'
+          ls -lh assets/rootfs/rootfs.tar.gz
+          sha256sum assets/rootfs/rootfs.tar.gz
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.9"
+          channel: stable
+          architecture: x64
+          cache: true
+
+      - name: Fetch Android proot runtime
+        run: |
+          chmod +x tool/fetch_runtime.sh tool/bootstrap_android.sh
+          ./tool/fetch_runtime.sh
 
       - name: Scaffold and patch the Android project
         run: ./tool/bootstrap_android.sh
