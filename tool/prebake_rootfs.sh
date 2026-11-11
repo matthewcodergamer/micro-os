@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a fully provisioned Ubuntu ARM64 guest on the CI runner.
-# Requires Docker with linux/arm64 emulation (docker/setup-qemu-action).
+# Runs on a native ARM64 GitHub-hosted Linux runner; no CPU emulation is needed.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,6 +42,14 @@ docker run --platform linux/arm64 --name "$NAME" \
     /opt/firefox/firefox --version
 
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
+
+    # Remove non-runtime documentation and translations to reduce the bundled
+    # guest size. Keep the system locale data needed for C.UTF-8 and English.
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*
+    find /usr/share/locale -mindepth 1 -maxdepth 1 \
+      ! -name 'en' ! -name 'en_US' ! -name 'en_US.UTF-8' \
+      -exec rm -rf {} + 2>/dev/null || true
+
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
     touch /root/.microos/ready
