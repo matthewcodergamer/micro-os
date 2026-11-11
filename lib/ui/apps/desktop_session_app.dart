@@ -113,12 +113,14 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
         if (window.__microOsTouchBridgeInstalled) return;
         const canvas = document.getElementById('noVNC_canvas');
         if (!canvas) {
-          setTimeout(() => {
-            if (!window.__microOsTouchBridgeInstalled) {
-              const retry = document.getElementById('noVNC_canvas');
-              if (retry) install(retry);
+          const observer = new MutationObserver(() => {
+            const retry = document.getElementById('noVNC_canvas');
+            if (retry) {
+              observer.disconnect();
+              install(retry);
             }
-          }, 500);
+          });
+          observer.observe(document.documentElement, {childList:true,subtree:true});
           return;
         }
         install(canvas);
