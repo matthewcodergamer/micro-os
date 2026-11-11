@@ -109,7 +109,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
       case AppId.files:
         return FilesApp(runtime: scope.runtime);
       case AppId.aiHub:
-        return AiHubApp(runtime: scope.runtime);
+        return AiHubApp(runtime: scope.runtime, settings: scope.settings);
       case AppId.settings:
         return SettingsApp(runtime: scope.runtime);
     }
