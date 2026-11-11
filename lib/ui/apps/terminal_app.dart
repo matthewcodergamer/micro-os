@@ -30,7 +30,7 @@ class TerminalApp extends StatefulWidget {
 }
 
 class _TerminalAppState extends State<TerminalApp> {
-  final Terminal _terminal = Terminal(maxLines: 8000);
+  final Terminal _terminal = Terminal(maxLines: 1000);
 
   Pty? _pty;
   StreamSubscription? _output;
@@ -200,12 +200,14 @@ class _TerminalAppState extends State<TerminalApp> {
           Expanded(
             child: GestureDetector(
               onLongPress: _showTerminalMenu,
-              child: TerminalView(
+              child: RepaintBoundary(
+                child: TerminalView(
                 _terminal,
                 autofocus: true,
                 padding: const EdgeInsets.all(8),
                 backgroundOpacity: 1,
                 theme: _theme,
+                ),
               ),
             ),
           ),
