@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a fully provisioned Ubuntu ARM64 guest on the CI runner.
-# Requires Docker with linux/arm64 emulation (docker/setup-qemu-action).
+# Runs on a native ARM64 GitHub Actions runner; Docker executes ARM64 natively.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
