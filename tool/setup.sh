@@ -80,7 +80,7 @@ stage 63 "Installing core toolchain"
 apt-get install "${APT_OPTS[@]}" \
   ca-certificates curl wget gnupg apt-utils \
   git git-lfs openssh-client \
-  build-essential pkg-config make cmake \
+  build-essential pkg-config make cmake openjdk-21-jdk-headless \
   python3 python3-pip python3-venv python3-dev \
   unzip zip xz-utils tar less nano vim-tiny \
   procps file jq tmux sudo \
