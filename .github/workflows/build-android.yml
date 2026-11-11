@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
 
     steps:
@@ -36,11 +36,6 @@ jobs:
         run: |
           chmod +x tool/fetch_runtime.sh tool/bootstrap_android.sh
           ./tool/fetch_runtime.sh
-
-      - name: Enable ARM64 emulation for rootfs provisioning
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Pre-bake Ubuntu ARM64 rootfs and Firefox
         run: |
