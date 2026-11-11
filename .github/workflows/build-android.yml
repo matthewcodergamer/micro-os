@@ -16,10 +16,14 @@ concurrency:
 jobs:
   apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
       - uses: actions/setup-java@v4
         with:
@@ -32,10 +36,21 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Bundle Linux runtime (rootfs + proot)
+      - name: Fetch Android proot runtime
         run: |
-          chmod +x tool/fetch_runtime.sh tool/bootstrap_android.sh
+          chmod +x tool/fetch_runtime.sh tool/bootstrap_android.sh tool/prebake_rootfs.sh
           ./tool/fetch_runtime.sh
+
+      - name: Build the fully provisioned ARM64 rootfs
+        run: |
+          ./tool/prebake_rootfs.sh
+          ROOTFS="assets/rootfs/rootfs.tar.gz"
+          test -s "$ROOTFS"
+          tar -tzf "$ROOTFS" | grep -qxE '(\\./)?root/\\.microos/ready'
+          tar -tzf "$ROOTFS" | grep -qxE '(\\./)?opt/firefox/firefox'
+          echo "Pre-baked rootfs:"
+          ls -lh "$ROOTFS"
+          sha256sum "$ROOTFS"
 
       - name: Scaffold and patch the Android project
         run: ./tool/bootstrap_android.sh
@@ -71,12 +86,18 @@ jobs:
       - name: Build release APK (arm64)
         run: flutter build apk --release --target-platform android-arm64
 
-      - name: Verify APK package and ABI
+      - name: Verify APK contains the pre-baked rootfs and ARM64 runtime
         run: |
           APK="build/app/outputs/flutter-apk/app-release.apk"
           test -s "$APK"
           unzip -l "$APK" | grep -q "AndroidManifest.xml"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/"
+          ROOTFS_BYTES="$(unzip -l "$APK" | awk '/assets\\/flutter_assets\\/assets\\/rootfs\\/rootfs.tar.gz$/ {print $1}')"
+          if [ -z "$ROOTFS_BYTES" ] || [ "$ROOTFS_BYTES" -lt 1048576 ]; then
+            echo "ERROR: bundled rootfs asset is missing or unexpectedly small (bytes: ${ROOTFS_BYTES:-0})"
+            exit 1
+          fi
+          echo "Bundled rootfs asset: $ROOTFS_BYTES bytes"
           sha256sum "$APK"
           ls -lh "$APK"
 
@@ -104,6 +125,6 @@ jobs:
           body: |
             MicroOS ${{ github.sha }}
             Debug-signed release APK for arm64-v8a (sideload only).
-            Bundles an Ubuntu 24.04 arm64 rootfs, proot and first-boot provisioning.
+            Includes the pre-baked Ubuntu 24.04 ARM64 rootfs and proot runtime.
           files: out/*.apk
           make_latest: true
