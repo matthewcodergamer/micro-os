@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
@@ -18,7 +17,8 @@ enum RuntimeStatus { checking, missing, installing, ready, failed }
 /// never has to know whether it is talking to a local proot guest or (later) a
 /// remote host.
 class LinuxRuntime extends ChangeNotifier {
-  static const String _rootfsAsset = 'assets/rootfs/rootfs.tar.gz';
+  static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.gz';
+  static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
 
@@ -226,16 +226,18 @@ class LinuxRuntime extends ChangeNotifier {
 
     final tarFile = File(p.join(base.path, 'rootfs.tar.gz'));
     if (!tarFile.existsSync() || tarFile.lengthSync() < 1024 * 1024) {
-      final data = await rootBundle.load(_rootfsAsset);
-      await tarFile.writeAsBytes(
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-        flush: true,
-      );
+      // AssetManager.open() is copied on a native worker thread in fixed-size
+      // chunks. Never call rootBundle.load() for this 800+ MB asset: that
+      // materializes the entire compressed rootfs in the Dart heap.
+      await _rootfsChannel.invokeMethod<int>('copyAssetToFile', <String, Object>{
+        'assetPath': _rootfsAsset,
+        'destinationPath': tarFile.path,
+      });
     }
 
-    // Use the in-process extractor: Android toybox tar rejects Ubuntu
-    // absolute symlink targets. The Dart extractor re-roots them in rootfs.
-    await _extractWithDart(tarFile.path, target.path);
+    if (!await _extractWithSystemTar(tarFile.path, target.path)) {
+      throw StateError('Android tar could not extract the bundled rootfs');
+    }
 
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');
@@ -244,12 +246,15 @@ class LinuxRuntime extends ChangeNotifier {
     try {
       await tarFile.delete();
     } catch (_) {
-      // Not fatal, just wasted space.
+      // Not fatal, just wasted storage.
     }
   }
 
   Future<bool> _extractWithSystemTar(String tarPath, String destination) async {
     try {
+      // The prebake step converts absolute guest symlinks to relative links.
+      // Android's toybox tar can therefore extract the archive without
+      // Dart-side decompression or archive-wide buffering.
       final result = await Process.run(
         '/system/bin/tar',
         <String>['-xzf', tarPath, '-C', destination],
@@ -264,58 +269,6 @@ class LinuxRuntime extends ChangeNotifier {
     } catch (e) {
       _appendLog('system tar failed: $e');
       return false;
-    }
-  }
-
-  Future<void> _extractWithDart(String tarPath, String destination) async {
-    final raw = await File(tarPath).readAsBytes();
-    final decompressed = GZipDecoder().decodeBytes(raw);
-    final archive = TarDecoder().decodeBytes(decompressed);
-
-    for (final entry in archive.files) {
-      final name = p.posix.normalize(entry.name.replaceFirst(RegExp(r'^\./'), ''));
-      if (name.isEmpty || name == '.' || name.startsWith('/') ||
-          name == '..' || name.startsWith('../')) continue;
-      final outPath = p.join(destination, name);
-
-      if (entry.isSymbolicLink) {
-        final link = Link(outPath);
-        await link.parent.create(recursive: true);
-        if (link.existsSync()) await link.delete();
-        final target = entry.nameOfLinkedFile;
-        final safeTarget = target.startsWith('/')
-            ? p.posix.relative(
-                p.posix.normalize(target),
-                from: p.posix.dirname('/$name'),
-              )
-            : target;
-        await link.create(safeTarget);
-        continue;
-      }
-
-      if (!entry.isFile) {
-        await Directory(outPath).create(recursive: true);
-        continue;
-      }
-
-      final file = File(outPath);
-      await file.parent.create(recursive: true);
-      await file.writeAsBytes(_bytesOf(entry), flush: false);
-      final mode = entry.unixPermissions;
-      if (mode != 0) await _chmod(outPath, mode.toRadixString(8));
-    }
-  }
-
-
-  Uint8List _bytesOf(ArchiveFile entry) {
-    final content = entry.content;
-    if (content is Uint8List) return content;
-    if (content is List<int>) return Uint8List.fromList(content);
-    try {
-      final dynamic stream = content;
-      return Uint8List.fromList(stream.toUint8Array() as List<int>);
-    } catch (_) {
-      return Uint8List(0);
     }
   }
 
