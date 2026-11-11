@@ -91,18 +91,47 @@ jobs:
       - name: Build release APK (arm64)
         run: flutter build apk --release --target-platform android-arm64
 
-      - name: Stage artifact
+      - name: Stage and split APK for chat retrieval
         run: |
-          mkdir -p out
-          cp build/app/outputs/flutter-apk/app-release.apk \
-             "out/MicroOS-${GITHUB_RUN_NUMBER}-arm64.apk"
-          ls -lh out
+          mkdir -p out/chunks
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          cp "$APK" "out/MicroOS-${GITHUB_RUN_NUMBER}-arm64.apk"
+          split -b 300m --numeric-suffixes=0 --suffix-length=2 "$APK" out/chunks/MicroOS-part-
+          ls -lh out out/chunks
+          test "$(find out/chunks -type f | wc -l)" -le 3
+          test "$(find out/chunks -type f | wc -l)" -ge 1
 
-      - name: Upload APK
+      - name: Upload APK part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: MicroOS-apk-part-00
+          path: out/chunks/MicroOS-part-00
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload APK part 01
+        if: hashFiles('out/chunks/MicroOS-part-01') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: MicroOS-apk-part-01
+          path: out/chunks/MicroOS-part-01
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload APK part 02
+        if: hashFiles('out/chunks/MicroOS-part-02') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: MicroOS-apk-part-02
+          path: out/chunks/MicroOS-part-02
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload complete APK artifact (GitHub download)
         uses: actions/upload-artifact@v4
         with:
           name: MicroOS-apk
-          path: out/*.apk
+          path: out/MicroOS-${GITHUB_RUN_NUMBER}-arm64.apk
           if-no-files-found: error
           retention-days: 30
 
