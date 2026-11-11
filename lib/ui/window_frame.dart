@@ -245,11 +245,17 @@ class _GripPainter extends CustomPainter {
       ..strokeWidth = 1.4
       ..strokeCap = StrokeCap.round;
 
+    final right = alignment.x >= 0;
+    final bottom = alignment.y >= 0;
+    final sx = right ? 1.0 : -1.0;
+    final sy = bottom ? 1.0 : -1.0;
+    final cornerX = right ? size.width : 0.0;
+    final cornerY = bottom ? size.height : 0.0;
     for (var i = 0; i < 3; i++) {
       final offset = 5.0 + i * 5;
       canvas.drawLine(
-        Offset(size.width - offset, size.height - 4),
-        Offset(size.width - 4, size.height - offset),
+        Offset(cornerX - sx * offset, cornerY - sy * 4),
+        Offset(cornerX - sx * 4, cornerY - sy * offset),
         paint,
       );
     }
