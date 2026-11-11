@@ -38,6 +38,7 @@ flutter:
     - tool/setup.sh
     - assets/rootfs/
     - assets/proot/
+    - assets/fonts/OFL.txt
   fonts:
     - family: JetBrains Mono
       fonts:
