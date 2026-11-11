@@ -18,12 +18,15 @@ class SettingsApp extends StatefulWidget {
 
 class _SettingsAppState extends State<SettingsApp> {
   final TextEditingController _token = TextEditingController();
+  final TextEditingController _hfToken = TextEditingController();
 
   bool _busy = false;
+  bool _hfBusy = false;
   bool _repairing = false;
   String? _message;
   bool _messageIsError = false;
   String? _login;
+  String? _hfAccount;
 
   @override
   void initState() {
@@ -33,18 +36,19 @@ class _SettingsAppState extends State<SettingsApp> {
 
   Future<void> _restore() async {
     final scope = AppScope.of(context);
-    final token = await scope.auth.readToken();
     final login = await scope.auth.readLogin();
+    final hfToken = await scope.auth.readHuggingFaceToken();
     if (!mounted) return;
     setState(() {
       _login = login;
-      if (token != null) _token.text = token;
+      _hfAccount = hfToken == null ? null : 'Token saved';
     });
   }
 
   @override
   void dispose() {
     _token.dispose();
+    _hfToken.dispose();
     super.dispose();
   }
 
@@ -93,6 +97,40 @@ class _SettingsAppState extends State<SettingsApp> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _saveHuggingFaceToken() async {
+    final scope = AppScope.of(context);
+    final token = _hfToken.text.trim();
+    if (token.isEmpty) {
+      _notify('Paste a Hugging Face access token first.', isError: true);
+      return;
+    }
+    setState(() => _hfBusy = true);
+    try {
+      final account = await scope.auth.verifyHuggingFace(token);
+      if (account == null) {
+        _notify('Hugging Face rejected that token. Check its validity and permissions.', isError: true);
+        return;
+      }
+      await scope.auth.saveHuggingFaceToken(token);
+      widget.runtime.setHuggingFaceToken(token);
+      if (!mounted) return;
+      setState(() => _hfAccount = account);
+      _notify('Hugging Face connected as $account. OpenCode can use HF_TOKEN.');
+    } finally {
+      if (mounted) setState(() => _hfBusy = false);
+    }
+  }
+
+  Future<void> _clearHuggingFaceToken() async {
+    final scope = AppScope.of(context);
+    await scope.auth.clearHuggingFaceToken();
+    widget.runtime.setHuggingFaceToken(null);
+    if (!mounted) return;
+    _hfToken.clear();
+    setState(() => _hfAccount = null);
+    _notify('Hugging Face token removed.');
   }
 
   Future<void> _clearToken() async {
@@ -214,6 +252,49 @@ class _SettingsAppState extends State<SettingsApp> {
                       ),
                     ),
                   ],
+                ],
+              ),
+              _Section(
+                title: 'Hugging Face',
+                subtitle: _hfAccount == null ? 'Not connected' : 'Connected · $_hfAccount',
+                children: [
+                  const Text(
+                    'Stored using Android encrypted storage. OpenCode and Python tools receive HF_TOKEN when Linux processes start.',
+                    style: TextStyle(color: MicroColors.subtle, fontSize: 11),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _hfToken,
+                    obscureText: true,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    style: const TextStyle(fontSize: 12, color: MicroColors.text),
+                    decoration: const InputDecoration(
+                      hintText: 'hf_…',
+                      labelText: 'Hugging Face access token',
+                      labelStyle: TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      FilledButton(
+                        onPressed: _hfBusy ? null : _saveHuggingFaceToken,
+                        child: _hfBusy
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Text('Verify & save'),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: _hfBusy ? null : _clearHuggingFaceToken,
+                        child: const Text('Clear'),
+                      ),
+                    ],
+                  ),
+                  const Text(
+                    'Use a read-only token unless a project genuinely needs write access. Never paste tokens into project files or commit them.',
+                    style: TextStyle(color: MicroColors.amber, fontSize: 10, height: 1.45),
+                  ),
                 ],
               ),
               _Section(
