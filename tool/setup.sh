@@ -11,6 +11,10 @@
 # =============================================================================
 set -uo pipefail
 
+# Use a writable, private temp directory inside the proot guest.
+export TMPDIR=/tmp
+mkdir -p /tmp
+chmod 1777 /tmp
 export DEBIAN_FRONTEND=noninteractive
 export HOME=/root
 export LANG=C.UTF-8
@@ -167,6 +171,15 @@ update-ca-certificates --fresh || warn "certificate refresh failed; retrying onc
 update-ca-certificates || true
 
 stage 91 "Installing OpenCode"
+# Keep npm's V8 heap bounded for low-memory Android devices running proot.
+# The official installer is preferred; npm is a bounded fallback, not a
+# prerequisite for the rest of the Linux environment.
+export NODE_OPTIONS="--max-old-space-size=768"
+apt-get install "${APT_OPTS[@]}" curl wget unzip tar ca-certificates || warn "OpenCode prerequisites could not all be installed"
+mkdir -p "$TMPDIR"
+chmod 1777 "$TMPDIR"
+update-ca-certificates || true
+
 if ! command -v opencode >/dev/null 2>&1; then
   installed=0
   for attempt in 1 2 3; do
@@ -180,7 +193,18 @@ if ! command -v opencode >/dev/null 2>&1; then
     fi
     sleep $((attempt * 5))
   done
-  [ "$installed" -eq 1 ] || warn "OpenCode unavailable; install later with the official installer"
+  if [ "$installed" -ne 1 ]; then
+    warn "official OpenCode installer unavailable; trying bounded npm fallback"
+    if command -v npm >/dev/null 2>&1; then
+      npm cache clean --force >/dev/null 2>&1 || true
+      if timeout 240 npm install -g opencode-ai --unsafe-perm=true --no-package-lock --prefer-online; then
+        installed=1
+      else
+        warn "npm fallback failed or timed out"
+      fi
+    fi
+  fi
+  [ "$installed" -eq 1 ] || warn "OpenCode unavailable; install later when network/memory permits"
 fi
 
 # Verify the binary exists; a successful download attempt alone is not proof.

@@ -447,6 +447,26 @@ class LinuxRuntime extends ChangeNotifier {
     );
   }
 
+  /// Attempts to repair interrupted dpkg configuration and broken dependencies.
+  /// Output is streamed into the same diagnostic log shown in Settings.
+  Future<int> repairPackages() async {
+    if (!isReady || isBusy) return -1;
+    _appendLog('[microos] starting package repair');
+    final pty = Pty.start(
+      prootPath,
+      arguments: _prootArgs(<String>[
+        '/bin/bash', '-lc',
+        'dpkg --configure -a; first=$?; apt-get install -f -y; second=$?; '
+            'if [ "$first" -ne 0 ]; then exit "$first"; else exit "$second"; fi',
+      ]),
+      environment: _prootEnv,
+    );
+    pty.output.listen((data) => _appendLog(utf8.decode(data, allowMalformed: true)));
+    final code = await pty.exitCode;
+    _appendLog('[microos] package repair exited with code $code');
+    return code;
+  }
+
   // --------------------------------------------------------------- credentials
 
   /// Writes `~/.git-credentials` + `~/.gitconfig` straight into the rootfs so

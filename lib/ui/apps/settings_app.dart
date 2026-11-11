@@ -20,6 +20,7 @@ class _SettingsAppState extends State<SettingsApp> {
   final TextEditingController _token = TextEditingController();
 
   bool _busy = false;
+  bool _repairing = false;
   String? _message;
   bool _messageIsError = false;
   String? _login;
@@ -273,6 +274,30 @@ class _SettingsAppState extends State<SettingsApp> {
                         child: const Text('Storage access'),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: (!widget.runtime.isReady || widget.runtime.isBusy || _repairing)
+                          ? null
+                          : () async {
+                              setState(() => _repairing = true);
+                              final code = await widget.runtime.repairPackages();
+                              if (!mounted) return;
+                              setState(() => _repairing = false);
+                              _notify(
+                                code == 0
+                                    ? 'Package repair completed.'
+                                    : 'Package repair exited with code $code. Check the log for details.',
+                                isError: code != 0,
+                              );
+                            },
+                      icon: _repairing
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.build_outlined, size: 16),
+                      label: Text(_repairing ? 'Repairing packages…' : 'Repair Linux packages'),
+                    ),
                   ),
                   const SizedBox(height: 10),
                   _LogView(runtime: widget.runtime),
