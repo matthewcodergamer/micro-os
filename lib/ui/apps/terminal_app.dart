@@ -220,15 +220,15 @@ class _TerminalAppState extends State<TerminalApp> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _extraKey('Tab', '\\t'),
-                  _extraKey('↑', '\\x1b[A'),
-                  _extraKey('↓', '\\x1b[B'),
-                  _extraKey('←', '\\x1b[D'),
-                  _extraKey('→', '\\x1b[C'),
+                  _extraKey('Tab', '\t'),
+                  _extraKey('↑', '\x1b[A'),
+                  _extraKey('↓', '\x1b[B'),
+                  _extraKey('←', '\x1b[D'),
+                  _extraKey('→', '\x1b[C'),
                   _extraKey('Ctrl', '', selected: _ctrlArmed, onPressed: () {
                     setState(() => _ctrlArmed = !_ctrlArmed);
                   }),
-                  _extraKey('Esc', '\\x1b'),
+                  _extraKey('Esc', '\x1b'),
                   _extraKey('|', '|'),
                 ],
               ),
