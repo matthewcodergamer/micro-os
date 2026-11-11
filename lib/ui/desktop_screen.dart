@@ -304,7 +304,7 @@ class _WelcomePanel extends StatelessWidget {
                       const SizedBox(width: 9),
                       const Expanded(
                         child: Text(
-                          'Tip: open Phone files, find your project or Minecraft .jar, then choose “Terminal here” to inspect it with unzip or Python. OpenCode can work in that same folder.',
+                          'Tip: open Phone files, find your project or Minecraft .jar, then choose “Terminal here” and run microos-jar inspect file.jar or microos-jar extract file.jar. OpenCode can work in that same folder.',
                           style: TextStyle(color: MicroColors.text, fontSize: 10, height: 1.5),
                         ),
                       ),
