@@ -33,8 +33,9 @@ jobs:
           ./tool/prebake_rootfs.sh
           ROOTFS="assets/rootfs/rootfs.tar.gz"
           test -s "$ROOTFS"
-          tar -tzf "$ROOTFS" | grep -qxE '(\./)?root/\.microos/ready'
-          tar -tzf "$ROOTFS" | grep -qxE '(\./)?opt/firefox/firefox'
+          tar -tzf "$ROOTFS" > /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           echo "Pre-baked rootfs:"
           ls -lh "$ROOTFS"
           sha256sum "$ROOTFS"
@@ -64,8 +65,9 @@ jobs:
       - name: Verify transferred rootfs
         run: |
           test -s assets/rootfs/rootfs.tar.gz
-          tar -tzf assets/rootfs/rootfs.tar.gz | grep -qxE '(\./)?root/\.microos/ready'
-          tar -tzf assets/rootfs/rootfs.tar.gz | grep -qxE '(\./)?opt/firefox/firefox'
+          tar -tzf assets/rootfs/rootfs.tar.gz > /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           ls -lh assets/rootfs/rootfs.tar.gz
           sha256sum assets/rootfs/rootfs.tar.gz
 
