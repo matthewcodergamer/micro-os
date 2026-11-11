@@ -116,16 +116,18 @@ apt-get install "${APT_OPTS[@]}" \
   || warn "some X11 packages failed to install"
 
 # -----------------------------------------------------------------------------
-# 5. Browser
-#    Ubuntu arm64 ships Chromium only as a snap, and snaps cannot run in proot.
-#    Falkon is a real .deb desktop browser built on QtWebEngine (Chromium's
-#    Blink + V8), so it is the dependable default. If a genuine Chromium .deb
-#    is ever available it is preferred automatically by microos-browse.
+# 5. Browser runtime
+#    The CI pre-bake installs Mozilla's official Firefox ARM64 tarball.
+#    Install only its shared-library dependencies here; do not install Snap.
 # -----------------------------------------------------------------------------
-stage 84 "Installing desktop browser"
-# Do not install Ubuntu's chromium transitional package: on arm64 it
-# points to Snap, and snapd cannot operate inside this proot guest.
-apt-get install "${APT_OPTS[@]}" falkon || warn "Falkon/QtWebEngine install failed"
+stage 84 "Installing Firefox runtime libraries"
+apt-get install "${APT_OPTS[@]}" \
+  libgtk-3-0t64 libdbus-glib-1-2 libxt6 libx11-xcb1 \
+  libasound2t64 libpulse0 libnss3 libxcomposite1 libxdamage1 \
+  libxrandr2 libgbm1 libxss1 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+  libcups2t64 libdrm2 libxkbcommon0 libwayland-client0 libegl1 \
+  libgl1 libpango-1.0-0 libcairo2 \
+  || warn "some Firefox runtime libraries could not be installed"
 
 # -----------------------------------------------------------------------------
 # 6. ZRAM
@@ -321,37 +323,30 @@ echo "[microos] display stopped"
 EOF
 chmod 755 /root/.microos/stop-gui.sh
 
-# The browser launcher. Flags are the memory-conservative set requested for
-# low-RAM phones; --single-process is opt-in because upstream deprecated it and
-# it crashes on many sites.
+# Prefer Mozilla's official Firefox ARM64 build when it is pre-baked.
+# Keep Falkon as a compatibility fallback for older/non-prebaked guests.
 cat > /usr/local/bin/microos-browse <<'EOF'
 #!/usr/bin/env bash
 set -u
 export DISPLAY="${DISPLAY:-:1}"
-export QTWEBENGINE_DISABLE_SANDBOX=1
-
-BASE_FLAGS=(
-  --no-sandbox
-  --disable-gpu-sandbox
-  --disable-dev-shm-usage
-  --disable-background-networking
-  --process-per-site
-  --renderer-process-limit=1
-  --js-flags=--max-old-space-size=512
-)
-[ "${MICROOS_SINGLE_PROCESS:-0}" = "1" ] && BASE_FLAGS+=(--single-process)
-
-export QTWEBENGINE_CHROMIUM_FLAGS="${BASE_FLAGS[*]}"
+export GDK_BACKEND=x11
+export MOZ_DISABLE_CONTENT_SANDBOX=1
+export MOZ_DISABLE_GMP_SANDBOX=1
 
 URL="${1:-}"
-if command -v falkon >/dev/null 2>&1; then
+if [ -x /opt/firefox/firefox ]; then
+  if [ -n "$URL" ]; then
+    exec /opt/firefox/firefox --new-window "$URL"
+  fi
+  exec /opt/firefox/firefox
+elif command -v falkon >/dev/null 2>&1; then
   exec falkon ${URL:+"$URL"}
 elif command -v chromium >/dev/null 2>&1; then
-  exec chromium "${BASE_FLAGS[@]}" ${URL:+"$URL"}
+  exec chromium --no-sandbox --disable-dev-shm-usage ${URL:+"$URL"}
 elif command -v chromium-browser >/dev/null 2>&1; then
-  exec chromium-browser "${BASE_FLAGS[@]}" ${URL:+"$URL"}
+  exec chromium-browser --no-sandbox --disable-dev-shm-usage ${URL:+"$URL"}
 fi
-echo "No desktop browser is installed. Run: apt-get install falkon" >&2
+echo "No desktop browser is installed. Reinstall the Linux guest from Settings." >&2
 exit 1
 EOF
 chmod 755 /usr/local/bin/microos-browse
