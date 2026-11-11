@@ -486,8 +486,10 @@ class LinuxRuntime extends ChangeNotifier {
 
   Future<void> clearGitCredentials() async {
     _githubToken = null;
-    final credentials = File(p.join(rootfsPath, 'root/.git-credentials'));
-    if (credentials.existsSync()) await credentials.delete();
+    for (final name in <String>['root/.git-credentials', 'root/.gitconfig']) {
+      final file = File(p.join(rootfsPath, name));
+      if (file.existsSync()) await file.delete();
+    }
   }
 
   // --------------------------------------------------------------------- misc
