@@ -37,6 +37,14 @@ Future<void> main() async {
 
   await settings.load();
   await runtime.init();
+  final githubToken = await auth.readToken();
+  final githubLogin = await auth.readLogin();
+  final huggingFaceToken = await auth.readHuggingFaceToken();
+  runtime.setGithubToken(githubToken);
+  runtime.setHuggingFaceToken(huggingFaceToken);
+  if (githubToken != null && githubLogin != null && runtime.isReady) {
+    await runtime.applyGitCredentials(githubToken, githubLogin);
+  }
   unawaited(stats.start());
 
   runApp(
