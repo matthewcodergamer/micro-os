@@ -20,8 +20,8 @@ jobs:
     # larger ARM runner, set repository variable MICROOS_ARM_RUNNER to its label.
     runs-on: ${{ vars.MICROOS_ARM_RUNNER || 'ubuntu-24.04-arm' }}
     env:
-      # Set MICROOS_MIN_RAM_GIB=14 when a 14+ GiB larger ARM runner is configured.
-      MICROOS_MIN_RAM_GIB: ${{ vars.MICROOS_MIN_RAM_GIB || '0' }}
+      # Require a 14 GiB ARM64 runner by default; override only for a known larger-runner label.
+      MICROOS_MIN_RAM_GIB: ${{ vars.MICROOS_MIN_RAM_GIB || '14' }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
