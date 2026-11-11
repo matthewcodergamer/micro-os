@@ -81,6 +81,7 @@ class _SettingsAppState extends State<SettingsApp> {
       }
 
       await scope.auth.saveToken(token, identity.login);
+      widget.runtime.setGithubToken(token);
       if (widget.runtime.isReady) {
         await widget.runtime.applyGitCredentials(token, identity.login);
       }
