@@ -10,8 +10,8 @@ import 'package:path_provider/path_provider.dart';
 
 enum RuntimeStatus { checking, missing, installing, ready, failed }
 
-/// Owns the Linux guest: unpacks the bundled rootfs, runs first-boot
-/// provisioning, and launches processes inside it through proot.
+/// Owns the Linux guest: unpacks the bundled, pre-provisioned rootfs and
+/// launches processes through proot. Legacy images retain a setup fallback.
 ///
 /// Everything the UI needs is exposed as plain Dart calls so the window manager
 /// never has to know whether it is talking to a local proot guest or (later) a
@@ -21,6 +21,10 @@ class LinuxRuntime extends ChangeNotifier {
   static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
+  // Bump this whenever the bundled Linux image changes. It forces upgrades to
+  // replace an older extracted rootfs instead of silently reusing stale files.
+  static const String _rootfsVersion = '2';
+  static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
   /// rootfs instead of being executed straight out of the APK, because Android
@@ -78,6 +82,13 @@ class LinuxRuntime extends ChangeNotifier {
   String get prootPath => p.join(base.path, 'proot', 'proot');
   String get _readyPath => p.join(rootfsPath, _readyMarker);
 
+  bool get _hasCurrentImage {
+    final versionFile = File(p.join(rootfsPath, _imageVersionPath));
+    return File(_readyPath).existsSync() &&
+        versionFile.existsSync() &&
+        versionFile.readAsStringSync().trim() == _rootfsVersion;
+  }
+
   /// Environment handed to every proot invocation.
   Map<String, String> get _prootEnv => <String, String>{
         'PROOT_LOADER': p.join(base.path, 'proot', 'loader'),
@@ -118,10 +129,10 @@ class LinuxRuntime extends ChangeNotifier {
       await _base!.create(recursive: true);
       await Directory(p.join(base.path, 'tmp')).create(recursive: true);
 
-      status = File(_readyPath).existsSync()
-          ? RuntimeStatus.ready
-          : RuntimeStatus.missing;
-      stage = status == RuntimeStatus.ready ? 'Linux ready' : 'Linux not installed';
+      status = _hasCurrentImage ? RuntimeStatus.ready : RuntimeStatus.missing;
+      stage = status == RuntimeStatus.ready
+          ? 'Pre-baked Linux ready'
+          : 'Pre-baked workstation needs unpacking';
       progress = status == RuntimeStatus.ready ? 1 : 0;
       if (status == RuntimeStatus.ready) await _refreshGuestDns();
     } catch (e) {
@@ -167,23 +178,36 @@ class LinuxRuntime extends ChangeNotifier {
       await _extractProot();
 
       progress = 0.08;
-      stage = 'Unpacking Ubuntu rootfs';
+      stage = 'Unpacking pre-baked Ubuntu workstation';
       _notify();
       await _extractRootfs();
 
-      progress = 0.55;
-      stage = 'Installing developer toolchain';
-      _notify();
-      await _installSetupScript();
-      await _runProvisioning();
-
-      if (File(_readyPath).existsSync()) {
+      if (_hasCurrentImage) {
+        // The APK already contains Firefox, OpenCode and the complete toolchain.
+        // Do not run apt or download packages on the phone during first launch.
+        progress = 0.95;
+        stage = 'Finalising pre-baked workstation';
+        _notify();
+        await _refreshGuestDns();
         status = RuntimeStatus.ready;
         progress = 1;
-        stage = 'Linux ready';
+        stage = 'Pre-baked Linux ready';
       } else {
-        status = RuntimeStatus.failed;
-        error = 'Provisioning stopped before it finished. Check the log below.';
+        // Compatibility path for an older development image without a
+        // recognised pre-bake marker.
+        progress = 0.55;
+        stage = 'Completing legacy Linux setup';
+        _notify();
+        await _installSetupScript();
+        await _runProvisioning();
+        if (File(_readyPath).existsSync()) {
+          status = RuntimeStatus.ready;
+          progress = 1;
+          stage = 'Linux ready';
+        } else {
+          status = RuntimeStatus.failed;
+          error = 'Linux setup stopped before it finished. Check the log below.';
+        }
       }
     } catch (e, stack) {
       status = RuntimeStatus.failed;
@@ -230,9 +254,11 @@ class LinuxRuntime extends ChangeNotifier {
 
   Future<void> _extractRootfs() async {
     final target = Directory(rootfsPath);
+    if (target.existsSync()) await target.delete(recursive: true);
     await target.create(recursive: true);
 
     final tarFile = File(p.join(base.path, 'rootfs.tar.gz'));
+    if (tarFile.existsSync()) await tarFile.delete();
     if (!tarFile.existsSync() || tarFile.lengthSync() < 1024 * 1024) {
       // AssetManager.open() is copied on a native worker thread in fixed-size
       // chunks. Never call rootBundle.load() for this 800+ MB asset: that
