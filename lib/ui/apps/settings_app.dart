@@ -161,10 +161,11 @@ class _SettingsAppState extends State<SettingsApp> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: MicroColors.panelSolid,
-        title: const Text('Install Linux toolchain?'),
+        title: const Text('Unpack Linux workstation?'),
         content: const Text(
-          'This downloads roughly 700 MB – 1.2 GB of packages inside the guest. '
-          'Use Wi-Fi and keep the app in the foreground.',
+          'The APK already contains Ubuntu, Firefox, OpenCode and the developer tools. '
+          'This expands the bundled image into private app storage; it does not '
+          'download packages. Keep MicroOS open while it finishes.',
         ),
         actions: [
           TextButton(
@@ -173,7 +174,7 @@ class _SettingsAppState extends State<SettingsApp> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Install'),
+            child: const Text('Unpack'),
           ),
         ],
       ),
@@ -373,7 +374,7 @@ class _SettingsAppState extends State<SettingsApp> {
                       FilledButton.tonal(
                         onPressed: widget.runtime.isBusy ? null : _install,
                         child: Text(
-                          widget.runtime.isReady ? 'Repair toolchain' : 'Install toolchain',
+                          widget.runtime.isReady ? 'Reinstall workstation' : 'Unpack workstation',
                         ),
                       ),
                       const SizedBox(width: 8),
