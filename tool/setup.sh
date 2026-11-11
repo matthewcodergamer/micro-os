@@ -282,7 +282,86 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 8. Shell defaults, git, projects
+# 8. Local JAR / Minecraft inspection helper
+#    Works on files the user has downloaded to Android shared storage. It does
+#    not download, bundle, or redistribute Minecraft game assets.
+# -----------------------------------------------------------------------------
+stage 93 "Preparing local JAR inspection tools"
+cat > /usr/local/bin/microos-jar <<'JAR'
+#!/usr/bin/env python3
+import pathlib
+import stat
+import sys
+import zipfile
+
+def usage():
+    print("Usage:")
+    print("  microos-jar inspect <file.jar>")
+    print("  microos-jar extract <file.jar> [destination]")
+    raise SystemExit(2)
+
+if len(sys.argv) < 3 or sys.argv[1] not in {"inspect", "extract"}:
+    usage()
+
+action = sys.argv[1]
+source = pathlib.Path(sys.argv[2]).expanduser()
+if not source.is_file():
+    raise SystemExit(f"File not found: {source}")
+
+try:
+    archive = zipfile.ZipFile(source)
+except (OSError, zipfile.BadZipFile) as error:
+    raise SystemExit(f"Not a readable ZIP/JAR archive: {error}")
+
+with archive:
+    entries = archive.infolist()
+    assets = [entry for entry in entries if entry.filename.startswith("assets/")]
+    total = sum(entry.file_size for entry in entries)
+    print(f"Archive: {source}")
+    print(f"Entries: {len(entries)}")
+    print(f"Uncompressed size: {total:,} bytes")
+    print(f"assets/ entries: {len(assets)}")
+    if action == "inspect":
+        for entry in entries[:80]:
+            print(f"{entry.file_size:>12,}  {entry.filename}")
+        if len(entries) > 80:
+            print(f"... {len(entries) - 80} more entries")
+        raise SystemExit(0)
+
+    destination = pathlib.Path(sys.argv[3]).expanduser() if len(sys.argv) > 3 else source.with_name(source.name + ".extracted")
+    destination.mkdir(parents=True, exist_ok=True)
+    root = destination.resolve()
+    written = 0
+    for entry in entries:
+        name = pathlib.PurePosixPath(entry.filename)
+        if name.is_absolute() or ".." in name.parts:
+            print(f"Skipping unsafe path: {entry.filename}", file=sys.stderr)
+            continue
+        mode = entry.external_attr >> 16
+        if stat.S_ISLNK(mode):
+            print(f"Skipping symlink entry: {entry.filename}", file=sys.stderr)
+            continue
+        target = (root / pathlib.Path(*name.parts)).resolve()
+        if target != root and root not in target.parents:
+            print(f"Skipping unsafe path: {entry.filename}", file=sys.stderr)
+            continue
+        if entry.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with archive.open(entry) as incoming, target.open("wb") as outgoing:
+            while True:
+                chunk = incoming.read(1024 * 1024)
+                if not chunk:
+                    break
+                outgoing.write(chunk)
+        written += 1
+    print(f"Extracted {written} files to: {root}")
+JAR
+chmod 755 /usr/local/bin/microos-jar
+
+# -----------------------------------------------------------------------------
+# 9. Shell defaults, git, projects
 # -----------------------------------------------------------------------------
 stage 94 "Finalising shell"
 cat > /etc/profile.d/microos.sh <<'EOF'
@@ -319,7 +398,7 @@ alias ll='ls -alF'
 EOF
 
 # -----------------------------------------------------------------------------
-# 9. Display bridge + browser launcher
+# 10. Display bridge + browser launcher
 # -----------------------------------------------------------------------------
 stage 96 "Writing display bridge"
 cat > /root/.microos/start-gui.sh <<'EOF'
@@ -418,7 +497,7 @@ STEAMCHECK
 chmod 755 /usr/local/bin/microos-steam-check
 
 # -----------------------------------------------------------------------------
-# 10. Trim the image
+# 11. Trim the image
 # -----------------------------------------------------------------------------
 stage 98 "Cleaning up"
 apt-get autoremove -y >/dev/null 2>&1 || true
