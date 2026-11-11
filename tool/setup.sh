@@ -115,6 +115,39 @@ apt-get install "${APT_OPTS[@]}" \
   fonts-dejavu-core fonts-liberation \
   || warn "some X11 packages failed to install"
 
+# macOS-inspired X11 pointer theme (WhiteSur Cursors, upstream GPL-3.0).
+# This affects X11 applications in the VNC desktop; it does not change the
+# Android host pointer or create a pointer overlay for touch-only screens.
+stage 80 "Installing WhiteSur X11 cursor theme"
+apt-get install "${APT_OPTS[@]}" git x11-xserver-utils || warn "cursor prerequisites failed"
+if [ ! -d /usr/share/icons/WhiteSur-cursors/cursors ]; then
+  rm -rf /tmp/WhiteSur-cursors
+  if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-cursors.git /tmp/WhiteSur-cursors; then
+    if [ -d /tmp/WhiteSur-cursors/dist/cursors ]; then
+      install -d /usr/share/icons/WhiteSur-cursors
+      cp -a /tmp/WhiteSur-cursors/dist/. /usr/share/icons/WhiteSur-cursors/
+      [ -f /tmp/WhiteSur-cursors/LICENSE ] && install -m 644 /tmp/WhiteSur-cursors/LICENSE /usr/share/icons/WhiteSur-cursors/LICENSE
+      log "WhiteSur cursor assets installed"
+    else
+      warn "WhiteSur upstream checkout has no compiled dist/cursors; retaining default cursor"
+    fi
+  else
+    warn "WhiteSur cursor download failed; retaining default cursor"
+  fi
+fi
+if [ -d /usr/share/icons/WhiteSur-cursors/cursors ]; then
+  mkdir -p /root/.icons/default
+  cat > /root/.icons/default/index.theme <<'CURSOR'
+[Icon Theme]
+Inherits=WhiteSur-cursors
+CURSOR
+  cat > /root/.Xresources <<'XRES'
+Xcursor.theme: WhiteSur-cursors
+Xcursor.size: 24
+XRES
+fi
+rm -rf /tmp/WhiteSur-cursors
+
 # -----------------------------------------------------------------------------
 # 5. Browser
 #    Ubuntu arm64 ships Chromium only as a snap, and snaps cannot run in proot.
@@ -245,6 +278,8 @@ cat >> /root/.bashrc <<'EOF'
 # --- MicroOS ---------------------------------------------------------------
 export PATH="/root/.opencode/bin:/root/.local/bin:$PATH"
 export DISPLAY=:1
+export XCURSOR_THEME=WhiteSur-cursors
+export XCURSOR_SIZE=24
 export PS1='\[\e[38;5;39m\]\u@microos\[\e[0m\]:\[\e[38;5;114m\]\w\[\e[0m\]\$ '
 command -v microos-mem >/dev/null && :
 alias ll='ls -alF'
