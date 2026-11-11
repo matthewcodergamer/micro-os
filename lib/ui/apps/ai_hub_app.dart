@@ -13,7 +13,7 @@ class AiHubApp extends StatelessWidget {
   final LinuxRuntime runtime;
 
   static String _command(String theme) => '''
-export PATH="/root/.opencode/bin :/root/.local/bin:\$PATH"
+export PATH="/root/.opencode/bin:/root/.local/bin:\$PATH"
 if command -v opencode >/dev/null 2>&1; then
   mkdir -p /root/.config/opencode
   printf '{"\$schema":"https://opencode.ai/config.json","theme":"$theme"}' > /root/.config/opencode/opencode.json
