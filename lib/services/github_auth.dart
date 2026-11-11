@@ -17,6 +17,7 @@ class GithubIdentity {
 class GithubAuth {
   static const _kToken = 'github.pat';
   static const _kLogin = 'github.login';
+  static const _kHfToken = 'huggingface.token';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -25,6 +26,36 @@ class GithubAuth {
   Future<String?> readToken() async {
     try {
       return await _storage.read(key: _kToken);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> readHuggingFaceToken() async {
+    try {
+      return await _storage.read(key: _kHfToken);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveHuggingFaceToken(String token) async {
+    await _storage.write(key: _kHfToken, value: token);
+  }
+
+  Future<void> clearHuggingFaceToken() async {
+    await _storage.delete(key: _kHfToken);
+  }
+
+  Future<String?> verifyHuggingFace(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://huggingface.co/api/whoami-v2'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      return (body['name'] as String?) ?? (body['fullname'] as String?) ?? 'Hugging Face account';
     } catch (_) {
       return null;
     }
