@@ -118,6 +118,7 @@ class _DockButtonState extends State<_DockButton> {
         onExit: (_) => setState(() => _hovered = false),
         child: InkWell(
           onTap: widget.onTap,
+          onDoubleTap: widget.onQuit,
           onLongPress: () async {
             final choice = await showModalBottomSheet<String>(
               context: context,
