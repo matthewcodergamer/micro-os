@@ -193,29 +193,32 @@ class _TerminalAppState extends State<TerminalApp> {
     }
 
     return Container(
-      color: const Color(0xFF0B0E14),
+      color: TerminalProColors.background,
       child: Column(
         children: [
           Container(
             height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: const BoxDecoration(
-              color: Color(0xFF141822),
+              color: Color(0xFF101010),
               border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF))),
             ),
             child: Row(
               children: [
-                const Icon(Icons.terminal, size: 15, color: MicroColors.subtle),
+                const Icon(Icons.terminal, size: 15, color: Color(0xFFBFBFBF)),
                 const SizedBox(width: 7),
                 const Expanded(
-                  child: Text('Terminal', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+                  child: Text(
+                    'Terminal',
+                    style: TextStyle(color: Color(0xFFBFBFBF), fontSize: 11),
+                  ),
                 ),
                 IconButton(
                   tooltip: 'Paste from Android clipboard',
                   visualDensity: VisualDensity.compact,
                   onPressed: _pasteFromClipboard,
                   icon: const Icon(Icons.content_paste, size: 17),
-                  color: MicroColors.text,
+                  color: const Color(0xFFF4F4F4),
                 ),
               ],
             ),
@@ -232,7 +235,11 @@ class _TerminalAppState extends State<TerminalApp> {
                     padding: const EdgeInsets.all(8),
                     backgroundOpacity: 1,
                     theme: _theme,
-                    textStyle: TerminalStyle(fontSize: widget.settings.terminalFontSize),
+                    textStyle: TerminalStyle(
+                      fontSize: widget.settings.terminalFontSize,
+                      fontFamily: 'JetBrains Mono',
+                      fontFamilyFallback: const ['monospace'],
+                    ),
                     simulateScroll: true,
                   ),
                 ),
@@ -243,7 +250,7 @@ class _TerminalAppState extends State<TerminalApp> {
           Container(
             height: 44,
             decoration: const BoxDecoration(
-              color: Color(0xFF141822),
+              color: Color(0xFF101010),
               border: Border(top: BorderSide(color: Color(0x1AFFFFFF))),
             ),
             child: SingleChildScrollView(
@@ -272,28 +279,38 @@ class _TerminalAppState extends State<TerminalApp> {
   }
 }
 
+/// macOS Terminal.app Pro profile palette.
 const TerminalTheme _theme = TerminalTheme(
-  cursor: Color(0xFF7FD1FF),
-  selection: Color(0x553D7EFF),
-  foreground: Color(0xFFE6E9F0),
-  background: Color(0xFF0B0E14),
-  black: Color(0xFF1B1F27),
-  red: Color(0xFFFF6B6B),
-  green: Color(0xFF4ADE80),
-  yellow: Color(0xFFFACC15),
-  blue: Color(0xFF60A5FA),
-  magenta: Color(0xFFC084FC),
-  cyan: Color(0xFF22D3EE),
-  white: Color(0xFFE5E7EB),
-  brightBlack: Color(0xFF4B5563),
-  brightRed: Color(0xFFFF8A8A),
-  brightGreen: Color(0xFF86EFAC),
-  brightYellow: Color(0xFFFDE68A),
-  brightBlue: Color(0xFF93C5FD),
-  brightMagenta: Color(0xFFD8B4FE),
-  brightCyan: Color(0xFF67E8F9),
-  brightWhite: Color(0xFFFFFFFF),
-  searchHitBackground: Color(0x66FACC15),
-  searchHitBackgroundCurrent: Color(0x99FACC15),
-  searchHitForeground: Color(0xFF0B0E14),
+  cursor: TerminalProColors.cursor,
+  selection: TerminalProColors.selection,
+  foreground: TerminalProColors.foreground,
+  background: TerminalProColors.background,
+  black: Color(0xFF000000),
+  red: Color(0xFF990000),
+  green: Color(0xFF00A600),
+  yellow: Color(0xFF999900),
+  blue: Color(0xFF0000B3),
+  magenta: Color(0xFFB300B3),
+  cyan: Color(0xFF00A6B3),
+  white: Color(0xFFBFBFBF),
+  brightBlack: Color(0xFF666666),
+  brightRed: Color(0xFFE60000),
+  brightGreen: Color(0xFF00D900),
+  brightYellow: Color(0xFFE6E600),
+  brightBlue: Color(0xFF0000FF),
+  brightMagenta: Color(0xFFE600E6),
+  brightCyan: Color(0xFF00E6E6),
+  brightWhite: Color(0xFFE6E6E6),
+  searchHitBackground: Color(0x66E6E600),
+  searchHitBackgroundCurrent: Color(0x99E6E600),
+  searchHitForeground: Color(0xFF000000),
 );
+
+class TerminalProColors {
+  const TerminalProColors._();
+
+  static const background = Color(0xFF000000);
+  static const foreground = Color(0xFFF4F4F4);
+  static const cursor = Color(0xFF606060);
+  static const selection = Color(0xFF525252);
+}
