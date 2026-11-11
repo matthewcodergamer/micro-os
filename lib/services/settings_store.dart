@@ -19,7 +19,7 @@ class SettingsStore extends ChangeNotifier {
     singleProcessBrowser = prefs.getBool(_kSingleProcess) ?? false;
     installedAt = prefs.getString(_kInstalledAt);
     openCodeTheme = prefs.getString(_kOpenCodeTheme) ?? 'light';
-    terminalFontSize = (prefs.getDouble(_kTerminalFontSize) ?? 13).clamp(10, 18);
+    terminalFontSize = (prefs.getDouble(_kTerminalFontSize) ?? 13).clamp(10, 18).toDouble();
     notifyListeners();
   }
 
@@ -31,7 +31,7 @@ class SettingsStore extends ChangeNotifier {
   }
 
   Future<void> setTerminalFontSize(double value) async {
-    terminalFontSize = value.clamp(10, 18);
+    terminalFontSize = value.clamp(10, 18).toDouble();
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_kTerminalFontSize, terminalFontSize);

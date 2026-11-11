@@ -60,8 +60,8 @@ class _TerminalAppState extends State<TerminalApp> {
     try {
       final pty = widget.runtime.startShell(argv: widget.argv);
       _pty = pty;
-      _output = pty.output.listen(
-        (data) => _queueOutput(utf8.decode(data, allowMalformed: true)),
+      _output = pty.output.transform(const Utf8Decoder(allowMalformed: true)).listen(
+        _queueOutput,
         onError: (Object e) => _terminal.write('\r\n[pty error: $e]\r\n'),
         onDone: () => _terminal.write('\r\n[process exited]\r\n'),
       );
@@ -225,14 +225,17 @@ class _TerminalAppState extends State<TerminalApp> {
             child: GestureDetector(
               onLongPress: _showTerminalMenu,
               child: RepaintBoundary(
-                child: TerminalView(
-                _terminal,
-                autofocus: true,
-                padding: const EdgeInsets.all(8),
-                backgroundOpacity: 1,
-                theme: _theme,
-                textStyle: TerminalStyle(fontSize: widget.settings.terminalFontSize),
-                simulateScroll: true,
+                child: AnimatedBuilder(
+                  animation: widget.settings,
+                  builder: (context, _) => TerminalView(
+                    _terminal,
+                    autofocus: true,
+                    padding: const EdgeInsets.all(8),
+                    backgroundOpacity: 1,
+                    theme: _theme,
+                    textStyle: TerminalStyle(fontSize: widget.settings.terminalFontSize),
+                    simulateScroll: true,
+                  ),
                 ),
               ),
             ),
