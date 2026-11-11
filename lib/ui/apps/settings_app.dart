@@ -216,6 +216,9 @@ class _SettingsAppState extends State<SettingsApp> {
                   ],
                 ],
               ),
+                  ],
+                ],
+              ),
               _Section(
                 title: 'How to get a GitHub Token',
                 subtitle: 'Connect MicroOS to your GitHub account',
