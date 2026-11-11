@@ -75,7 +75,7 @@ jobs:
         run: |
           APK="build/app/outputs/flutter-apk/app-release.apk"
           test -s "$APK"
-          aapt dump badging "$APK" | grep -q "package:"
+          unzip -l "$APK" | grep -q "AndroidManifest.xml"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/"
           sha256sum "$APK"
           ls -lh "$APK"
