@@ -176,6 +176,37 @@ class DesktopState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resize from any corner while keeping the opposite corner anchored.
+  void resizeFrom(
+    int id,
+    Offset delta,
+    Size screen, {
+    required bool fromLeft,
+    required bool fromTop,
+  }) {
+    final window = _byId(id);
+    if (window == null || window.pinned || window.maximized) return;
+    const minWidth = 240.0;
+    const minHeight = 160.0;
+    final old = window.rect;
+    var left = old.left;
+    var top = old.top;
+    var right = old.right;
+    var bottom = old.bottom;
+    if (fromLeft) {
+      left = (old.left + delta.dx).clamp(0.0, right - minWidth).toDouble();
+    } else {
+      right = (old.right + delta.dx).clamp(left + minWidth, screen.width).toDouble();
+    }
+    if (fromTop) {
+      top = (old.top + delta.dy).clamp(kStatusBarHeight, bottom - minHeight).toDouble();
+    } else {
+      bottom = (old.bottom + delta.dy).clamp(top + minHeight, screen.height - kDockReserved).toDouble();
+    }
+    window.rect = Rect.fromLTRB(left, top, right, bottom);
+    notifyListeners();
+  }
+
   /// Called on rotation / resize so pinned windows keep filling the screen.
   void syncToScreen(Size screen) {
     final compact = screen.width < 720;
