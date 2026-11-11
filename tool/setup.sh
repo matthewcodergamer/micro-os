@@ -116,17 +116,11 @@ apt-get install "${APT_OPTS[@]}" \
   || warn "some X11 packages failed to install"
 
 # -----------------------------------------------------------------------------
-# 5. Browser
-#    Ubuntu arm64 ships Chromium only as a snap, and snaps cannot run in proot.
-#    Falkon is a real .deb desktop browser built on QtWebEngine (Chromium's
-#    Blink + V8), so it is the dependable default. If a genuine Chromium .deb
-#    is ever available it is preferred automatically by microos-browse.
+# 5. Browser runtime
+#    The CI pre-bake installs Mozilla's official Firefox ARM64 tarball.
+#    Install only its shared-library dependencies here; do not install Snap.
 # -----------------------------------------------------------------------------
-stage 84 "Installing desktop browser"
-# Do not install Ubuntu's chromium transitional package: on arm64 it
-# points to Snap, and snapd cannot operate inside this proot guest.
-apt-get install "${APT_OPTS[@]}" falkon || warn "Falkon/QtWebEngine install failed"
-# Runtime libraries required by Mozilla's official Linux ARM64 tarball.
+stage 84 "Installing Firefox runtime libraries"
 apt-get install "${APT_OPTS[@]}" \
   libgtk-3-0t64 libdbus-glib-1-2 libxt6 libx11-xcb1 \
   libasound2t64 libpulse0 libnss3 libxcomposite1 libxdamage1 \
