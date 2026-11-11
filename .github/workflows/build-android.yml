@@ -21,9 +21,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify native ARM64 runner
+      - name: Verify native ARM64 runner and memory budget
         run: |
+          set -euo pipefail
           test "$(uname -m)" = "aarch64"
+          echo "Runner architecture: $(uname -m)"
+          echo "Runner CPUs: $(nproc)"
+          free -h
+          MEM_KB="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
+          MIN_MEM_KB="$((14 * 1024 * 1024))"
+          if [ "$MEM_KB" -lt "$MIN_MEM_KB" ]; then
+            echo "Expected at least 14 GiB RAM on the ARM64 pre-bake runner; found $((MEM_KB / 1024)) MiB."
+            exit 1
+          fi
           docker info >/dev/null
           docker pull --platform linux/arm64 ubuntu:24.04
 
@@ -36,6 +46,8 @@ jobs:
           tar -tzf "$ROOTFS" > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
+          grep -qxE '(\\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
+          grep -qxE '(\\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
           echo "Pre-baked rootfs:"
           ls -lh "$ROOTFS"
           sha256sum "$ROOTFS"
@@ -87,6 +99,8 @@ jobs:
           tar -tzf assets/rootfs/rootfs.tar.gz > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
+          grep -qxE '(\\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
+          grep -qxE '(\\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
           ls -lh assets/rootfs/rootfs.tar.gz
           sha256sum assets/rootfs/rootfs.tar.gz
 
