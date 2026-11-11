@@ -34,7 +34,9 @@ docker run --platform linux/arm64 --name "$NAME" \
     curl -fL --retry 3 --connect-timeout 20 \
       "https://download.mozilla.org/?lang=en-US&os=linux64-aarch64&product=firefox-latest-ssl" \
       -o /tmp/firefox.tar.xz
-    tar -tJf /tmp/firefox.tar.xz | grep -q "^firefox/firefox$"
+    tar -tJf /tmp/firefox.tar.xz > /tmp/firefox-archive.list
+    grep -qx "firefox/firefox" /tmp/firefox-archive.list
+    rm -f /tmp/firefox-archive.list
     mkdir -p /opt
     tar -xJf /tmp/firefox.tar.xz -C /opt
     ln -sf /opt/firefox/firefox /usr/local/bin/firefox
@@ -78,6 +80,7 @@ PY
 tar --hard-dereference --numeric-owner --owner=0 --group=0 \
   -czf "$OUT" -C "$TMP/rootfs" .
 
-tar -tzf "$OUT" | grep -qxE '(\./)?root/\.microos/ready'
-tar -tzf "$OUT" | grep -qxE '(\./)?opt/firefox/firefox'
+tar -tzf "$OUT" > "$TMP/rootfs-archive.list"
+grep -qxE '(\./)?root/\.microos/ready' "$TMP/rootfs-archive.list"
+grep -qxE '(\./)?opt/firefox/firefox' "$TMP/rootfs-archive.list"
 echo "==> Pre-baked ARM64 rootfs: $(du -h "$OUT" | cut -f1)"
