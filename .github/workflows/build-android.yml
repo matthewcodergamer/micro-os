@@ -57,6 +57,8 @@ jobs:
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-jar' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/.opencode/bin/opencode' /tmp/rootfs-archive.list
           grep -q 'root/.microos/browser-home' /tmp/rootfs-archive.list
           echo "Pre-baked rootfs:"
           ls -lh "$ROOTFS"
@@ -111,6 +113,8 @@ jobs:
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-jar' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/.opencode/bin/opencode' /tmp/rootfs-archive.list
           grep -q 'root/.microos/browser-home' /tmp/rootfs-archive.list
           ls -lh assets/rootfs/rootfs.tar.gz
           sha256sum assets/rootfs/rootfs.tar.gz
