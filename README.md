@@ -150,6 +150,7 @@ execution arrangement).
 ### Local build
 
 ```bash
+bash tool/fetch_fonts.sh   # JetBrains Mono bundled in the terminal APK
 flutter pub get
 ./tool/fetch_runtime.sh      # rootfs + proot into assets/
 ./tool/bootstrap_android.sh  # generates android/ and patches the manifest
