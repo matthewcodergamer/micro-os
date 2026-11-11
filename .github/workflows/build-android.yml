@@ -16,7 +16,12 @@ concurrency:
 jobs:
   rootfs:
     # Provision the Linux guest on real ARM64 hardware, without QEMU.
-    runs-on: ubuntu-24.04-arm
+    # Defaults to GitHub's standard ARM64 runner. To use a configured
+    # larger ARM runner, set repository variable MICROOS_ARM_RUNNER to its label.
+    runs-on: ${{ vars.MICROOS_ARM_RUNNER || 'ubuntu-24.04-arm' }}
+    env:
+      # Set MICROOS_MIN_RAM_GIB=14 when a 14+ GiB larger ARM runner is configured.
+      MICROOS_MIN_RAM_GIB: ${{ vars.MICROOS_MIN_RAM_GIB || '0' }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -29,10 +34,13 @@ jobs:
           echo "Runner CPUs: $(nproc)"
           free -h
           MEM_KB="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
-          MIN_MEM_KB="$((14 * 1024 * 1024))"
-          if [ "$MEM_KB" -lt "$MIN_MEM_KB" ]; then
-            echo "Expected at least 14 GiB RAM on the ARM64 pre-bake runner; found $((MEM_KB / 1024)) MiB."
-            exit 1
+          echo "ARM64 runner memory: $((MEM_KB / 1024)) MiB"
+          if [ "$MICROOS_MIN_RAM_GIB" != "0" ]; then
+            MIN_MEM_KB="$((MICROOS_MIN_RAM_GIB * 1024 * 1024))"
+            if [ "$MEM_KB" -lt "$MIN_MEM_KB" ]; then
+              echo "Configured runner requires at least ${MICROOS_MIN_RAM_GIB} GiB RAM."
+              exit 1
+            fi
           fi
           docker info >/dev/null
           docker pull --platform linux/arm64 ubuntu:24.04
