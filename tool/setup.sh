@@ -150,15 +150,37 @@ rm -rf /tmp/WhiteSur-cursors
 
 # -----------------------------------------------------------------------------
 # 5. Browser
-#    Ubuntu arm64 ships Chromium only as a snap, and snaps cannot run in proot.
-#    Falkon is a real .deb desktop browser built on QtWebEngine (Chromium's
-#    Blink + V8), so it is the dependable default. If a genuine Chromium .deb
-#    is ever available it is preferred automatically by microos-browse.
+#    Firefox is downloaded from Mozilla and baked into the ARM64 rootfs by
+#    tool/prebake_rootfs.sh. Run it as a dedicated unprivileged guest user:
+#    Firefox intentionally refuses to run as root, and its profile must not
+#    be owned by the proot root account.
 # -----------------------------------------------------------------------------
-stage 84 "Installing desktop browser"
-# Do not install Ubuntu's chromium transitional package: on arm64 it
-# points to Snap, and snapd cannot operate inside this proot guest.
-apt-get install "${APT_OPTS[@]}" falkon || warn "Falkon/QtWebEngine install failed"
+stage 84 "Preparing Firefox desktop browser"
+apt-get install "${APT_OPTS[@]}" passwd util-linux || warn "browser user tools unavailable"
+if ! id microos-browser >/dev/null 2>&1; then
+  useradd --system --create-home --home-dir /home/microos-browser \\
+    --shell /usr/sbin/nologin microos-browser || warn "could not create Firefox user"
+fi
+
+cat > /usr/local/bin/microos-browse <<'BROWSER'
+#!/usr/bin/env bash
+set -euo pipefail
+export DISPLAY="${DISPLAY:-:1}"
+
+if command -v firefox >/dev/null 2>&1; then
+  # PRoot runs the desktop as guest root. Firefox must run as a normal user.
+  exec runuser -u microos-browser -- env \\
+    DISPLAY="$DISPLAY" \\
+    HOME=/home/microos-browser \\
+    MOZ_DISABLE_CONTENT_SANDBOX=1 \\
+    MOZ_DISABLE_GMP_SANDBOX=1 \\
+    firefox "$@"
+fi
+
+echo "Firefox is missing from this MicroOS image. Reinstall/update MicroOS with a pre-baked Firefox build." >&2
+exit 127
+BROWSER
+chmod 755 /usr/local/bin/microos-browse
 
 # -----------------------------------------------------------------------------
 # 6. ZRAM
@@ -325,7 +347,7 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 <openbox_menu>
   <menu id="root-menu" label="MicroOS">
     <item label="Terminal"><action name="Execute"><command>xterm -fa Monospace -fs 10</command></action></item>
-    <item label="Browser"><action name="Execute"><command>/usr/local/bin/microos-browse</command></action></item>
+    <item label="Firefox"><action name="Execute"><command>/usr/local/bin/microos-browse</command></action></item>
     <item label="OpenCode"><action name="Execute"><command>xterm -fa Monospace -fs 10 -e opencode</command></action></item>
     <separator/>
     <item label="Restart window manager"><action name="Restart"/></item>
@@ -359,40 +381,7 @@ echo "[microos] display stopped"
 EOF
 chmod 755 /root/.microos/stop-gui.sh
 
-# The browser launcher. Flags are the memory-conservative set requested for
-# low-RAM phones; --single-process is opt-in because upstream deprecated it and
-# it crashes on many sites.
-cat > /usr/local/bin/microos-browse <<'EOF'
-#!/usr/bin/env bash
-set -u
-export DISPLAY="${DISPLAY:-:1}"
-export QTWEBENGINE_DISABLE_SANDBOX=1
-
-BASE_FLAGS=(
-  --no-sandbox
-  --disable-gpu-sandbox
-  --disable-dev-shm-usage
-  --disable-background-networking
-  --process-per-site
-  --renderer-process-limit=1
-  --js-flags=--max-old-space-size=512
-)
-[ "${MICROOS_SINGLE_PROCESS:-0}" = "1" ] && BASE_FLAGS+=(--single-process)
-
-export QTWEBENGINE_CHROMIUM_FLAGS="${BASE_FLAGS[*]}"
-
-URL="${1:-}"
-if command -v falkon >/dev/null 2>&1; then
-  exec falkon ${URL:+"$URL"}
-elif command -v chromium >/dev/null 2>&1; then
-  exec chromium "${BASE_FLAGS[@]}" ${URL:+"$URL"}
-elif command -v chromium-browser >/dev/null 2>&1; then
-  exec chromium-browser "${BASE_FLAGS[@]}" ${URL:+"$URL"}
-fi
-echo "No desktop browser is installed. Run: apt-get install falkon" >&2
-exit 1
-EOF
-chmod 755 /usr/local/bin/microos-browse
+# Browser launcher was installed above with the Firefox-first, unprivileged-user wrapper.
 
 # Optional Steam/Box64 feasibility check. This intentionally does not install
 # Steam or alter the guest: the Steam Linux client has 32-bit components and
