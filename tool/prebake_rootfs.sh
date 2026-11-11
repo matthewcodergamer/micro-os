@@ -22,6 +22,25 @@ docker run --platform linux/arm64 --name "$NAME" \
     chmod 755 /root/.microos/setup.sh
     bash /root/.microos/setup.sh
 
+    echo "==> Verifying the pre-baked developer workstation"
+    for tool in git gh python3 node npm rustc cargo unzip zip; do
+      command -v "$tool" >/dev/null 2>&1 || {
+        echo "Required pre-baked tool is missing: $tool" >&2
+        exit 1
+      }
+      printf '%-10s %s\\n' "$tool" "$(command -v "$tool")"
+    done
+    if command -v opencode >/dev/null 2>&1; then
+      OPENCODE_BIN="$(command -v opencode)"
+    elif [ -x /root/.opencode/bin/opencode ]; then
+      OPENCODE_BIN=/root/.opencode/bin/opencode
+    else
+      echo "OpenCode is missing from the pre-baked image" >&2
+      exit 1
+    fi
+    timeout 30 "$OPENCODE_BIN" --version
+    python3 -c 'import zipfile, json, pathlib; print("Python ZIP/JAR inspection support: ready")'
+
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
     apt-get install -y --no-install-recommends \
