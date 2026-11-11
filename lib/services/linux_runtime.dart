@@ -465,6 +465,9 @@ class LinuxRuntime extends ChangeNotifier {
     _githubToken = token;
     if (!isReady) return;
 
+    final legacyCredentials = File(p.join(rootfsPath, 'root/.git-credentials'));
+    if (legacyCredentials.existsSync()) await legacyCredentials.delete();
+
     final gitconfig = File(p.join(rootfsPath, 'root/.gitconfig'));
     await gitconfig.writeAsString('''
 [user]
