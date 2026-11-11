@@ -156,39 +156,62 @@ class LinuxRuntime extends ChangeNotifier {
     _notify();
 
     try {
-      await _extractProot();
-
-      progress = 0.08;
-      stage = 'Unpacking Ubuntu rootfs';
-      _notify();
-      await _extractRootfs();
-
-      // CI ships a fully provisioned guest. When its ready marker and shell
-      // are present, first boot is extraction-only: never run apt on the phone.
-      final preBaked = File(_readyPath).existsSync() &&
-          File(p.join(rootfsPath, 'usr/bin/bash')).existsSync();
-      if (preBaked) {
-        progress = 0.96;
-        stage = 'Starting prepared Linux environment';
+      // Do not unpack over an installation that is already complete. This
+      // protects the user's Linux files and makes Install safe to tap again.
+      final existingReady = File(_readyPath).existsSync() &&
+          File(p.join(rootfsPath, 'usr/bin/bash')).existsSync() &&
+          File(p.join(rootfsPath, 'etc/os-release')).existsSync();
+      if (existingReady) {
+        stage = 'Checking existing Linux installation';
+        progress = 0.9;
         _notify();
+        await _extractProot();
         await _refreshGuestDns();
         status = RuntimeStatus.ready;
         progress = 1;
         stage = 'Linux ready';
       } else {
-        progress = 0.55;
-        stage = 'Installing developer toolchain';
-        _notify();
-        await _installSetupScript();
-        await _runProvisioning();
+        // A partial/corrupt install is not reusable. Remove only that
+        // incomplete rootfs before unpacking; never delete a ready install.
+        final rootfs = Directory(rootfsPath);
+        if (rootfs.existsSync()) {
+          await rootfs.delete(recursive: true);
+        }
 
-        if (File(_readyPath).existsSync()) {
+        await _extractProot();
+
+        progress = 0.08;
+        stage = 'Unpacking Ubuntu rootfs';
+        _notify();
+        await _extractRootfs();
+
+        // CI-prepared guests skip all apt provisioning on the phone.
+        final preBaked = File(_readyPath).existsSync() &&
+            File(p.join(rootfsPath, 'usr/bin/bash')).existsSync() &&
+            File(p.join(rootfsPath, 'etc/os-release')).existsSync();
+        if (preBaked) {
+          progress = 0.96;
+          stage = 'Starting prepared Linux environment';
+          _notify();
+          await _refreshGuestDns();
           status = RuntimeStatus.ready;
           progress = 1;
           stage = 'Linux ready';
         } else {
-          status = RuntimeStatus.failed;
-          error = 'Provisioning stopped before it finished. Check the log below.';
+          progress = 0.55;
+          stage = 'Installing developer toolchain';
+          _notify();
+          await _installSetupScript();
+          await _runProvisioning();
+
+          if (File(_readyPath).existsSync()) {
+            status = RuntimeStatus.ready;
+            progress = 1;
+            stage = 'Linux ready';
+          } else {
+            status = RuntimeStatus.failed;
+            error = 'Provisioning stopped before it finished. Check the log below.';
+          }
         }
       }
     } catch (e, stack) {
