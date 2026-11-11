@@ -35,6 +35,7 @@ class _TerminalAppState extends State<TerminalApp> {
   Pty? _pty;
   StreamSubscription? _output;
   String? _error;
+  bool _ctrlArmed = false;
 
   @override
   void initState() {
@@ -90,6 +91,14 @@ class _TerminalAppState extends State<TerminalApp> {
   }
 
   void _send(String data) {
+    if (_ctrlArmed && data.isNotEmpty) {
+      _ctrlArmed = false;
+      if (mounted) setState(() {});
+      final code = data.toUpperCase().codeUnitAt(0);
+      if (code >= 64 && code <= 95) {
+        data = String.fromCharCode(code - 64);
+      }
+    }
     final pty = _pty;
     if (pty == null) return;
     try {
@@ -97,6 +106,32 @@ class _TerminalAppState extends State<TerminalApp> {
     } catch (_) {
       // PTY closed mid-keystroke.
     }
+  }
+
+  void _sendExtra(String sequence) {
+    _send(sequence);
+  }
+
+  Widget _extraKey(String label, String sequence, {bool selected = false, VoidCallback? onPressed}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+      child: SizedBox(
+        height: 34,
+        child: OutlinedButton(
+          onPressed: onPressed ?? () => _sendExtra(sequence),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: selected ? Colors.white : MicroColors.text,
+            backgroundColor: selected ? const Color(0xFF315C9B) : const Color(0xFF252B38),
+            side: const BorderSide(color: Color(0x334FFFFFFF)),
+            padding: const EdgeInsets.symmetric(horizontal: 11),
+            minimumSize: const Size(38, 34),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+      ),
+    );
   }
 
   void _resize(int width, int height, int pixelWidth, int pixelHeight) {
@@ -171,6 +206,31 @@ class _TerminalAppState extends State<TerminalApp> {
                 padding: const EdgeInsets.all(8),
                 backgroundOpacity: 1,
                 theme: _theme,
+              ),
+            ),
+          ),
+          // Termux-style developer keys stay available above the soft keyboard.
+          Container(
+            height: 44,
+            decoration: const BoxDecoration(
+              color: Color(0xFF141822),
+              border: Border(top: BorderSide(color: Color(0x1AFFFFFF))),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _extraKey('Tab', '\\t'),
+                  _extraKey('↑', '\\x1b[A'),
+                  _extraKey('↓', '\\x1b[B'),
+                  _extraKey('←', '\\x1b[D'),
+                  _extraKey('→', '\\x1b[C'),
+                  _extraKey('Ctrl', '', selected: _ctrlArmed, onPressed: () {
+                    setState(() => _ctrlArmed = !_ctrlArmed);
+                  }),
+                  _extraKey('Esc', '\\x1b'),
+                  _extraKey('|', '|'),
+                ],
               ),
             ),
           ),
