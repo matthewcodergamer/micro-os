@@ -55,13 +55,13 @@ docker run --platform linux/arm64 --name "$NAME" \
     id microos-browser
     mkdir -p /home/microos-browser/.mozilla/smoke-profile
     chown -R microos-browser:microos-browser /home/microos-browser/.mozilla
-    runuser -u microos-browser -- env \\
-      HOME=/home/microos-browser \\
-      MOZ_DISABLE_CONTENT_SANDBOX=1 \\
-      MOZ_DISABLE_GMP_SANDBOX=1 \\
-      timeout 90 /opt/firefox/firefox --headless --no-remote \\
-        --profile /home/microos-browser/.mozilla/smoke-profile \\
-        --screenshot /tmp/microos-firefox-smoke.png \\
+    runuser -u microos-browser -- env \
+      HOME=/home/microos-browser \
+      MOZ_DISABLE_CONTENT_SANDBOX=1 \
+      MOZ_DISABLE_GMP_SANDBOX=1 \
+      timeout 90 /opt/firefox/firefox --headless --no-remote \
+        --profile /home/microos-browser/.mozilla/smoke-profile \
+        --screenshot /tmp/microos-firefox-smoke.png \
         "data:text/html,<title>MicroOS Firefox smoke test</title><h1>Firefox is ready</h1>"
     test -s /tmp/microos-firefox-smoke.png
     echo "==> Firefox ARM64 headless startup and rendering test passed"
