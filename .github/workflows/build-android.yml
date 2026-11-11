@@ -46,8 +46,8 @@ jobs:
           tar -tzf "$ROOTFS" > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
-          grep -qxE '(\\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
-          grep -qxE '(\\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
           echo "Pre-baked rootfs:"
           ls -lh "$ROOTFS"
           sha256sum "$ROOTFS"
@@ -99,8 +99,8 @@ jobs:
           tar -tzf assets/rootfs/rootfs.tar.gz > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
-          grep -qxE '(\\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
-          grep -qxE '(\\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
           ls -lh assets/rootfs/rootfs.tar.gz
           sha256sum assets/rootfs/rootfs.tar.gz
 
