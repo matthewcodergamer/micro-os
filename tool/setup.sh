@@ -169,9 +169,14 @@ export DISPLAY="${DISPLAY:-:1}"
 
 if command -v firefox >/dev/null 2>&1; then
   # PRoot runs the desktop as guest root. Firefox must run as a normal user.
+  # The rootfs archive normalizes ownership to root, so give the browser a
+  # persistent, explicitly writable profile home inside the guest instead.
+  BROWSER_HOME=/root/.microos/browser-home
+  mkdir -p "$BROWSER_HOME"
+  chmod 1777 "$BROWSER_HOME"
   exec runuser -u microos-browser -- env \
     DISPLAY="$DISPLAY" \
-    HOME=/home/microos-browser \
+    HOME="$BROWSER_HOME" \
     MOZ_DISABLE_CONTENT_SANDBOX=1 \
     MOZ_DISABLE_GMP_SANDBOX=1 \
     firefox "$@"
