@@ -48,6 +48,8 @@ jobs:
       # Firefox is pre-installed and smoke-tested in the rootfs before APK packaging.
       - name: Build the fully provisioned ARM64 rootfs
         run: |
+          bash -n tool/prebake_rootfs.sh
+          bash -n tool/setup.sh
           chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh
           ROOTFS="assets/rootfs/rootfs.tar.gz"
