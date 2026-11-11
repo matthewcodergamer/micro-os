@@ -59,7 +59,7 @@ class DesktopState extends ChangeNotifier {
       rect: _initialRect(app, screen),
       zIndex: ++_zCounter,
       args: args,
-    )..pinned = screen.width < 720;
+    )..pinned = false;
 
     windows.add(window);
     notifyListeners();
@@ -70,17 +70,15 @@ class DesktopState extends ChangeNotifier {
     final usableHeight = screen.height - kStatusBarHeight - kDockReserved;
     final compact = screen.width < 720;
 
-    if (compact) {
-      return Rect.fromLTWH(0, kStatusBarHeight, screen.width, usableHeight);
-    }
-
     final size = app.defaultSize;
-    final width = math.min(size.width, screen.width - 48);
-    final height = math.min(size.height, usableHeight - 24);
-    final offset = (windows.length % 6) * 26.0;
+    // On phones, use a floating window with a usable title bar and resize grip
+    // instead of pinning every app edge-to-edge. On tablets, keep desktop sizes.
+    final width = math.min(size.width, math.max(280.0, screen.width - (compact ? 24 : 48)));
+    final height = math.min(size.height, math.max(240.0, usableHeight - 24));
+    final offset = compact ? 0.0 : (windows.length % 6) * 26.0;
 
-    var left = (screen.width - width) / 2 + offset - 60;
-    var top = kStatusBarHeight + 28 + offset;
+    var left = compact ? (screen.width - width) / 2 : (screen.width - width) / 2 + offset - 60;
+    var top = kStatusBarHeight + 18 + offset;
 
     left = left
         .clamp(8.0, math.max(8.0, screen.width - width - 8))
@@ -181,22 +179,21 @@ class DesktopState extends ChangeNotifier {
   /// Called on rotation / resize so pinned windows keep filling the screen.
   void syncToScreen(Size screen) {
     final compact = screen.width < 720;
-    final usableHeight = screen.height - kStatusBarHeight - kDockReserved;
-
     var changed = false;
     for (final window in windows) {
-      if (compact) {
-        final target = Rect.fromLTWH(0, kStatusBarHeight, screen.width, usableHeight);
-        if (window.rect != target || !window.pinned) {
-          window.rect = target;
-          window.pinned = true;
-          window.maximized = false;
-          window.restoreRect = null;
-          changed = true;
-        }
-      } else if (window.pinned) {
+      if (window.pinned) {
         window.pinned = false;
-        window.rect = _initialRect(window.app, screen);
+        changed = true;
+      }
+      final maxWidth = math.max(280.0, screen.width - 16);
+      final maxHeight = math.max(240.0, screen.height - kStatusBarHeight - kDockReserved - 8);
+      final width = math.min(window.rect.width, maxWidth);
+      final height = math.min(window.rect.height, maxHeight);
+      final left = compact ? (screen.width - width) / 2 : window.rect.left.clamp(0.0, math.max(0.0, screen.width - width)).toDouble();
+      final top = window.rect.top.clamp(kStatusBarHeight, math.max(kStatusBarHeight, screen.height - kDockReserved - height)).toDouble();
+      final rect = Rect.fromLTWH(left, top, width, height);
+      if (rect != window.rect) {
+        window.rect = rect;
         changed = true;
       }
     }

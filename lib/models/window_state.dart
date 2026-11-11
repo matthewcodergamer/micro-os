@@ -48,7 +48,6 @@ class ManagedWindow {
   bool maximized = false;
   Rect? restoreRect;
 
-  /// A compact (phone) window is pinned to the whole usable screen and cannot
-  /// be dragged or resized, which is the behaviour the prompt asked for.
+  /// Legacy compatibility flag. New windows remain floating on phones too.
   bool pinned = false;
 }

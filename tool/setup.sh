@@ -174,37 +174,40 @@ stage 91 "Installing OpenCode"
 # Keep npm's V8 heap bounded for low-memory Android devices running proot.
 # The official installer is preferred; npm is a bounded fallback, not a
 # prerequisite for the rest of the Linux environment.
-export NODE_OPTIONS="--max-old-space-size=768"
+export NODE_OPTIONS="--max-old-space-size=384"
 apt-get install "${APT_OPTS[@]}" curl wget unzip tar ca-certificates || warn "OpenCode prerequisites could not all be installed"
 mkdir -p "$TMPDIR"
 chmod 1777 "$TMPDIR"
 update-ca-certificates || true
 
-if ! command -v opencode >/dev/null 2>&1; then
+if ! command -v opencode >/dev/null 2>&1 && [ ! -x /root/.opencode/bin/opencode ]; then
   installed=0
   for attempt in 1 2 3; do
-    log "OpenCode download attempt $attempt/3"
-    if curl -fL --retry 2 --retry-delay 3 --connect-timeout 20 --max-time 180 \\
-        https://opencode.ai/install -o /tmp/opencode-install.sh; then
-      if bash /tmp/opencode-install.sh; then installed=1; break; fi
-      warn "OpenCode installer failed on attempt $attempt"
+    log "OpenCode installer download attempt $attempt/3"
+    rm -f /tmp/opencode-install.sh
+    if curl --silent --show-error --fail --location \
+        --connect-timeout 15 --max-time 90 --retry 2 --retry-delay 3 \
+        --retry-all-errors \
+        https://opencode.ai/install --output /tmp/opencode-install.sh \
+        && [ -s /tmp/opencode-install.sh ]; then
+      log "OpenCode installer downloaded ($(wc -c < /tmp/opencode-install.sh) bytes)"
+      if timeout 240 bash /tmp/opencode-install.sh; then
+        if command -v opencode >/dev/null 2>&1 || [ -x /root/.opencode/bin/opencode ]; then
+          installed=1
+          break
+        fi
+        warn "installer exited successfully but no OpenCode executable was found"
+      else
+        warn "OpenCode installer failed or timed out on attempt $attempt"
+      fi
     else
-      warn "could not reach opencode.ai on attempt $attempt"
+      warn "OpenCode installer download failed or timed out on attempt $attempt"
     fi
     sleep $((attempt * 5))
   done
   if [ "$installed" -ne 1 ]; then
-    warn "official OpenCode installer unavailable; trying bounded npm fallback"
-    if command -v npm >/dev/null 2>&1; then
-      npm cache clean --force >/dev/null 2>&1 || true
-      if timeout 240 npm install -g opencode-ai --unsafe-perm=true --no-package-lock --prefer-online; then
-        installed=1
-      else
-        warn "npm fallback failed or timed out"
-      fi
-    fi
+    warn "OpenCode not installed. Skipping npm fallback to avoid exhausting phone RAM; Linux remains usable."
   fi
-  [ "$installed" -eq 1 ] || warn "OpenCode unavailable; install later when network/memory permits"
 fi
 
 # Verify the binary exists; a successful download attempt alone is not proof.
