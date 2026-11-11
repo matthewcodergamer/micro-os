@@ -212,8 +212,9 @@ class _SettingsAppState extends State<SettingsApp> {
                     : 'Connected as $_login',
                 children: [
                   const Text(
-                    'Paste a Personal Access Token. It is kept in the Android '
-                    'keystore and written into the guest as a git credential.',
+                    'Paste a Personal Access Token. It is kept in Android encrypted storage '
+                    'and supplied to Git/OpenCode at launch; the PAT is not saved '
+                    'in a plaintext guest credential file.',
                     style: TextStyle(color: MicroColors.subtle, fontSize: 11),
                   ),
                   const SizedBox(height: 10),
