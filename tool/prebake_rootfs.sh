@@ -23,7 +23,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     bash /root/.microos/setup.sh
 
     echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh python3 node npm rustc cargo unzip zip microos-jar; do
+    for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar; do
       command -v "$tool" >/dev/null 2>&1 || {
         echo "Required pre-baked tool is missing: $tool" >&2
         exit 1
