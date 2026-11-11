@@ -218,12 +218,12 @@ class _SettingsAppState extends State<SettingsApp> {
                 subtitle: 'Connect MicroOS to your GitHub account',
                 children: [
                   const Text(
-                    '1. Open github.com and sign in.\\n'
-                    '2. Go to Settings → Developer settings → Personal access tokens.\\n'
-                    '3. Choose Fine-grained tokens → Generate new token.\\n'
-                    '4. Give it a name (for example, MicroOS) and an expiration date.\\n'
-                    '5. Select the repositories MicroOS should access.\\n'
-                    '6. Under Repository permissions, set Contents to Read and write.\\n'
+                    '1. Open github.com and sign in.\n'
+                    '2. Go to Settings → Developer settings → Personal access tokens.\n'
+                    '3. Choose Fine-grained tokens → Generate new token.\n'
+                    '4. Give it a name (for example, MicroOS) and an expiration date.\n'
+                    '5. Select the repositories MicroOS should access.\n'
+                    '6. Under Repository permissions, set Contents to Read and write.\n'
                     '7. Generate the token, copy it immediately, then paste it in the GitHub section above and tap Save & apply.',
                     style: TextStyle(color: MicroColors.text, fontSize: 11, height: 1.55),
                   ),
