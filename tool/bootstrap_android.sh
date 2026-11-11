@@ -20,6 +20,74 @@ flutter create \
 
 rm -f test/widget_test.dart
 
+# ---- Stream large bundled assets through Android AssetManager ---------------
+# Flutter's rootBundle.load() materializes a whole asset in Dart memory. The
+# pre-baked rootfs is hundreds of MB, so copy it to app-private storage using a
+# native 64 KiB buffer on a worker thread instead.
+MAIN_ACTIVITY="android/app/src/main/kotlin/com/matthewcodergamer/micro_os/MainActivity.kt"
+mkdir -p "$(dirname "$MAIN_ACTIVITY")"
+cat > "$MAIN_ACTIVITY" <<'KOTLIN'
+package com.matthewcodergamer.micro_os
+
+import android.os.Bundle
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
+import java.util.concurrent.Executors
+
+class MainActivity : FlutterActivity() {
+    private val assetCopyExecutor = Executors.newSingleThreadExecutor()
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "microos/rootfs")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "copyAssetToFile") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+
+                val assetPath = call.argument<String>("assetPath")
+                val destinationPath = call.argument<String>("destinationPath")
+                if (assetPath.isNullOrBlank() || destinationPath.isNullOrBlank()) {
+                    result.error("INVALID_ARGUMENT", "assetPath and destinationPath are required", null)
+                    return@setMethodCallHandler
+                }
+
+                assetCopyExecutor.execute {
+                    try {
+                        val destination = File(destinationPath)
+                        destination.parentFile?.mkdirs()
+                        assets.open(assetPath).use { input ->
+                            FileOutputStream(destination).use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    output.write(buffer, 0, count)
+                                }
+                                output.fd.sync()
+                            }
+                        }
+                        runOnUiThread { result.success(destination.length()) }
+                    } catch (error: Exception) {
+                        runOnUiThread {
+                            result.error("ASSET_COPY_FAILED", error.message, null)
+                        }
+                    }
+                }
+            }
+    }
+
+    override fun onDestroy() {
+        assetCopyExecutor.shutdown()
+        super.onDestroy()
+    }
+}
+KOTLIN
+
 python3 - "$ROOT" <<'PY'
 import os, re, sys
 
