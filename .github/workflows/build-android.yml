@@ -26,6 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install zstd compressor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+
       - name: Verify native ARM64 runner and memory budget
         run: |
           set -euo pipefail
@@ -52,9 +57,10 @@ jobs:
           bash -n tool/setup.sh
           chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh
-          ROOTFS="assets/rootfs/rootfs.tar.gz"
+          ROOTFS="assets/rootfs/rootfs.tar.zst"
           test -s "$ROOTFS"
-          tar -tzf "$ROOTFS" > /tmp/rootfs-archive.list
+          zstd -t "$ROOTFS"
+          zstd -dc "$ROOTFS" | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
@@ -71,7 +77,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MicroOS-rootfs-arm64
-          path: assets/rootfs/rootfs.tar.gz
+          path: assets/rootfs/rootfs.tar.zst
           if-no-files-found: error
           retention-days: 2
 
@@ -82,6 +88,11 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install zstd verifier
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
 
       # Remove large preinstalled SDKs before setting up Java/Flutter/NDK.
       # Toolchains needed by this job are installed again below.
@@ -110,8 +121,9 @@ jobs:
 
       - name: Verify transferred rootfs
         run: |
-          test -s assets/rootfs/rootfs.tar.gz
-          tar -tzf assets/rootfs/rootfs.tar.gz > /tmp/rootfs-archive.list
+          test -s assets/rootfs/rootfs.tar.zst
+          zstd -t assets/rootfs/rootfs.tar.zst
+          zstd -dc assets/rootfs/rootfs.tar.zst | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
@@ -120,8 +132,8 @@ jobs:
           grep -qxE '(\./)?usr/local/bin/microos-jar' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/.opencode/bin/opencode' /tmp/rootfs-archive.list
           grep -q 'home/microos-browser' /tmp/rootfs-archive.list
-          ls -lh assets/rootfs/rootfs.tar.gz
-          sha256sum assets/rootfs/rootfs.tar.gz
+          ls -lh assets/rootfs/rootfs.tar.zst
+          sha256sum assets/rootfs/rootfs.tar.zst
 
       - uses: actions/setup-java@v4
         with:
@@ -180,7 +192,7 @@ jobs:
           test -s "$APK"
           unzip -l "$APK" | grep -q "AndroidManifest.xml"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/"
-          ROOTFS_BYTES="$(unzip -l "$APK" | awk '$4 == "assets/flutter_assets/assets/rootfs/rootfs.tar.gz" {print $1}')"
+          ROOTFS_BYTES="$(unzip -l "$APK" | awk '$4 == "assets/flutter_assets/assets/rootfs/rootfs.tar.zst" {print $1}')"
           if [ -z "$ROOTFS_BYTES" ] || [ "$ROOTFS_BYTES" -lt 1048576 ]; then
             echo "ERROR: bundled rootfs asset is missing or unexpectedly small (bytes: ${ROOTFS_BYTES:-0})"
             exit 1

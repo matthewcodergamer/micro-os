@@ -181,7 +181,7 @@ if command -v firefox >/dev/null 2>&1; then
     HOME="$BROWSER_HOME" \
     MOZ_DISABLE_CONTENT_SANDBOX=1 \
     MOZ_DISABLE_GMP_SANDBOX=1 \
-    firefox "$@"
+    firefox --display=:1 "$@"
 fi
 
 echo "Firefox is missing from this MicroOS image. Reinstall/update MicroOS with a pre-baked Firefox build." >&2
@@ -499,6 +499,12 @@ if ! wait_for_port 6080 60 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then
   exit 1
 fi
 
+# Launch Firefox only after Xvfb, VNC and noVNC are accepting connections.
+if ! pgrep -u microos-browser -f 'firefox' >/dev/null 2>&1; then
+  /usr/local/bin/microos-browse --new-window about:home >"$LOG/firefox.log" 2>&1 &
+  FIREFOX_PID=$!
+fi
+
 # Keep the parent alive only while every layer remains alive. This prevents a
 # dead x11vnc from leaving a misleading, still-open noVNC HTTP port.
 echo "[microos] display :1 ready (Xvfb, VNC 5900, noVNC 6080)"
@@ -511,6 +517,7 @@ echo "[microos] ERROR: one of Xvfb/x11vnc/websockify exited; see $LOG/*.log" >&2
 exit 1
 EOF
 chmod 755 /root/.microos/start-gui.sh
+ln -sf /root/.microos/start-gui.sh /root/.microos/start-desktop.sh
 
 cat > /root/.microos/stop-gui.sh <<'EOF'
 #!/usr/bin/env bash

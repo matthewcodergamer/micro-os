@@ -4,7 +4,7 @@ publish_to: "none"
 version: 0.1.0+1
 
 environment:
-  sdk: ^3.5.0
+  sdk: ^3.10.0
 
 dependencies:
   flutter:
@@ -23,6 +23,7 @@ dependencies:
   webview_flutter: ^4.9.0
   http: ^1.2.2
   flutter_tts: ^4.2.5
+  zstd_dart: ^1.1.0
 
 dev_dependencies:
   flutter_test:
