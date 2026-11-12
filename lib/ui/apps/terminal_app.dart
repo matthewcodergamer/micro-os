@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -38,6 +39,7 @@ class _TerminalAppState extends State<TerminalApp> {
   final FlutterTts _tts = FlutterTts();
   bool _speaking = false;
   bool _voiceReady = false;
+  HttpServer? _ttsServer;
 
   Pty? _pty;
   StreamSubscription? _output;
@@ -50,6 +52,7 @@ class _TerminalAppState extends State<TerminalApp> {
   void initState() {
     super.initState();
     _configureTts();
+    _startTtsBridge();
     _terminal.onOutput = _send;
     _terminal.onResize = _resize;
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
@@ -105,6 +108,59 @@ class _TerminalAppState extends State<TerminalApp> {
     }
   }
 
+  Future<void> _startTtsBridge() async {
+    try {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 17842);
+      if (!mounted) {
+        await server.close(force: true);
+        return;
+      }
+      _ttsServer = server;
+      server.listen((request) async {
+        if (request.method != 'POST' || request.uri.path != '/speak') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
+        try {
+          final body = await utf8.decoder.bind(request).join();
+          final payload = jsonDecode(body) as Map<String, dynamic>;
+          final text = (payload['text'] as String? ?? '').trim();
+          if (text.isEmpty || text.length > 12000) {
+            request.response.statusCode = HttpStatus.badRequest;
+            await request.response.close();
+            return;
+          }
+          if (!widget.settings.autoReadOpenCode) {
+            request.response.statusCode = HttpStatus.noContent;
+            await request.response.close();
+            return;
+          }
+          if (!_voiceReady) await _configureTts();
+          await _tts.stop();
+          await _tts.speak(text, focus: true);
+          request.response.statusCode = HttpStatus.accepted;
+        } catch (_) {
+          request.response.statusCode = HttpStatus.internalServerError;
+        }
+        await request.response.close();
+      });
+    } catch (e) {
+      // The manual read-aloud control remains available if the local bridge
+      // cannot bind (for example, if another MicroOS terminal owns the port).
+      debugPrint('MicroOS speech bridge unavailable: $e');
+    }
+  }
+
+  Future<void> _speakText(String text) async {
+    final cleaned = text.trim();
+    if (cleaned.isEmpty) return;
+    if (!_voiceReady) await _configureTts();
+    if (!_voiceReady) throw StateError('Android text-to-speech is unavailable');
+    await _tts.stop();
+    await _tts.speak(cleaned, focus: true);
+  }
+
   Future<void> _readSelection() async {
     final range = _terminalController.selection;
     if (range == null) {
@@ -118,11 +174,8 @@ class _TerminalAppState extends State<TerminalApp> {
     final selected = _terminal.buffer.getText(range).trim();
     if (selected.isEmpty) return;
     try {
-      if (!_voiceReady) await _configureTts();
-      if (!_voiceReady) throw StateError('Android text-to-speech is unavailable');
-      await _tts.stop();
+      await _speakText(selected);
       _terminalController.clearSelection();
-      await _tts.speak(selected, focus: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -224,6 +277,7 @@ class _TerminalAppState extends State<TerminalApp> {
       _pendingOutput.clear();
     }
     _output?.cancel();
+    _ttsServer?.close(force: true);
     _tts.stop();
     _terminalController.dispose();
     try {
