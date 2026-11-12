@@ -47,6 +47,10 @@ class _TerminalAppState extends State<TerminalApp> {
   bool _ctrlArmed = false;
   final StringBuffer _pendingOutput = StringBuffer();
   Timer? _outputFlushTimer;
+  Timer? _selectionCopyTimer;
+  Timer? _copyToastTimer;
+  OverlayEntry? _copyToast;
+  String? _lastCopiedSelection;
 
   @override
   void initState() {
@@ -55,6 +59,7 @@ class _TerminalAppState extends State<TerminalApp> {
     _startTtsBridge();
     _terminal.onOutput = _send;
     _terminal.onResize = _resize;
+    _terminalController.addListener(_onSelectionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
@@ -190,6 +195,70 @@ class _TerminalAppState extends State<TerminalApp> {
     if (mounted) setState(() => _speaking = false);
   }
 
+  void _onSelectionChanged() {
+    final range = _terminalController.selection;
+    if (range == null) {
+      _selectionCopyTimer?.cancel();
+      _lastCopiedSelection = null;
+      return;
+    }
+    _selectionCopyTimer?.cancel();
+    _selectionCopyTimer = Timer(const Duration(milliseconds: 250), () async {
+      final current = _terminalController.selection;
+      if (!mounted || current == null) return;
+      final selected = _terminal.buffer.getText(current);
+      if (selected.trim().isEmpty || selected == _lastCopiedSelection) return;
+      try {
+        await Clipboard.setData(ClipboardData(text: selected));
+        _lastCopiedSelection = selected;
+        _showCopyToast();
+      } catch (e) {
+        debugPrint('MicroOS terminal auto-copy failed: $e');
+      }
+    });
+  }
+
+  void _showCopyToast() {
+    if (!mounted) return;
+    _copyToastTimer?.cancel();
+    _copyToast?.remove();
+    _copyToast = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 12,
+        right: 12,
+        child: Material(
+          color: Colors.transparent,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xEE202733),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0x553FFFFFFF)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x55000000), blurRadius: 14, offset: Offset(0, 5)),
+              ],
+            ),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle, color: Color(0xFF70D6A0), size: 16),
+                  SizedBox(width: 8),
+                  Text('Copied to clipboard', style: TextStyle(color: Colors.white, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_copyToast!);
+    _copyToastTimer = Timer(const Duration(milliseconds: 1400), () {
+      _copyToast?.remove();
+      _copyToast = null;
+    });
+  }
+
   Future<void> _copySelection() async {
     final range = _terminalController.selection;
     if (range == null) {
@@ -272,6 +341,10 @@ class _TerminalAppState extends State<TerminalApp> {
   @override
   void dispose() {
     _outputFlushTimer?.cancel();
+    _selectionCopyTimer?.cancel();
+    _copyToastTimer?.cancel();
+    _copyToast?.remove();
+    _terminalController.removeListener(_onSelectionChanged);
     if (_pendingOutput.isNotEmpty) {
       _terminal.write(_pendingOutput.toString());
       _pendingOutput.clear();
