@@ -14,6 +14,7 @@ mkdir -p "$(dirname "$OUT")"
 echo "==> Provisioning Ubuntu 24.04 ARM64 in Docker"
 docker run --platform linux/arm64 --name "$NAME" \
   -v "$ROOT/tool/setup.sh:/tmp/microos-setup.sh:ro" \
+  -v "$ROOT/tool/opencode-tts-plugin.js:/tmp/microos-tts-plugin.js:ro" \
   ubuntu:24.04 /bin/bash -lc '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
@@ -21,6 +22,10 @@ docker run --platform linux/arm64 --name "$NAME" \
     cp /tmp/microos-setup.sh /root/.microos/setup.sh
     chmod 755 /root/.microos/setup.sh
     bash /root/.microos/setup.sh
+
+    mkdir -p /root/.config/opencode/plugins
+    install -m 0644 /tmp/microos-tts-plugin.js /root/.config/opencode/plugins/microos-tts.js
+    echo "==> Installed local Android read-aloud plugin for OpenCode"
 
     echo "==> Verifying the pre-baked developer workstation"
     for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar; do
@@ -96,7 +101,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "2\\n" > /root/.microos/image-version
+    printf "3\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
@@ -134,7 +139,7 @@ tar --hard-dereference --numeric-owner --owner=0 --group=0 \
 tar -tzf "$OUT" > "$TMP/rootfs-archive.list"
 require_archive_path() {
   local expected="$1"
-  if ! grep -qE "^(\\./)?${expected}$" "$TMP/rootfs-archive.list"; then
+  if ! grep -qE "^(\\./)?${expected}(/)?$" "$TMP/rootfs-archive.list"; then
     echo "ERROR: exported rootfs is missing required path: ${expected}" >&2
     echo "Archive entries matching the expected basename:" >&2
     grep -F "$(basename "$expected")" "$TMP/rootfs-archive.list" | head -n 30 >&2 || true
@@ -142,8 +147,8 @@ require_archive_path() {
   fi
 }
 # Keep this list in sync with the APK workflow's transfer validation.
-require_archive_path 'root/\\.microos/ready'
-require_archive_path 'root/\\.microos/image-version'
+require_archive_path 'root/\.microos/ready'
+require_archive_path 'root/\.microos/image-version'
 require_archive_path 'opt/firefox/firefox'
 require_archive_path 'opt/firefox/firefox-bin'
 require_archive_path 'usr/local/bin/microos-browse'

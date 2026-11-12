@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'package:xterm/xterm.dart';
 
@@ -32,7 +34,12 @@ class TerminalApp extends StatefulWidget {
 }
 
 class _TerminalAppState extends State<TerminalApp> {
-  final Terminal _terminal = Terminal(maxLines: 1000);
+  final Terminal _terminal = Terminal(maxLines: 3000);
+  final TerminalController _terminalController = TerminalController();
+  final FlutterTts _tts = FlutterTts();
+  bool _speaking = false;
+  bool _voiceReady = false;
+  HttpServer? _ttsServer;
 
   Pty? _pty;
   StreamSubscription? _output;
@@ -40,12 +47,19 @@ class _TerminalAppState extends State<TerminalApp> {
   bool _ctrlArmed = false;
   final StringBuffer _pendingOutput = StringBuffer();
   Timer? _outputFlushTimer;
+  Timer? _selectionCopyTimer;
+  Timer? _copyToastTimer;
+  OverlayEntry? _copyToast;
+  String? _lastCopiedSelection;
 
   @override
   void initState() {
     super.initState();
+    _configureTts();
+    _startTtsBridge();
     _terminal.onOutput = _send;
     _terminal.onResize = _resize;
+    _terminalController.addListener(_onSelectionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
@@ -83,29 +97,193 @@ class _TerminalAppState extends State<TerminalApp> {
     _terminal.write(chunk);
   }
 
+  Future<void> _configureTts() async {
+    try {
+      await _tts.setLanguage('en-US');
+      await _tts.setSpeechRate(0.48);
+      await _tts.setVolume(1.0);
+      await _tts.awaitSpeakCompletion(true);
+      _tts.setStartHandler(() { if (mounted) setState(() => _speaking = true); });
+      _tts.setCompletionHandler(() { if (mounted) setState(() => _speaking = false); });
+      _tts.setCancelHandler(() { if (mounted) setState(() => _speaking = false); });
+      _tts.setErrorHandler((_) { if (mounted) setState(() => _speaking = false); });
+      _voiceReady = true;
+    } catch (_) {
+      _voiceReady = false;
+    }
+  }
+
+  Future<void> _startTtsBridge() async {
+    try {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 17842);
+      if (!mounted) {
+        await server.close(force: true);
+        return;
+      }
+      _ttsServer = server;
+      server.listen((request) async {
+        if (request.method != 'POST' || request.uri.path != '/speak') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
+        try {
+          final body = await utf8.decoder.bind(request).join();
+          final payload = jsonDecode(body) as Map<String, dynamic>;
+          final text = (payload['text'] as String? ?? '').trim();
+          if (text.isEmpty || text.length > 12000) {
+            request.response.statusCode = HttpStatus.badRequest;
+            await request.response.close();
+            return;
+          }
+          if (!widget.settings.autoReadOpenCode) {
+            request.response.statusCode = HttpStatus.noContent;
+            await request.response.close();
+            return;
+          }
+          if (!_voiceReady) await _configureTts();
+          await _tts.stop();
+          await _tts.speak(text, focus: true);
+          request.response.statusCode = HttpStatus.accepted;
+        } catch (_) {
+          request.response.statusCode = HttpStatus.internalServerError;
+        }
+        await request.response.close();
+      });
+    } catch (e) {
+      // The manual read-aloud control remains available if the local bridge
+      // cannot bind (for example, if another MicroOS terminal owns the port).
+      debugPrint('MicroOS speech bridge unavailable: $e');
+    }
+  }
+
+  Future<void> _speakText(String text) async {
+    final cleaned = text.trim();
+    if (cleaned.isEmpty) return;
+    if (!_voiceReady) await _configureTts();
+    if (!_voiceReady) throw StateError('Android text-to-speech is unavailable');
+    await _tts.stop();
+    await _tts.speak(cleaned, focus: true);
+  }
+
+  Future<void> _readSelection() async {
+    final range = _terminalController.selection;
+    if (range == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Select terminal text first, then tap Read aloud')),
+        );
+      }
+      return;
+    }
+    final selected = _terminal.buffer.getText(range).trim();
+    if (selected.isEmpty) return;
+    try {
+      await _speakText(selected);
+      _terminalController.clearSelection();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not read selection: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopSpeaking() async {
+    await _tts.stop();
+    if (mounted) setState(() => _speaking = false);
+  }
+
+  void _onSelectionChanged() {
+    final range = _terminalController.selection;
+    if (range == null) {
+      _selectionCopyTimer?.cancel();
+      _lastCopiedSelection = null;
+      return;
+    }
+    _selectionCopyTimer?.cancel();
+    _selectionCopyTimer = Timer(const Duration(milliseconds: 250), () async {
+      final current = _terminalController.selection;
+      if (!mounted || current == null) return;
+      final selected = _terminal.buffer.getText(current);
+      if (selected.trim().isEmpty || selected == _lastCopiedSelection) return;
+      try {
+        await Clipboard.setData(ClipboardData(text: selected));
+        _lastCopiedSelection = selected;
+        _showCopyToast();
+      } catch (e) {
+        debugPrint('MicroOS terminal auto-copy failed: $e');
+      }
+    });
+  }
+
+  void _showCopyToast() {
+    if (!mounted) return;
+    _copyToastTimer?.cancel();
+    _copyToast?.remove();
+    _copyToast = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 12,
+        right: 12,
+        child: Material(
+          color: Colors.transparent,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xEE202733),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0x55FFFFFF)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x55000000), blurRadius: 14, offset: Offset(0, 5)),
+              ],
+            ),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle, color: Color(0xFF70D6A0), size: 16),
+                  SizedBox(width: 8),
+                  Text('Copied to clipboard', style: TextStyle(color: Colors.white, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_copyToast!);
+    _copyToastTimer = Timer(const Duration(milliseconds: 1400), () {
+      _copyToast?.remove();
+      _copyToast = null;
+    });
+  }
+
+  Future<void> _copySelection() async {
+    final range = _terminalController.selection;
+    if (range == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Long-press text, drag the handles, then tap Copy')),
+        );
+      }
+      return;
+    }
+    final selected = _terminal.buffer.getText(range);
+    if (selected.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: selected));
+    _terminalController.clearSelection();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 1)),
+      );
+    }
+  }
+
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
     if (text != null && text.isNotEmpty) _terminal.paste(text);
-  }
-
-  Future<void> _showTerminalMenu() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: MicroColors.panelSolid,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.content_paste),
-              title: const Text('Paste from clipboard'),
-              onTap: () => Navigator.pop(context, 'paste'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (choice == 'paste') await _pasteFromClipboard();
   }
 
   void _send(String data) {
@@ -163,11 +341,18 @@ class _TerminalAppState extends State<TerminalApp> {
   @override
   void dispose() {
     _outputFlushTimer?.cancel();
+    _selectionCopyTimer?.cancel();
+    _copyToastTimer?.cancel();
+    _copyToast?.remove();
+    _terminalController.removeListener(_onSelectionChanged);
     if (_pendingOutput.isNotEmpty) {
       _terminal.write(_pendingOutput.toString());
       _pendingOutput.clear();
     }
     _output?.cancel();
+    _ttsServer?.close(force: true);
+    _tts.stop();
+    _terminalController.dispose();
     try {
       _pty?.kill();
     } catch (_) {
@@ -214,6 +399,20 @@ class _TerminalAppState extends State<TerminalApp> {
                   ),
                 ),
                 IconButton(
+                  tooltip: _speaking ? 'Stop reading aloud' : 'Read selected text aloud',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _speaking ? _stopSpeaking : _readSelection,
+                  icon: Icon(_speaking ? Icons.stop_circle_outlined : Icons.volume_up, size: 18),
+                  color: _speaking ? MicroColors.green : const Color(0xFFF4F4F4),
+                ),
+                IconButton(
+                  tooltip: 'Copy selected terminal text',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _copySelection,
+                  icon: const Icon(Icons.copy, size: 17),
+                  color: const Color(0xFFF4F4F4),
+                ),
+                IconButton(
                   tooltip: 'Paste from Android clipboard',
                   visualDensity: VisualDensity.compact,
                   onPressed: _pasteFromClipboard,
@@ -223,14 +422,42 @@ class _TerminalAppState extends State<TerminalApp> {
               ],
             ),
           ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: _speaking ? 34 : 0,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            color: const Color(0xFF252B38),
+            child: _speaking
+                ? Row(
+                    children: [
+                      const Icon(Icons.graphic_eq, color: MicroColors.green, size: 17),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text('Reading aloud',
+                          style: TextStyle(color: MicroColors.text, fontSize: 11)),
+                      ),
+                      TextButton.icon(
+                        onPressed: _stopSpeaking,
+                        icon: const Icon(Icons.stop, size: 14),
+                        label: const Text('Stop'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: MicroColors.text,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
           Expanded(
-            child: GestureDetector(
-              onLongPress: _showTerminalMenu,
-              child: RepaintBoundary(
-                child: AnimatedBuilder(
-                  animation: widget.settings,
-                  builder: (context, _) => TerminalView(
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: widget.settings,
+                builder: (context, _) => TerminalView(
                     _terminal,
+                    controller: _terminalController,
+                    deleteDetection: true,
                     autofocus: true,
                     padding: const EdgeInsets.all(8),
                     backgroundOpacity: 1,
@@ -242,7 +469,6 @@ class _TerminalAppState extends State<TerminalApp> {
                     ),
                     simulateScroll: true,
                   ),
-                ),
               ),
             ),
           ),

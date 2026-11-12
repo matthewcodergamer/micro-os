@@ -61,6 +61,19 @@ class DesktopState extends ChangeNotifier {
       args: args,
     )..pinned = false;
 
+    // Phone-first behavior: apps open as immersive workspaces, not tiny
+    // desktop windows. The green control still restores the desktop window.
+    if (screen.width < 720) {
+      window.restoreRect = window.rect;
+      window.rect = Rect.fromLTWH(
+        0,
+        kStatusBarHeight,
+        screen.width,
+        math.max(0.0, screen.height - kStatusBarHeight),
+      );
+      window.maximized = true;
+    }
+
     windows.add(window);
     notifyListeners();
     return window;
@@ -128,7 +141,7 @@ class DesktopState extends ChangeNotifier {
         0,
         kStatusBarHeight,
         screen.width,
-        screen.height - kStatusBarHeight - kDockReserved,
+        screen.height - kStatusBarHeight,
       );
       window.maximized = true;
     }
@@ -215,6 +228,19 @@ class DesktopState extends ChangeNotifier {
       if (window.pinned) {
         window.pinned = false;
         changed = true;
+      }
+      if (window.maximized && compact) {
+        final rect = Rect.fromLTWH(
+          0,
+          kStatusBarHeight,
+          screen.width,
+          math.max(0.0, screen.height - kStatusBarHeight),
+        );
+        if (rect != window.rect) {
+          window.rect = rect;
+          changed = true;
+        }
+        continue;
       }
       final maxWidth = math.max(280.0, screen.width - 16);
       final maxHeight = math.max(240.0, screen.height - kStatusBarHeight - kDockReserved - 8);

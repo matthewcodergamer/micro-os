@@ -206,6 +206,27 @@ class _SettingsAppState extends State<SettingsApp> {
             padding: const EdgeInsets.all(14),
             children: [
               _Section(
+                title: 'Speech',
+                subtitle: scope.settings.autoReadOpenCode
+                    ? 'Automatically reads completed OpenCode replies'
+                    : 'Manual read-aloud only',
+                children: [
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Read OpenCode replies aloud',
+                      style: TextStyle(color: MicroColors.text, fontSize: 12)),
+                    subtitle: const Text(
+                      'Uses the Android text-to-speech voice selected in your phone settings. Speech is processed on-device by the installed TTS engine.',
+                      style: TextStyle(color: MicroColors.subtle, fontSize: 10)),
+                    value: scope.settings.autoReadOpenCode,
+                    onChanged: scope.settings.setAutoReadOpenCode,
+                  ),
+                  const Text(
+                    'DeepSeek’s proprietary Mira voice is not an available public TTS engine here. You can change the Android system voice in Settings → Accessibility → Text-to-speech output.',
+                    style: TextStyle(color: MicroColors.subtle, fontSize: 10, height: 1.4)),
+                ],
+              ),
+              _Section(
                 title: 'GitHub',
                 subtitle: _login == null
                     ? 'Not connected'

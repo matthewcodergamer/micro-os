@@ -41,7 +41,7 @@ exec bash -l
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'OpenCode agent · /root/projects · git credentials from Settings',
+                    'OpenCode · GitHub PAT is for GitHub only · use /connect for an AI provider',
                     style: TextStyle(color: MicroColors.subtle, fontSize: 10),
                     overflow: TextOverflow.ellipsis,
                   ),
