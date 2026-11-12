@@ -229,6 +229,19 @@ class DesktopState extends ChangeNotifier {
         window.pinned = false;
         changed = true;
       }
+      if (window.maximized && compact) {
+        final rect = Rect.fromLTWH(
+          0,
+          kStatusBarHeight,
+          screen.width,
+          math.max(0.0, screen.height - kStatusBarHeight),
+        );
+        if (rect != window.rect) {
+          window.rect = rect;
+          changed = true;
+        }
+        continue;
+      }
       final maxWidth = math.max(280.0, screen.width - 16);
       final maxHeight = math.max(240.0, screen.height - kStatusBarHeight - kDockReserved - 8);
       final width = math.min(window.rect.width, maxWidth);
