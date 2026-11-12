@@ -442,17 +442,39 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 MENU
 openbox >"$LOG/openbox.log" 2>&1 &
 
+wait_for_port() {
+  local port="$1"
+  local attempts="$2"
+  for ((i=0; i<attempts; i++)); do
+    if (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
 x11vnc -display :1 -forever -shared -rfbport 5900 -localhost -nopw \
        -repeat -wait 15 -defer 15 >"$LOG/x11vnc.log" 2>&1 &
-sleep 0.8
-
-if [ -d /usr/share/novnc ]; then
-  websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 >"$LOG/websockify.log" 2>&1 &
-else
-  echo "[microos] noVNC missing; only raw VNC on 5900 is available" >&2
+if ! wait_for_port 5900 40; then
+  echo "[microos] ERROR: x11vnc did not open port 5900" >&2
+  cat "$LOG/x11vnc.log" >&2 || true
+  exit 1
 fi
 
-echo "[microos] display :1 ready"
+if [ ! -d /usr/share/novnc ]; then
+  echo "[microos] ERROR: /usr/share/novnc is missing; cannot start the phone display bridge" >&2
+  exit 1
+fi
+websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 >"$LOG/websockify.log" 2>&1 &
+if ! wait_for_port 6080 40; then
+  echo "[microos] ERROR: websockify did not open port 6080" >&2
+  cat "$LOG/websockify.log" >&2 || true
+  cat "$LOG/x11vnc.log" >&2 || true
+  exit 1
+fi
+
+echo "[microos] display :1 ready (VNC 5900, noVNC 6080)"
 wait
 EOF
 chmod 755 /root/.microos/start-gui.sh
