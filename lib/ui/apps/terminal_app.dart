@@ -232,7 +232,7 @@ class _TerminalAppState extends State<TerminalApp> {
             decoration: BoxDecoration(
               color: const Color(0xEE202733),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0x553FFFFFFF)),
+              border: Border.all(color: const Color(0x55FFFFFF)),
               boxShadow: const [
                 BoxShadow(color: Color(0x55000000), blurRadius: 14, offset: Offset(0, 5)),
               ],
