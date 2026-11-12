@@ -66,6 +66,27 @@ class StatusBar extends StatelessWidget {
                     icon: stats.charging ? Icons.battery_charging_full : Icons.battery_5_bar,
                     label: '${stats.batteryLevel}%',
                     color: stats.batteryLevel <= 15 ? MicroColors.red : null,
+                    onTap: () => showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: MicroColors.panelSolid,
+                        title: const Text('Battery'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${stats.batteryLevel}% remaining',
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            Text(stats.charging ? 'Charging or fully charged' : 'Discharging'),
+                            const SizedBox(height: 10),
+                            const Text('Android does not expose battery health or cycle count through the current app interface. This panel shows the live charge level and charging state.',
+                              style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+                          ],
+                        ),
+                        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -94,30 +115,38 @@ class StatusBar extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.icon, required this.label, this.color});
+  const _Stat({required this.icon, required this.label, this.color, this.onTap});
 
   final IconData icon;
   final String label;
   final Color? color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final tint = color ?? MicroColors.text;
     return Padding(
       padding: const EdgeInsets.only(left: 14),
-      child: Row(
-        children: [
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
           Icon(icon, size: 13, color: tint),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: tint,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+            Text(
+              label,
+              style: TextStyle(
+                color: tint,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
             ),
+          ],
           ),
-        ],
+        ),
       ),
     );
   }
