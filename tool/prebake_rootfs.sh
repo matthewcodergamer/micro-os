@@ -132,9 +132,23 @@ tar --hard-dereference --numeric-owner --owner=0 --group=0 \
   -czf "$OUT" -C "$TMP/rootfs" .
 
 tar -tzf "$OUT" > "$TMP/rootfs-archive.list"
-grep -qxE '(\./)?root/\.microos/ready' "$TMP/rootfs-archive.list"
-grep -qxE '(\./)?root/\.microos/image-version' "$TMP/rootfs-archive.list"
-grep -qxE '(\./)?opt/firefox/firefox' "$TMP/rootfs-archive.list"
-grep -qxE '(\./)?usr/local/bin/microos-jar' "$TMP/rootfs-archive.list"
-grep -qxE '(\./)?root/.opencode/bin/opencode' "$TMP/rootfs-archive.list"
+require_archive_path() {
+  local expected="$1"
+  if ! grep -qE "^(\\./)?${expected}$" "$TMP/rootfs-archive.list"; then
+    echo "ERROR: exported rootfs is missing required path: ${expected}" >&2
+    echo "Archive entries matching the expected basename:" >&2
+    grep -F "$(basename "$expected")" "$TMP/rootfs-archive.list" | head -n 30 >&2 || true
+    exit 1
+  fi
+}
+# Keep this list in sync with the APK workflow's transfer validation.
+require_archive_path 'root/\\.microos/ready'
+require_archive_path 'root/\\.microos/image-version'
+require_archive_path 'opt/firefox/firefox'
+require_archive_path 'opt/firefox/firefox-bin'
+require_archive_path 'usr/local/bin/microos-browse'
+require_archive_path 'usr/local/bin/microos-jar'
+require_archive_path 'root/.opencode/bin/opencode'
+require_archive_path 'home/microos-browser'
+echo "==> All required rootfs paths verified"
 echo "==> Pre-baked ARM64 rootfs: $(du -h "$OUT" | cut -f1)"
