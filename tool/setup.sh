@@ -171,15 +171,14 @@ if command -v firefox >/dev/null 2>&1; then
   # PRoot runs the desktop as guest root. Firefox must run as a normal user.
   # The rootfs archive normalizes ownership to root, so give the browser a
   # persistent, explicitly writable profile home inside the guest instead.
-  BROWSER_HOME=/root/.microos/browser-home
-  mkdir -p "$BROWSER_HOME"
-  chmod 1777 "$BROWSER_HOME"
+  BROWSER_HOME=/home/microos-browser/.cache/microos-firefox
+  install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME/profile"
   exec runuser -u microos-browser -- env \
     DISPLAY="$DISPLAY" \
-    HOME="$BROWSER_HOME" \
+    HOME=/home/microos-browser \
     MOZ_DISABLE_CONTENT_SANDBOX=1 \
     MOZ_DISABLE_GMP_SANDBOX=1 \
-    firefox "$@"
+    firefox --profile "$BROWSER_HOME/profile" "$@"
 fi
 
 echo "Firefox is missing from this MicroOS image. Reinstall/update MicroOS with a pre-baked Firefox build." >&2
