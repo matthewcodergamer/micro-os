@@ -8,7 +8,7 @@ export const MicroOSTextToSpeech = async ({ client }) => ({
       event?.properties?.sessionID ??
       event?.data?.sessionID ??
       event?.properties?.info?.id;
-    if (!sessionID || spoken.has(sessionID)) return;
+    if (!sessionID) return;
 
     try {
       const result = await client.session.messages({ path: { id: sessionID } });
@@ -19,6 +19,8 @@ export const MicroOSTextToSpeech = async ({ client }) => ({
         item.parts.some((part) => part?.type === "text" && part?.text?.trim())
       );
       if (!assistant) return;
+      const messageKey = `${sessionID}:${assistant.info.id}`;
+      if (spoken.has(messageKey)) return;
 
       const text = assistant.parts
         .filter((part) => part?.type === "text" && typeof part.text === "string")
@@ -34,7 +36,7 @@ export const MicroOSTextToSpeech = async ({ client }) => ({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      if (response.ok || response.status === 204) spoken.add(sessionID);
+      if (response.ok || response.status === 204) spoken.add(messageKey);
     } catch (error) {
       console.error("[microos-tts] could not hand response to Android TTS:", error);
     }
