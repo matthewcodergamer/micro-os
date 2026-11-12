@@ -72,11 +72,10 @@ docker run --platform linux/arm64 --name "$NAME" \
     # Firefox refuses to start as root. Exercise the same unprivileged account
     # and headless Gecko startup path used by MicroOS before shipping the image.
     id microos-browser
-    BROWSER_HOME=/root/.microos/browser-home
-    mkdir -p "$BROWSER_HOME"
-    chmod 1777 "$BROWSER_HOME"
+    BROWSER_HOME=/home/microos-browser/.cache/microos-firefox
+    install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME/smoke-profile"
     runuser -u microos-browser -- env \
-      HOME="$BROWSER_HOME" \
+      HOME=/home/microos-browser \
       MOZ_DISABLE_CONTENT_SANDBOX=1 \
       MOZ_DISABLE_GMP_SANDBOX=1 \
       timeout 90 /opt/firefox/firefox --headless --no-remote \
@@ -85,7 +84,7 @@ docker run --platform linux/arm64 --name "$NAME" \
         "data:text/html,<title>MicroOS Firefox smoke test</title><h1>Firefox is ready</h1>"
     test -s /tmp/microos-firefox-smoke.png
     echo "==> Firefox ARM64 headless startup and rendering test passed"
-    rm -rf "$BROWSER_HOME/smoke-profile"
+    rm -rf "$BROWSER_HOME"
     rm -f /tmp/microos-firefox-smoke.png /tmp/firefox-ldd.txt
 
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
