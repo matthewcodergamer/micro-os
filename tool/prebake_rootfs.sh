@@ -14,6 +14,7 @@ mkdir -p "$(dirname "$OUT")"
 echo "==> Provisioning Ubuntu 24.04 ARM64 in Docker"
 docker run --platform linux/arm64 --name "$NAME" \
   -v "$ROOT/tool/setup.sh:/tmp/microos-setup.sh:ro" \
+  -v "$ROOT/tool/opencode-tts-plugin.js:/tmp/microos-tts-plugin.js:ro" \
   ubuntu:24.04 /bin/bash -lc '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
@@ -21,6 +22,10 @@ docker run --platform linux/arm64 --name "$NAME" \
     cp /tmp/microos-setup.sh /root/.microos/setup.sh
     chmod 755 /root/.microos/setup.sh
     bash /root/.microos/setup.sh
+
+    mkdir -p /root/.config/opencode/plugins
+    install -m 0644 /tmp/microos-tts-plugin.js /root/.config/opencode/plugins/microos-tts.js
+    echo "==> Installed local Android read-aloud plugin for OpenCode"
 
     echo "==> Verifying the pre-baked developer workstation"
     for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar; do
