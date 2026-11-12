@@ -39,7 +39,7 @@ docker run --platform linux/arm64 --name "$NAME" \
       exit 1
     fi
     timeout 30 "$OPENCODE_BIN" --version
-    python3 -c "import zipfile, json, pathlib; print('Python ZIP/JAR inspection support: ready')"
+    python3 -c "import zipfile, json, pathlib"
 
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
