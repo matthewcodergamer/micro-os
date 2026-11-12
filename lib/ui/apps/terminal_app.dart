@@ -190,6 +190,7 @@ class _TerminalAppState extends State<TerminalApp> {
       _pendingOutput.clear();
     }
     _output?.cancel();
+    _terminalController.dispose();
     try {
       _pty?.kill();
     } catch (_) {
