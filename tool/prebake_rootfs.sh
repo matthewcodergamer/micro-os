@@ -72,14 +72,17 @@ docker run --platform linux/arm64 --name "$NAME" \
     # Firefox refuses to start as root. Exercise the same unprivileged account
     # and headless Gecko startup path used by MicroOS before shipping the image.
     id microos-browser
-    BROWSER_HOME=/home/microos-browser/.cache/microos-firefox
-    install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME/smoke-profile"
+    BROWSER_HOME=/home/microos-browser
+    # Let Firefox create its own default profile. Passing --profile to the
+    # Mozilla launcher in this container produced a false "profile folder"
+    # failure even when the directory existed.
+    install -d -o microos-browser -g microos-browser -m 700 \
+      "$BROWSER_HOME" "$BROWSER_HOME/.mozilla" "$BROWSER_HOME/.cache"
     runuser -u microos-browser -- env \
-      HOME=/home/microos-browser \
+      HOME="$BROWSER_HOME" \
       MOZ_DISABLE_CONTENT_SANDBOX=1 \
       MOZ_DISABLE_GMP_SANDBOX=1 \
       timeout 90 /opt/firefox/firefox --headless --no-remote \
-        --profile "$BROWSER_HOME/smoke-profile" \
         --screenshot /tmp/microos-firefox-smoke.png \
         "data:text/html,<title>MicroOS Firefox smoke test</title><h1>Firefox is ready</h1>"
     test -s /tmp/microos-firefox-smoke.png
