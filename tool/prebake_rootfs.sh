@@ -87,7 +87,10 @@ docker run --platform linux/arm64 --name "$NAME" \
         "data:text/html,<title>MicroOS Firefox smoke test</title><h1>Firefox is ready</h1>"
     test -s /tmp/microos-firefox-smoke.png
     echo "==> Firefox ARM64 headless startup and rendering test passed"
-    rm -rf "$BROWSER_HOME"
+    # Keep the browser home in the exported rootfs; the runtime launcher expects
+    # this path to exist and will repair ownership before starting Firefox.
+    rm -rf "$BROWSER_HOME/.mozilla" "$BROWSER_HOME/.cache"
+    install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME"
     rm -f /tmp/microos-firefox-smoke.png /tmp/firefox-ldd.txt
 
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
