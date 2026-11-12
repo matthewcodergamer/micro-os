@@ -20,6 +20,75 @@ class Dock extends StatelessWidget {
   final bool compact;
   final ValueChanged<AppId> onOpen;
 
+  Future<void> _showLaunchpad(BuildContext context) async {
+    final apps = AppId.values;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xF0181D29),
+      barrierColor: Colors.black54,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 38, height: 4, decoration: BoxDecoration(
+                color: Colors.white30, borderRadius: BorderRadius.circular(4))),
+              const SizedBox(height: 16),
+              const Align(alignment: Alignment.centerLeft, child: Text(
+                'Launchpad', style: TextStyle(color: MicroColors.text,
+                  fontSize: 22, fontWeight: FontWeight.w700))),
+              const SizedBox(height: 16),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: apps.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3, mainAxisSpacing: 18, crossAxisSpacing: 12,
+                  childAspectRatio: 0.92),
+                itemBuilder: (context, index) {
+                  final app = apps[index];
+                  final item = _itemFor(app);
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () { Navigator.pop(sheetContext); onOpen(app); },
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(width: 62, height: 62,
+                          decoration: BoxDecoration(
+                            color: item.color, borderRadius: BorderRadius.circular(19),
+                            boxShadow: const [BoxShadow(color: Colors.black38,
+                              blurRadius: 12, offset: Offset(0, 5))]),
+                          child: Icon(item.icon, color: Colors.white, size: 30)),
+                        const SizedBox(height: 8),
+                        Text(app.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: MicroColors.text, fontSize: 11)),
+                        if (desktop.isRunning(app)) const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: CircleAvatar(radius: 2, backgroundColor: MicroColors.accent)),
+                      ]));
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  _DockItem _itemFor(AppId app) => switch (app) {
+    AppId.terminal => _DockItem(app, Icons.terminal, const Color(0xFF2B2F3A)),
+    AppId.desktop => _DockItem(app, Icons.desktop_windows, const Color(0xFF1F6FEB)),
+    AppId.browser => _DockItem(app, Icons.travel_explore, const Color(0xFF7C4DFF)),
+    AppId.files => _DockItem(app, Icons.folder_rounded, const Color(0xFFF0A32B)),
+    AppId.aiHub => _DockItem(app, Icons.auto_awesome, const Color(0xFF00A67E)),
+    AppId.settings => _DockItem(app, Icons.settings, const Color(0xFF5A6472)),
+  };
+
   @override
   Widget build(BuildContext context) {
     final items = <_DockItem>[
@@ -66,6 +135,7 @@ class Dock extends StatelessWidget {
                     if (window != null) desktop.close(window.id);
                   },
                 ),
+              _LaunchpadButton(compact: compact, onTap: () => _showLaunchpad(context)),
             ],
           ),
         ),
@@ -198,4 +268,32 @@ class _DockButtonState extends State<_DockButton> {
       ),
     );
   }
+}
+
+
+class _LaunchpadButton extends StatelessWidget {
+  const _LaunchpadButton({required this.compact, required this.onTap});
+  final bool compact;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Launchpad',
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 5),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: compact ? 44 : 52, height: compact ? 44 : 52,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF6C7CFF), Color(0xFF9B55E8)]),
+              borderRadius: BorderRadius.circular(14)),
+            child: Icon(Icons.apps_rounded, color: Colors.white, size: compact ? 23 : 27)),
+          const SizedBox(height: 3),
+          const SizedBox(height: 4),
+          if (!compact) const Text('Launchpad', style: TextStyle(color: MicroColors.subtle, fontSize: 9)),
+        ]),
+      ),
+    ),
+  );
 }
