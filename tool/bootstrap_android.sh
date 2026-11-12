@@ -253,4 +253,5 @@ PY
 grep -q "targetSdk = 28\|targetSdkVersion 28" android/app/build.gradle.kts android/app/build.gradle 2>/dev/null \
   || { echo "!! could not patch targetSdk, inspect android/app/build.gradle*"; exit 1; }
 
+echo "==> Android TTS service discovery enabled"
 echo "==> android project ready"
