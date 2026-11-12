@@ -80,7 +80,7 @@ stage 63 "Installing core toolchain"
 apt-get install "${APT_OPTS[@]}" \
   ca-certificates curl wget gnupg apt-utils \
   git git-lfs openssh-client \
-  build-essential pkg-config make cmake \
+  build-essential pkg-config make cmake openjdk-21-jdk-headless \
   python3 python3-pip python3-venv python3-dev \
   unzip zip xz-utils tar less nano vim-tiny \
   procps file jq tmux sudo \
@@ -115,17 +115,79 @@ apt-get install "${APT_OPTS[@]}" \
   fonts-dejavu-core fonts-liberation \
   || warn "some X11 packages failed to install"
 
+# macOS-inspired X11 pointer theme (WhiteSur Cursors, upstream GPL-3.0).
+# This affects X11 applications in the VNC desktop; it does not change the
+# Android host pointer or create a pointer overlay for touch-only screens.
+stage 80 "Installing WhiteSur X11 cursor theme"
+apt-get install "${APT_OPTS[@]}" git x11-xserver-utils || warn "cursor prerequisites failed"
+if [ ! -d /usr/share/icons/WhiteSur-cursors/cursors ]; then
+  rm -rf /tmp/WhiteSur-cursors
+  if git clone --depth 1 https://github.com/vinceliuice/WhiteSur-cursors.git /tmp/WhiteSur-cursors; then
+    if [ -d /tmp/WhiteSur-cursors/dist/cursors ]; then
+      install -d /usr/share/icons/WhiteSur-cursors
+      cp -a /tmp/WhiteSur-cursors/dist/. /usr/share/icons/WhiteSur-cursors/
+      [ -f /tmp/WhiteSur-cursors/LICENSE ] && install -m 644 /tmp/WhiteSur-cursors/LICENSE /usr/share/icons/WhiteSur-cursors/LICENSE
+      log "WhiteSur cursor assets installed"
+    else
+      warn "WhiteSur upstream checkout has no compiled dist/cursors; retaining default cursor"
+    fi
+  else
+    warn "WhiteSur cursor download failed; retaining default cursor"
+  fi
+fi
+if [ -d /usr/share/icons/WhiteSur-cursors/cursors ]; then
+  mkdir -p /root/.icons/default
+  cat > /root/.icons/default/index.theme <<'CURSOR'
+[Icon Theme]
+Inherits=WhiteSur-cursors
+CURSOR
+  cat > /root/.Xresources <<'XRES'
+Xcursor.theme: WhiteSur-cursors
+Xcursor.size: 24
+XRES
+fi
+rm -rf /tmp/WhiteSur-cursors
+
 # -----------------------------------------------------------------------------
 # 5. Browser
-#    Ubuntu arm64 ships Chromium only as a snap, and snaps cannot run in proot.
-#    Falkon is a real .deb desktop browser built on QtWebEngine (Chromium's
-#    Blink + V8), so it is the dependable default. If a genuine Chromium .deb
-#    is ever available it is preferred automatically by microos-browse.
+#    Firefox is downloaded from Mozilla and baked into the ARM64 rootfs by
+#    tool/prebake_rootfs.sh. Run it as a dedicated unprivileged guest user:
+#    Firefox intentionally refuses to run as root, and its profile must not
+#    be owned by the proot root account.
 # -----------------------------------------------------------------------------
-stage 84 "Installing desktop browser"
-# Do not install Ubuntu's chromium transitional package: on arm64 it
-# points to Snap, and snapd cannot operate inside this proot guest.
-apt-get install "${APT_OPTS[@]}" falkon || warn "Falkon/QtWebEngine install failed"
+stage 84 "Preparing Firefox desktop browser"
+apt-get install "${APT_OPTS[@]}" passwd util-linux || warn "browser user tools unavailable"
+if ! id microos-browser >/dev/null 2>&1; then
+  useradd --system --create-home --home-dir /home/microos-browser \
+    --shell /usr/sbin/nologin microos-browser || warn "could not create Firefox user"
+fi
+
+cat > /usr/local/bin/microos-browse <<'BROWSER'
+#!/usr/bin/env bash
+set -euo pipefail
+export DISPLAY="${DISPLAY:-:1}"
+
+if command -v firefox >/dev/null 2>&1; then
+  # PRoot runs the desktop as guest root. Firefox must run as a normal user.
+  # The rootfs archive normalizes ownership to root, so give the browser a
+  # persistent, explicitly writable profile home inside the guest instead.
+  BROWSER_HOME=/home/microos-browser
+  # Ensure the normalized rootfs home is writable by the browser account.
+  # Firefox manages its default profile beneath HOME/.mozilla itself.
+  install -d -o microos-browser -g microos-browser -m 700 \
+    "$BROWSER_HOME" "$BROWSER_HOME/.mozilla" "$BROWSER_HOME/.cache"
+  exec runuser -u microos-browser -- env \
+    DISPLAY="$DISPLAY" \
+    HOME="$BROWSER_HOME" \
+    MOZ_DISABLE_CONTENT_SANDBOX=1 \
+    MOZ_DISABLE_GMP_SANDBOX=1 \
+    firefox "$@"
+fi
+
+echo "Firefox is missing from this MicroOS image. Reinstall/update MicroOS with a pre-baked Firefox build." >&2
+exit 127
+BROWSER
+chmod 755 /usr/local/bin/microos-browse
 
 # -----------------------------------------------------------------------------
 # 6. ZRAM
@@ -222,7 +284,86 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 8. Shell defaults, git, projects
+# 8. Local JAR / Minecraft inspection helper
+#    Works on files the user has downloaded to Android shared storage. It does
+#    not download, bundle, or redistribute Minecraft game assets.
+# -----------------------------------------------------------------------------
+stage 93 "Preparing local JAR inspection tools"
+cat > /usr/local/bin/microos-jar <<'JAR'
+#!/usr/bin/env python3
+import pathlib
+import stat
+import sys
+import zipfile
+
+def usage():
+    print("Usage:")
+    print("  microos-jar inspect <file.jar>")
+    print("  microos-jar extract <file.jar> [destination]")
+    raise SystemExit(2)
+
+if len(sys.argv) < 3 or sys.argv[1] not in {"inspect", "extract"}:
+    usage()
+
+action = sys.argv[1]
+source = pathlib.Path(sys.argv[2]).expanduser()
+if not source.is_file():
+    raise SystemExit(f"File not found: {source}")
+
+try:
+    archive = zipfile.ZipFile(source)
+except (OSError, zipfile.BadZipFile) as error:
+    raise SystemExit(f"Not a readable ZIP/JAR archive: {error}")
+
+with archive:
+    entries = archive.infolist()
+    assets = [entry for entry in entries if entry.filename.startswith("assets/")]
+    total = sum(entry.file_size for entry in entries)
+    print(f"Archive: {source}")
+    print(f"Entries: {len(entries)}")
+    print(f"Uncompressed size: {total:,} bytes")
+    print(f"assets/ entries: {len(assets)}")
+    if action == "inspect":
+        for entry in entries[:80]:
+            print(f"{entry.file_size:>12,}  {entry.filename}")
+        if len(entries) > 80:
+            print(f"... {len(entries) - 80} more entries")
+        raise SystemExit(0)
+
+    destination = pathlib.Path(sys.argv[3]).expanduser() if len(sys.argv) > 3 else source.with_name(source.name + ".extracted")
+    destination.mkdir(parents=True, exist_ok=True)
+    root = destination.resolve()
+    written = 0
+    for entry in entries:
+        name = pathlib.PurePosixPath(entry.filename)
+        if name.is_absolute() or ".." in name.parts:
+            print(f"Skipping unsafe path: {entry.filename}", file=sys.stderr)
+            continue
+        mode = entry.external_attr >> 16
+        if stat.S_ISLNK(mode):
+            print(f"Skipping symlink entry: {entry.filename}", file=sys.stderr)
+            continue
+        target = (root / pathlib.Path(*name.parts)).resolve()
+        if target != root and root not in target.parents:
+            print(f"Skipping unsafe path: {entry.filename}", file=sys.stderr)
+            continue
+        if entry.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with archive.open(entry) as incoming, target.open("wb") as outgoing:
+            while True:
+                chunk = incoming.read(1024 * 1024)
+                if not chunk:
+                    break
+                outgoing.write(chunk)
+        written += 1
+    print(f"Extracted {written} files to: {root}")
+JAR
+chmod 755 /usr/local/bin/microos-jar
+
+# -----------------------------------------------------------------------------
+# 9. Shell defaults, git, projects
 # -----------------------------------------------------------------------------
 stage 94 "Finalising shell"
 cat > /etc/profile.d/microos.sh <<'EOF'
@@ -245,6 +386,8 @@ cat >> /root/.bashrc <<'EOF'
 # --- MicroOS ---------------------------------------------------------------
 export PATH="/root/.opencode/bin:/root/.local/bin:$PATH"
 export DISPLAY=:1
+export XCURSOR_THEME=WhiteSur-cursors
+export XCURSOR_SIZE=24
 export PS1='\[\e[38;5;39m\]\u@microos\[\e[0m\]:\[\e[38;5;114m\]\w\[\e[0m\]\$ '
 command -v microos-mem >/dev/null && :
 alias ll='ls -alF'
@@ -257,7 +400,7 @@ alias ll='ls -alF'
 EOF
 
 # -----------------------------------------------------------------------------
-# 9. Display bridge + browser launcher
+# 10. Display bridge + browser launcher
 # -----------------------------------------------------------------------------
 stage 96 "Writing display bridge"
 cat > /root/.microos/start-gui.sh <<'EOF'
@@ -265,6 +408,8 @@ cat > /root/.microos/start-gui.sh <<'EOF'
 # Xvfb + openbox + x11vnc + noVNC. The Flutter app renders noVNC in a window.
 set -uo pipefail
 export DISPLAY=:1
+export XCURSOR_THEME=WhiteSur-cursors
+export XCURSOR_SIZE=24
 GEOMETRY="${MICROOS_GEOMETRY:-1024x768x24}"
 LOG=/tmp/.microos
 mkdir -p "$LOG"
@@ -278,7 +423,8 @@ sleep 0.5
 Xvfb :1 -screen 0 "$GEOMETRY" -nolisten tcp -dpi 96 >"$LOG/xvfb.log" 2>&1 &
 sleep 1.2
 
-xsetroot -solid '#0f131b' 2>/dev/null
+xrdb -merge /root/.Xresources 2>/dev/null || true
+xsetroot -solid '#0f131b' -cursor_name left_ptr 2>/dev/null || xsetroot -solid '#0f131b' 2>/dev/null
 
 # Minimal openbox config so the desktop has a right-click menu.
 mkdir -p /root/.config/openbox
@@ -287,7 +433,7 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 <openbox_menu>
   <menu id="root-menu" label="MicroOS">
     <item label="Terminal"><action name="Execute"><command>xterm -fa Monospace -fs 10</command></action></item>
-    <item label="Browser"><action name="Execute"><command>/usr/local/bin/microos-browse</command></action></item>
+    <item label="Firefox"><action name="Execute"><command>/usr/local/bin/microos-browse</command></action></item>
     <item label="OpenCode"><action name="Execute"><command>xterm -fa Monospace -fs 10 -e opencode</command></action></item>
     <separator/>
     <item label="Restart window manager"><action name="Restart"/></item>
@@ -321,43 +467,39 @@ echo "[microos] display stopped"
 EOF
 chmod 755 /root/.microos/stop-gui.sh
 
-# The browser launcher. Flags are the memory-conservative set requested for
-# low-RAM phones; --single-process is opt-in because upstream deprecated it and
-# it crashes on many sites.
-cat > /usr/local/bin/microos-browse <<'EOF'
+# Browser launcher was installed above with the Firefox-first, unprivileged-user wrapper.
+
+# Optional Steam/Box64 feasibility check. This intentionally does not install
+# Steam or alter the guest: the Steam Linux client has 32-bit components and
+# needs a compatible Box86/Box32 path in addition to Box64.
+cat > /usr/local/bin/microos-steam-check <<'STEAMCHECK'
 #!/usr/bin/env bash
 set -u
-export DISPLAY="${DISPLAY:-:1}"
-export QTWEBENGINE_DISABLE_SANDBOX=1
-
-BASE_FLAGS=(
-  --no-sandbox
-  --disable-gpu-sandbox
-  --disable-dev-shm-usage
-  --disable-background-networking
-  --process-per-site
-  --renderer-process-limit=1
-  --js-flags=--max-old-space-size=512
-)
-[ "${MICROOS_SINGLE_PROCESS:-0}" = "1" ] && BASE_FLAGS+=(--single-process)
-
-export QTWEBENGINE_CHROMIUM_FLAGS="${BASE_FLAGS[*]}"
-
-URL="${1:-}"
-if command -v falkon >/dev/null 2>&1; then
-  exec falkon ${URL:+"$URL"}
-elif command -v chromium >/dev/null 2>&1; then
-  exec chromium "${BASE_FLAGS[@]}" ${URL:+"$URL"}
-elif command -v chromium-browser >/dev/null 2>&1; then
-  exec chromium-browser "${BASE_FLAGS[@]}" ${URL:+"$URL"}
+echo "MicroOS Steam compatibility check"
+echo "Guest architecture: $(dpkg --print-architecture 2>/dev/null || uname -m)"
+if command -v box64 >/dev/null 2>&1; then
+  echo "Box64: $(box64 --version 2>&1 | head -n 1)"
+else
+  echo "Box64: not installed"
 fi
-echo "No desktop browser is installed. Run: apt-get install falkon" >&2
-exit 1
-EOF
-chmod 755 /usr/local/bin/microos-browse
+if command -v box86 >/dev/null 2>&1; then
+  echo "Box86: $(box86 --version 2>&1 | head -n 1)"
+else
+  echo "Box86/Box32: not installed"
+fi
+echo
+echo "Steam package availability:"
+apt-cache policy steam 2>/dev/null | sed -n '1,8p' || true
+echo
+echo "No Steam install was attempted. Do not assume Box64 alone is enough:"
+echo "Steam's Linux client includes 32-bit components and Chromium/CEF processes."
+echo "A real test also needs compatible 32-bit userspace libraries, graphics"
+echo "drivers, and a working display/audio stack. PRoot may impose further limits."
+STEAMCHECK
+chmod 755 /usr/local/bin/microos-steam-check
 
 # -----------------------------------------------------------------------------
-# 10. Trim the image
+# 11. Trim the image
 # -----------------------------------------------------------------------------
 stage 98 "Cleaning up"
 apt-get autoremove -y >/dev/null 2>&1 || true

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a fully provisioned Ubuntu ARM64 guest on the CI runner.
-# Requires Docker with linux/arm64 emulation (docker/setup-qemu-action).
+# Runs on a native ARM64 GitHub Actions runner; Docker executes ARM64 natively.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,6 +22,25 @@ docker run --platform linux/arm64 --name "$NAME" \
     chmod 755 /root/.microos/setup.sh
     bash /root/.microos/setup.sh
 
+    echo "==> Verifying the pre-baked developer workstation"
+    for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar; do
+      command -v "$tool" >/dev/null 2>&1 || {
+        echo "Required pre-baked tool is missing: $tool" >&2
+        exit 1
+      }
+      printf "%-10s %s\\n" "$tool" "$(command -v "$tool")"
+    done
+    if command -v opencode >/dev/null 2>&1; then
+      OPENCODE_BIN="$(command -v opencode)"
+    elif [ -x /root/.opencode/bin/opencode ]; then
+      OPENCODE_BIN=/root/.opencode/bin/opencode
+    else
+      echo "OpenCode is missing from the pre-baked image" >&2
+      exit 1
+    fi
+    timeout 30 "$OPENCODE_BIN" --version
+    python3 -c "import zipfile, json, pathlib"
+
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
     apt-get install -y --no-install-recommends \
@@ -34,16 +53,50 @@ docker run --platform linux/arm64 --name "$NAME" \
     curl -fL --retry 3 --connect-timeout 20 \
       "https://download.mozilla.org/?lang=en-US&os=linux64-aarch64&product=firefox-latest-ssl" \
       -o /tmp/firefox.tar.xz
-    tar -tJf /tmp/firefox.tar.xz | grep -q "^firefox/firefox$"
+    tar -tJf /tmp/firefox.tar.xz > /tmp/firefox-archive.list
+    grep -qx "firefox/firefox" /tmp/firefox-archive.list
+    rm -f /tmp/firefox-archive.list
     mkdir -p /opt
     tar -xJf /tmp/firefox.tar.xz -C /opt
     ln -sf /opt/firefox/firefox /usr/local/bin/firefox
-    file /opt/firefox/firefox | grep -qi "ARM aarch64"
+    # The shell launcher is a script; verify the actual ARM64 ELF binary.
+    test -x /opt/firefox/firefox-bin
+    file /opt/firefox/firefox-bin | grep -Eqi "ARM aarch64|ARM64"
+    if ldd /opt/firefox/firefox-bin 2>&1 | tee /tmp/firefox-ldd.txt | grep -q "not found"; then
+      echo "Firefox has unresolved shared-library dependencies:" >&2
+      cat /tmp/firefox-ldd.txt >&2
+      exit 1
+    fi
     /opt/firefox/firefox --version
+
+    # Firefox refuses to start as root. Exercise the same unprivileged account
+    # and headless Gecko startup path used by MicroOS before shipping the image.
+    id microos-browser
+    BROWSER_HOME=/home/microos-browser
+    # Let Firefox create its own default profile. Passing --profile to the
+    # Mozilla launcher in this container produced a false "profile folder"
+    # failure even when the directory existed.
+    install -d -o microos-browser -g microos-browser -m 700 \
+      "$BROWSER_HOME" "$BROWSER_HOME/.mozilla" "$BROWSER_HOME/.cache"
+    runuser -u microos-browser -- env \
+      HOME="$BROWSER_HOME" \
+      MOZ_DISABLE_CONTENT_SANDBOX=1 \
+      MOZ_DISABLE_GMP_SANDBOX=1 \
+      timeout 90 /opt/firefox/firefox --headless --no-remote \
+        --screenshot /tmp/microos-firefox-smoke.png \
+        "data:text/html,<title>MicroOS Firefox smoke test</title><h1>Firefox is ready</h1>"
+    test -s /tmp/microos-firefox-smoke.png
+    echo "==> Firefox ARM64 headless startup and rendering test passed"
+    # Keep the browser home in the exported rootfs; the runtime launcher expects
+    # this path to exist and will repair ownership before starting Firefox.
+    rm -rf "$BROWSER_HOME/.mozilla" "$BROWSER_HOME/.cache"
+    install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME"
+    rm -f /tmp/microos-firefox-smoke.png /tmp/firefox-ldd.txt
 
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
+    printf "2\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
@@ -78,6 +131,24 @@ PY
 tar --hard-dereference --numeric-owner --owner=0 --group=0 \
   -czf "$OUT" -C "$TMP/rootfs" .
 
-tar -tzf "$OUT" | grep -qxE '(\./)?root/\.microos/ready'
-tar -tzf "$OUT" | grep -qxE '(\./)?opt/firefox/firefox'
+tar -tzf "$OUT" > "$TMP/rootfs-archive.list"
+require_archive_path() {
+  local expected="$1"
+  if ! grep -qE "^(\\./)?${expected}$" "$TMP/rootfs-archive.list"; then
+    echo "ERROR: exported rootfs is missing required path: ${expected}" >&2
+    echo "Archive entries matching the expected basename:" >&2
+    grep -F "$(basename "$expected")" "$TMP/rootfs-archive.list" | head -n 30 >&2 || true
+    exit 1
+  fi
+}
+# Keep this list in sync with the APK workflow's transfer validation.
+require_archive_path 'root/\\.microos/ready'
+require_archive_path 'root/\\.microos/image-version'
+require_archive_path 'opt/firefox/firefox'
+require_archive_path 'opt/firefox/firefox-bin'
+require_archive_path 'usr/local/bin/microos-browse'
+require_archive_path 'usr/local/bin/microos-jar'
+require_archive_path 'root/.opencode/bin/opencode'
+require_archive_path 'home/microos-browser'
+echo "==> All required rootfs paths verified"
 echo "==> Pre-baked ARM64 rootfs: $(du -h "$OUT" | cut -f1)"

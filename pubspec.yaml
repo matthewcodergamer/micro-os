@@ -12,7 +12,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_pty: ^0.4.2
   xterm: ^4.0.0
-  archive: ^3.6.1
   path: ^1.9.0
   path_provider: ^2.1.4
   shared_preferences: ^2.3.2
@@ -38,3 +37,11 @@ flutter:
     - tool/setup.sh
     - assets/rootfs/
     - assets/proot/
+    - assets/fonts/OFL.txt
+  fonts:
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700

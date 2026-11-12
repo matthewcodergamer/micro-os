@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
@@ -11,16 +10,21 @@ import 'package:path_provider/path_provider.dart';
 
 enum RuntimeStatus { checking, missing, installing, ready, failed }
 
-/// Owns the Linux guest: unpacks the bundled rootfs, runs first-boot
-/// provisioning, and launches processes inside it through proot.
+/// Owns the Linux guest: unpacks the bundled, pre-provisioned rootfs and
+/// launches processes through proot. Legacy images retain a setup fallback.
 ///
 /// Everything the UI needs is exposed as plain Dart calls so the window manager
 /// never has to know whether it is talking to a local proot guest or (later) a
 /// remote host.
 class LinuxRuntime extends ChangeNotifier {
-  static const String _rootfsAsset = 'assets/rootfs/rootfs.tar.gz';
+  static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.gz';
+  static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
+  // Bump this whenever the bundled Linux image changes. It forces upgrades to
+  // replace an older extracted rootfs instead of silently reusing stale files.
+  static const String _rootfsVersion = '2';
+  static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
   /// rootfs instead of being executed straight out of the APK, because Android
@@ -44,6 +48,8 @@ class LinuxRuntime extends ChangeNotifier {
   bool _displayRequested = false;
   bool _provisioningFinished = false;
   bool _disposed = false;
+  String? _githubToken;
+  String? _huggingFaceToken;
 
   bool get isReady => status == RuntimeStatus.ready;
   bool get isBusy => status == RuntimeStatus.installing;
@@ -76,6 +82,13 @@ class LinuxRuntime extends ChangeNotifier {
   String get prootPath => p.join(base.path, 'proot', 'proot');
   String get _readyPath => p.join(rootfsPath, _readyMarker);
 
+  bool get _hasCurrentImage {
+    final versionFile = File(p.join(rootfsPath, _imageVersionPath));
+    return File(_readyPath).existsSync() &&
+        versionFile.existsSync() &&
+        versionFile.readAsStringSync().trim() == _rootfsVersion;
+  }
+
   /// Environment handed to every proot invocation.
   Map<String, String> get _prootEnv => <String, String>{
         'PROOT_LOADER': p.join(base.path, 'proot', 'loader'),
@@ -88,6 +101,12 @@ class LinuxRuntime extends ChangeNotifier {
         'DISPLAY': ':1',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
             '/root/.opencode/bin:/root/.local/bin',
+        if (_githubToken != null && _githubToken!.isNotEmpty) ...<String, String>{
+          'GH_TOKEN': _githubToken!,
+          'GITHUB_TOKEN': _githubToken!,
+        },
+        if (_huggingFaceToken != null && _huggingFaceToken!.isNotEmpty)
+          'HF_TOKEN': _huggingFaceToken!,
       };
 
   // ---------------------------------------------------------------- lifecycle
@@ -110,10 +129,10 @@ class LinuxRuntime extends ChangeNotifier {
       await _base!.create(recursive: true);
       await Directory(p.join(base.path, 'tmp')).create(recursive: true);
 
-      status = File(_readyPath).existsSync()
-          ? RuntimeStatus.ready
-          : RuntimeStatus.missing;
-      stage = status == RuntimeStatus.ready ? 'Linux ready' : 'Linux not installed';
+      status = _hasCurrentImage ? RuntimeStatus.ready : RuntimeStatus.missing;
+      stage = status == RuntimeStatus.ready
+          ? 'Pre-baked Linux ready'
+          : 'Pre-baked workstation needs unpacking';
       progress = status == RuntimeStatus.ready ? 1 : 0;
       if (status == RuntimeStatus.ready) await _refreshGuestDns();
     } catch (e) {
@@ -159,23 +178,36 @@ class LinuxRuntime extends ChangeNotifier {
       await _extractProot();
 
       progress = 0.08;
-      stage = 'Unpacking Ubuntu rootfs';
+      stage = 'Unpacking pre-baked Ubuntu workstation';
       _notify();
       await _extractRootfs();
 
-      progress = 0.55;
-      stage = 'Installing developer toolchain';
-      _notify();
-      await _installSetupScript();
-      await _runProvisioning();
-
-      if (File(_readyPath).existsSync()) {
+      if (_hasCurrentImage) {
+        // The APK already contains Firefox, OpenCode and the complete toolchain.
+        // Do not run apt or download packages on the phone during first launch.
+        progress = 0.95;
+        stage = 'Finalising pre-baked workstation';
+        _notify();
+        await _refreshGuestDns();
         status = RuntimeStatus.ready;
         progress = 1;
-        stage = 'Linux ready';
+        stage = 'Pre-baked Linux ready';
       } else {
-        status = RuntimeStatus.failed;
-        error = 'Provisioning stopped before it finished. Check the log below.';
+        // Compatibility path for an older development image without a
+        // recognised pre-bake marker.
+        progress = 0.55;
+        stage = 'Completing legacy Linux setup';
+        _notify();
+        await _installSetupScript();
+        await _runProvisioning();
+        if (File(_readyPath).existsSync()) {
+          status = RuntimeStatus.ready;
+          progress = 1;
+          stage = 'Linux ready';
+        } else {
+          status = RuntimeStatus.failed;
+          error = 'Linux setup stopped before it finished. Check the log below.';
+        }
       }
     } catch (e, stack) {
       status = RuntimeStatus.failed;
@@ -222,20 +254,24 @@ class LinuxRuntime extends ChangeNotifier {
 
   Future<void> _extractRootfs() async {
     final target = Directory(rootfsPath);
+    if (target.existsSync()) await target.delete(recursive: true);
     await target.create(recursive: true);
 
     final tarFile = File(p.join(base.path, 'rootfs.tar.gz'));
+    if (tarFile.existsSync()) await tarFile.delete();
     if (!tarFile.existsSync() || tarFile.lengthSync() < 1024 * 1024) {
-      final data = await rootBundle.load(_rootfsAsset);
-      await tarFile.writeAsBytes(
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-        flush: true,
-      );
+      // AssetManager.open() is copied on a native worker thread in fixed-size
+      // chunks. Never call rootBundle.load() for this 800+ MB asset: that
+      // materializes the entire compressed rootfs in the Dart heap.
+      await _rootfsChannel.invokeMethod<int>('copyAssetToFile', <String, Object>{
+        'assetPath': _rootfsAsset,
+        'destinationPath': tarFile.path,
+      });
     }
 
-    // Use the in-process extractor: Android toybox tar rejects Ubuntu
-    // absolute symlink targets. The Dart extractor re-roots them in rootfs.
-    await _extractWithDart(tarFile.path, target.path);
+    if (!await _extractWithSystemTar(tarFile.path, target.path)) {
+      throw StateError('Android tar could not extract the bundled rootfs');
+    }
 
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');
@@ -244,12 +280,15 @@ class LinuxRuntime extends ChangeNotifier {
     try {
       await tarFile.delete();
     } catch (_) {
-      // Not fatal, just wasted space.
+      // Not fatal, just wasted storage.
     }
   }
 
   Future<bool> _extractWithSystemTar(String tarPath, String destination) async {
     try {
+      // The prebake step converts absolute guest symlinks to relative links.
+      // Android's toybox tar can therefore extract the archive without
+      // Dart-side decompression or archive-wide buffering.
       final result = await Process.run(
         '/system/bin/tar',
         <String>['-xzf', tarPath, '-C', destination],
@@ -264,58 +303,6 @@ class LinuxRuntime extends ChangeNotifier {
     } catch (e) {
       _appendLog('system tar failed: $e');
       return false;
-    }
-  }
-
-  Future<void> _extractWithDart(String tarPath, String destination) async {
-    final raw = await File(tarPath).readAsBytes();
-    final decompressed = GZipDecoder().decodeBytes(raw);
-    final archive = TarDecoder().decodeBytes(decompressed);
-
-    for (final entry in archive.files) {
-      final name = p.posix.normalize(entry.name.replaceFirst(RegExp(r'^\./'), ''));
-      if (name.isEmpty || name == '.' || name.startsWith('/') ||
-          name == '..' || name.startsWith('../')) continue;
-      final outPath = p.join(destination, name);
-
-      if (entry.isSymbolicLink) {
-        final link = Link(outPath);
-        await link.parent.create(recursive: true);
-        if (link.existsSync()) await link.delete();
-        final target = entry.nameOfLinkedFile;
-        final safeTarget = target.startsWith('/')
-            ? p.posix.relative(
-                p.posix.normalize(target),
-                from: p.posix.dirname('/$name'),
-              )
-            : target;
-        await link.create(safeTarget);
-        continue;
-      }
-
-      if (!entry.isFile) {
-        await Directory(outPath).create(recursive: true);
-        continue;
-      }
-
-      final file = File(outPath);
-      await file.parent.create(recursive: true);
-      await file.writeAsBytes(_bytesOf(entry), flush: false);
-      final mode = entry.unixPermissions;
-      if (mode != 0) await _chmod(outPath, mode.toRadixString(8));
-    }
-  }
-
-
-  Uint8List _bytesOf(ArchiveFile entry) {
-    final content = entry.content;
-    if (content is Uint8List) return content;
-    if (content is List<int>) return Uint8List.fromList(content);
-    try {
-      final dynamic stream = content;
-      return Uint8List.fromList(stream.toUint8Array() as List<int>);
-    } catch (_) {
-      return Uint8List(0);
     }
   }
 
@@ -490,14 +477,22 @@ class LinuxRuntime extends ChangeNotifier {
 
   // --------------------------------------------------------------- credentials
 
-  /// Writes `~/.git-credentials` + `~/.gitconfig` straight into the rootfs so
-  /// git (and therefore OpenCode) can push without an interactive prompt.
+  /// Keeps tokens in Android Keystore-backed storage and passes them to guest
+  /// processes at launch. Never writes a PAT into .git-credentials or shell files.
+  void setGithubToken(String? token) {
+    _githubToken = token?.trim().isEmpty == true ? null : token?.trim();
+  }
+
+  void setHuggingFaceToken(String? token) {
+    _huggingFaceToken = token?.trim().isEmpty == true ? null : token?.trim();
+  }
+
   Future<void> applyGitCredentials(String token, String login) async {
+    _githubToken = token;
     if (!isReady) return;
 
-    final credentials = File(p.join(rootfsPath, 'root/.git-credentials'));
-    await credentials.writeAsString('https://$login:$token@github.com\n');
-    await _chmod(credentials.path, '600');
+    final legacyCredentials = File(p.join(rootfsPath, 'root/.git-credentials'));
+    if (legacyCredentials.existsSync()) await legacyCredentials.delete();
 
     final gitconfig = File(p.join(rootfsPath, 'root/.gitconfig'));
     await gitconfig.writeAsString('''
@@ -505,19 +500,19 @@ class LinuxRuntime extends ChangeNotifier {
 \tname = $login
 \temail = $login@users.noreply.github.com
 [credential]
-\thelper = store
+\thelper = !gh auth git-credential
 [init]
 \tdefaultBranch = main
 [safe]
 \tdirectory = *
 ''');
     await _chmod(gitconfig.path, '600');
-
-    _appendLog('[microos] GitHub credentials stored for $login');
+    _appendLog('[microos] GitHub credential helper configured for $login (token not written to disk)');
   }
 
   Future<void> clearGitCredentials() async {
-    for (final name in <String>['root/.git-credentials']) {
+    _githubToken = null;
+    for (final name in <String>['root/.git-credentials', 'root/.gitconfig']) {
       final file = File(p.join(rootfsPath, name));
       if (file.existsSync()) await file.delete();
     }

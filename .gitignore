@@ -3,7 +3,6 @@
 .packages
 .pub-cache/
 .pub/
-build/
 .flutter-plugins
 .flutter-plugins-dependencies
 *.iml
@@ -25,6 +24,7 @@ assets/proot/proot
 assets/proot/loader
 assets/proot/*.so
 !assets/proot/.gitkeep
+assets/fonts/*.ttf
 
 # Build output
 out/

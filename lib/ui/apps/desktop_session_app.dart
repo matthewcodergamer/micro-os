@@ -87,9 +87,13 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     if (!mounted) return;
     setState(() => _status = 'Attaching to :1…');
 
-    final controller = WebViewController()
+    late final WebViewController controller;
+    controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0B0E14))
+      ..setNavigationDelegate(NavigationDelegate(
+        onPageFinished: (_) => _installTouchBridge(controller),
+      ))
       ..loadRequest(Uri.parse(_vncUrl));
 
     setState(() {
@@ -97,6 +101,122 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       _status = 'Connected';
     });
     _booting = false;
+  }
+
+  // noVNC runs inside the Android WebView. Translate touch gestures into
+  // ordinary DOM pointer/wheel events on its canvas so the existing noVNC
+  // RFB input pipeline sends them to X11. A tap is left-click, a 500ms
+  // stationary press is right-click, a one-finger drag is mouse movement,
+  // and a two-finger drag becomes vertical/horizontal wheel scrolling.
+  Future<void> _installTouchBridge(WebViewController controller) async {
+    await controller.runJavaScript(r"""
+      (() => {
+        if (window.__microOsTouchBridgeInstalled) return;
+        const canvas = document.getElementById('noVNC_canvas');
+        if (!canvas) {
+          const observer = new MutationObserver(() => {
+            const retry = document.getElementById('noVNC_canvas');
+            if (retry) {
+              observer.disconnect();
+              install(retry);
+            }
+          });
+          observer.observe(document.documentElement, {childList:true,subtree:true});
+          return;
+        }
+        install(canvas);
+        function install(target) {
+          if (window.__microOsTouchBridgeInstalled) return;
+          window.__microOsTouchBridgeInstalled = true;
+          target.style.touchAction = 'none';
+          let mode = 'idle', startX = 0, startY = 0, lastX = 0, lastY = 0;
+          let timer = null, rightClick = false, moved = false;
+          const point = (t) => ({x:t.clientX, y:t.clientY});
+          const pointer = (type, x, y, button, buttons) => {
+            target.dispatchEvent(new PointerEvent(type, {
+              bubbles:true, cancelable:true, pointerId:1, pointerType:'mouse',
+              isPrimary:true, clientX:x, clientY:y, button, buttons
+            }));
+          };
+          const mouse = (type, x, y, button, buttons) => {
+            target.dispatchEvent(new MouseEvent(type, {
+              bubbles:true, cancelable:true, view:window,
+              clientX:x, clientY:y, button, buttons
+            }));
+          };
+          const clear = () => { if (timer) clearTimeout(timer); timer = null; };
+          target.addEventListener('touchstart', e => {
+            if (e.touches.length === 2) {
+              clear(); mode = 'scroll';
+              const a=point(e.touches[0]), b=point(e.touches[1]);
+              lastX=(a.x+b.x)/2; lastY=(a.y+b.y)/2;
+              return;
+            }
+            if (e.touches.length !== 1) return;
+            const p=point(e.touches[0]);
+            mode='pending'; startX=lastX=p.x; startY=lastY=p.y;
+            moved=false; rightClick=false;
+            clear();
+            timer=setTimeout(() => {
+              if (mode==='pending' && !moved) {
+                rightClick=true; mode='right';
+                pointer('pointerdown', startX, startY, 2, 2);
+                mouse('mousedown', startX, startY, 2, 2);
+              }
+            }, 500);
+          }, {passive:false});
+          target.addEventListener('touchmove', e => {
+            if (mode==='scroll' && e.touches.length >= 2) {
+              e.preventDefault();
+              const a=point(e.touches[0]), b=point(e.touches[1]);
+              const x=(a.x+b.x)/2, y=(a.y+b.y)/2;
+              target.dispatchEvent(new WheelEvent('wheel', {
+                bubbles:true, cancelable:true,
+                deltaX:lastX-x, deltaY:lastY-y, deltaMode:0
+              }));
+              lastX=x; lastY=y; return;
+            }
+            if ((mode==='pending' || mode==='drag') && e.touches.length===1) {
+              e.preventDefault();
+              const p=point(e.touches[0]);
+              if (mode==='pending' && Math.hypot(p.x-startX,p.y-startY)>8) {
+                clear(); moved=true; mode='drag';
+                pointer('pointerdown', startX, startY, 0, 1);
+                mouse('mousedown', startX, startY, 0, 1);
+              }
+              if (mode==='drag') {
+                pointer('pointermove',p.x,p.y,-1,1);
+                mouse('mousemove',p.x,p.y,-1,1);
+              }
+              lastX=p.x; lastY=p.y;
+            }
+          }, {passive:false});
+          const finish = e => {
+            clear();
+            if (mode==='right') {
+              pointer('pointerup',lastX,lastY,2,0);
+              mouse('mouseup',lastX,lastY,2,0);
+              target.dispatchEvent(new MouseEvent('contextmenu',{
+                bubbles:true,cancelable:true,view:window,
+                clientX:lastX,clientY:lastY,button:2
+              }));
+            } else if (mode==='drag') {
+              pointer('pointerup',lastX,lastY,0,0);
+              mouse('mouseup',lastX,lastY,0,0);
+            } else if (mode==='pending' && !moved) {
+              pointer('pointerdown',startX,startY,0,1);
+              mouse('mousedown',startX,startY,0,1);
+              pointer('pointerup',startX,startY,0,0);
+              mouse('mouseup',startX,startY,0,0);
+              mouse('click',startX,startY,0,0);
+            }
+            mode='idle'; rightClick=false;
+          };
+          target.addEventListener('touchend', finish, {passive:false});
+          target.addEventListener('touchcancel', finish, {passive:false});
+        }
+      })();
+    """);
   }
 
   String get _vncUrl {

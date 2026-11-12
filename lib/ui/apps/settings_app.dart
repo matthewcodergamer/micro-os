@@ -18,12 +18,15 @@ class SettingsApp extends StatefulWidget {
 
 class _SettingsAppState extends State<SettingsApp> {
   final TextEditingController _token = TextEditingController();
+  final TextEditingController _hfToken = TextEditingController();
 
   bool _busy = false;
+  bool _hfBusy = false;
   bool _repairing = false;
   String? _message;
   bool _messageIsError = false;
   String? _login;
+  String? _hfAccount;
 
   @override
   void initState() {
@@ -33,18 +36,19 @@ class _SettingsAppState extends State<SettingsApp> {
 
   Future<void> _restore() async {
     final scope = AppScope.of(context);
-    final token = await scope.auth.readToken();
     final login = await scope.auth.readLogin();
+    final hfToken = await scope.auth.readHuggingFaceToken();
     if (!mounted) return;
     setState(() {
       _login = login;
-      if (token != null) _token.text = token;
+      _hfAccount = hfToken == null ? null : 'Token saved';
     });
   }
 
   @override
   void dispose() {
     _token.dispose();
+    _hfToken.dispose();
     super.dispose();
   }
 
@@ -77,6 +81,7 @@ class _SettingsAppState extends State<SettingsApp> {
       }
 
       await scope.auth.saveToken(token, identity.login);
+      widget.runtime.setGithubToken(token);
       if (widget.runtime.isReady) {
         await widget.runtime.applyGitCredentials(token, identity.login);
       }
@@ -85,14 +90,48 @@ class _SettingsAppState extends State<SettingsApp> {
       _notify(
         widget.runtime.isReady
             ? 'Connected as ${identity.login}. git push will not prompt.'
-            : 'Token saved for ${identity.login}. It is written into the guest '
-                'as soon as Linux finishes installing.',
+            : 'Token saved for ${identity.login}. It will be supplied securely to '
+                'Linux tools when the guest starts.',
       );
     } catch (e) {
       _notify('Could not store the token: $e', isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _saveHuggingFaceToken() async {
+    final scope = AppScope.of(context);
+    final token = _hfToken.text.trim();
+    if (token.isEmpty) {
+      _notify('Paste a Hugging Face access token first.', isError: true);
+      return;
+    }
+    setState(() => _hfBusy = true);
+    try {
+      final account = await scope.auth.verifyHuggingFace(token);
+      if (account == null) {
+        _notify('Hugging Face rejected that token. Check its validity and permissions.', isError: true);
+        return;
+      }
+      await scope.auth.saveHuggingFaceToken(token);
+      widget.runtime.setHuggingFaceToken(token);
+      if (!mounted) return;
+      setState(() => _hfAccount = account);
+      _notify('Hugging Face connected as $account. OpenCode can use HF_TOKEN.');
+    } finally {
+      if (mounted) setState(() => _hfBusy = false);
+    }
+  }
+
+  Future<void> _clearHuggingFaceToken() async {
+    final scope = AppScope.of(context);
+    await scope.auth.clearHuggingFaceToken();
+    widget.runtime.setHuggingFaceToken(null);
+    if (!mounted) return;
+    _hfToken.clear();
+    setState(() => _hfAccount = null);
+    _notify('Hugging Face token removed.');
   }
 
   Future<void> _clearToken() async {
@@ -122,10 +161,11 @@ class _SettingsAppState extends State<SettingsApp> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: MicroColors.panelSolid,
-        title: const Text('Install Linux toolchain?'),
+        title: const Text('Unpack Linux workstation?'),
         content: const Text(
-          'This downloads roughly 700 MB – 1.2 GB of packages inside the guest. '
-          'Use Wi-Fi and keep the app in the foreground.',
+          'The APK already contains Ubuntu, Firefox, OpenCode and the developer tools. '
+          'This expands the bundled image into private app storage; it does not '
+          'download packages. Keep MicroOS open while it finishes.',
         ),
         actions: [
           TextButton(
@@ -134,7 +174,7 @@ class _SettingsAppState extends State<SettingsApp> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Install'),
+            child: const Text('Unpack'),
           ),
         ],
       ),
@@ -144,6 +184,11 @@ class _SettingsAppState extends State<SettingsApp> {
     await widget.runtime.install();
     if (!mounted) return;
     if (widget.runtime.isReady) {
+      final token = await scope.auth.readToken();
+      final login = await scope.auth.readLogin();
+      if (token != null && login != null) {
+        await widget.runtime.applyGitCredentials(token, login);
+      }
       await scope.settings.markInstalled();
     }
   }
@@ -167,8 +212,9 @@ class _SettingsAppState extends State<SettingsApp> {
                     : 'Connected as $_login',
                 children: [
                   const Text(
-                    'Paste a Personal Access Token. It is kept in the Android '
-                    'keystore and written into the guest as a git credential.',
+                    'Paste a Personal Access Token. It is kept in Android encrypted storage '
+                    'and supplied to Git/OpenCode at launch; the PAT is not saved '
+                    'in a plaintext guest credential file.',
                     style: TextStyle(color: MicroColors.subtle, fontSize: 11),
                   ),
                   const SizedBox(height: 10),
@@ -214,6 +260,49 @@ class _SettingsAppState extends State<SettingsApp> {
                       ),
                     ),
                   ],
+                ],
+              ),
+              _Section(
+                title: 'Hugging Face',
+                subtitle: _hfAccount == null ? 'Not connected' : 'Connected · $_hfAccount',
+                children: [
+                  const Text(
+                    'Stored using Android encrypted storage. OpenCode and Python tools receive HF_TOKEN when Linux processes start.',
+                    style: TextStyle(color: MicroColors.subtle, fontSize: 11),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _hfToken,
+                    obscureText: true,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    style: const TextStyle(fontSize: 12, color: MicroColors.text),
+                    decoration: const InputDecoration(
+                      hintText: 'hf_…',
+                      labelText: 'Hugging Face access token',
+                      labelStyle: TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      FilledButton(
+                        onPressed: _hfBusy ? null : _saveHuggingFaceToken,
+                        child: _hfBusy
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Text('Verify & save'),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: _hfBusy ? null : _clearHuggingFaceToken,
+                        child: const Text('Clear'),
+                      ),
+                    ],
+                  ),
+                  const Text(
+                    'Use a read-only token unless a project genuinely needs write access. Never paste tokens into project files or commit them.',
+                    style: TextStyle(color: MicroColors.amber, fontSize: 10, height: 1.45),
+                  ),
                 ],
               ),
               _Section(
@@ -286,7 +375,7 @@ class _SettingsAppState extends State<SettingsApp> {
                       FilledButton.tonal(
                         onPressed: widget.runtime.isBusy ? null : _install,
                         child: Text(
-                          widget.runtime.isReady ? 'Repair toolchain' : 'Install toolchain',
+                          widget.runtime.isReady ? 'Reinstall workstation' : 'Unpack workstation',
                         ),
                       ),
                       const SizedBox(width: 8),

@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../services/linux_runtime.dart';
 
-/// First-run screen. Shown until the guest is unpacked and provisioned.
+/// First-run screen. Shown while the bundled Linux workstation is unpacked.
 class InstallScreen extends StatelessWidget {
   const InstallScreen({super.key, required this.runtime});
 
@@ -115,9 +115,10 @@ class InstallScreen extends StatelessWidget {
                     )
                   else
                     const Text(
-                      'Unpacks a bundled Ubuntu rootfs, then installs Python, '
-                      'Node, Rust, git, GitHub CLI, Chromium/Falkon, OpenCode and '
-                      'the X11 stack. Roughly 1 GB — use Wi-Fi.',
+                      'The APK already contains Ubuntu ARM64, Firefox, OpenCode, Python, '
+                      'Node, Rust, Java 21, Git and GitHub CLI. This is a one-time '
+                      'unpack into private app storage — no package downloads are '
+                      'needed. Keep MicroOS open while it finishes.',
                       style: TextStyle(
                         color: MicroColors.subtle,
                         fontSize: 11,
@@ -179,10 +180,10 @@ class InstallScreen extends StatelessWidget {
                                   : runtime.install(),
                           child: Text(
                             runtime.isBusy
-                                ? 'Installing…'
+                                ? 'Unpacking…'
                                 : failed
-                                    ? 'Retry installation'
-                                    : 'Install Linux',
+                                    ? 'Retry unpacking'
+                                    : 'Unpack workstation',
                           ),
                         ),
                       ),
