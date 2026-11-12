@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -35,6 +37,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   bool _failed = false;
   bool _booting = false;
   int _attempts = 0;
+  Timer? _vncRetryTimer;
+  int _vncRetryCount = 0;
+  bool _vncRetryCheckInFlight = false;
 
   @override
   void initState() {
@@ -93,14 +98,92 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       ..setBackgroundColor(const Color(0xFF0B0E14))
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (_) => _installTouchBridge(controller),
+        onWebResourceError: (_) => _retryVncPage(controller),
       ))
       ..loadRequest(Uri.parse(_vncUrl));
 
     setState(() {
       _controller = controller;
-      _status = 'Connected';
+      _status = 'Connecting to VNC…';
     });
     _booting = false;
+    _startVncRetryLoop(controller);
+  }
+
+  void _startVncRetryLoop(WebViewController controller) {
+    _vncRetryTimer?.cancel();
+    _vncRetryCount = 0;
+    _vncRetryTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!mounted || !identical(_controller, controller)) {
+        timer.cancel();
+        return;
+      }
+      if (_vncRetryCheckInFlight) return;
+      _vncRetryCheckInFlight = true;
+      try {
+        final result = await controller.runJavaScriptReturningResult(
+          "document.body ? document.body.innerText : ''",
+        );
+        final pageText = result.toString().toLowerCase();
+        final connected = pageText.contains('connected') &&
+            !pageText.contains('disconnected');
+        if (connected) {
+          timer.cancel();
+          if (mounted) setState(() => _status = 'Connected');
+          return;
+        }
+
+        _vncRetryCount++;
+        if (_vncRetryCount >= 15) {
+          timer.cancel();
+          if (mounted) {
+            setState(() {
+              _failed = true;
+              _status = 'VNC did not connect within 15 seconds. Tap Try again.';
+            });
+          }
+          return;
+        }
+
+        final failed = pageText.contains('failed to connect') ||
+            pageText.contains('connection failed');
+        if (failed || _vncRetryCount % 3 == 0) {
+          if (mounted) {
+            setState(() => _status =
+                'Waiting for the VNC server… retry $_vncRetryCount/15');
+          }
+          await controller.reload();
+        }
+      } catch (_) {
+        _vncRetryCount++;
+        if (_vncRetryCount >= 15) {
+          timer.cancel();
+          if (mounted) {
+            setState(() {
+              _failed = true;
+              _status = 'VNC did not connect within 15 seconds. Tap Try again.';
+            });
+          }
+        } else if (_vncRetryCount % 3 == 0) {
+          await controller.reload();
+        }
+      } finally {
+        _vncRetryCheckInFlight = false;
+      }
+    });
+  }
+
+  void _retryVncPage(WebViewController controller) {
+    if (!mounted || !identical(_controller, controller)) return;
+    if (_vncRetryCount < 15) {
+      setState(() => _status = 'VNC connection interrupted; retrying…');
+    }
+  }
+
+  @override
+  void dispose() {
+    _vncRetryTimer?.cancel();
+    super.dispose();
   }
 
   // noVNC runs inside the Android WebView. Translate touch gestures into

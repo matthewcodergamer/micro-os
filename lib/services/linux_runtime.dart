@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:zstd_dart/zstd_dart.dart';
 
 enum RuntimeStatus { checking, missing, installing, ready, failed }
 
@@ -17,13 +19,14 @@ enum RuntimeStatus { checking, missing, installing, ready, failed }
 /// never has to know whether it is talking to a local proot guest or (later) a
 /// remote host.
 class LinuxRuntime extends ChangeNotifier {
-  static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.gz';
+  static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.zst';
+  static const int _rootfsChunkBytes = 8 * 1024 * 1024;
   static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '3';
+  static const String _rootfsVersion = '4';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -257,52 +260,87 @@ class LinuxRuntime extends ChangeNotifier {
     if (target.existsSync()) await target.delete(recursive: true);
     await target.create(recursive: true);
 
-    final tarFile = File(p.join(base.path, 'rootfs.tar.gz'));
-    if (tarFile.existsSync()) await tarFile.delete();
-    if (!tarFile.existsSync() || tarFile.lengthSync() < 1024 * 1024) {
-      // AssetManager.open() is copied on a native worker thread in fixed-size
-      // chunks. Never call rootBundle.load() for this 800+ MB asset: that
-      // materializes the entire compressed rootfs in the Dart heap.
+    final archive = File(p.join(base.path, 'rootfs.tar.zst'));
+    if (archive.existsSync()) await archive.delete();
+    if (!archive.existsSync() || archive.lengthSync() < 1024 * 1024) {
+      // AssetManager copies the compressed asset on a native worker thread.
+      // Never materialize the multi-hundred-megabyte asset in the Dart heap.
       await _rootfsChannel.invokeMethod<int>('copyAssetToFile', <String, Object>{
         'assetPath': _rootfsAsset,
-        'destinationPath': tarFile.path,
+        'destinationPath': archive.path,
       });
     }
 
-    if (!await _extractWithSystemTar(tarFile.path, target.path)) {
-      throw StateError('Android tar could not extract the bundled rootfs');
-    }
-
+    await _extractZstdWithSystemTar(archive.path, target.path);
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');
     }
 
     try {
-      await tarFile.delete();
+      await archive.delete();
     } catch (_) {
-      // Not fatal, just wasted storage.
+      // Not fatal; the next install can reuse or replace this cached archive.
     }
   }
 
-  Future<bool> _extractWithSystemTar(String tarPath, String destination) async {
+  /// Decompress zstd in bounded 8 MiB chunks and pipe tar directly into
+  /// Android tar. Neither the compressed asset nor the expanded tar is loaded
+  /// wholesale into memory or written as a second giant temporary file.
+  Future<void> _extractZstdWithSystemTar(
+    String archivePath,
+    String destination,
+  ) async {
+    final tar = await Process.start(
+      '/system/bin/tar',
+      <String>['-x', '-f', '-', '-C', destination],
+    );
+    final stderrText = StringBuffer();
+    final stderrSubscription =
+        tar.stderr.transform(utf8.decoder).listen(stderrText.write);
+    final stdoutSubscription = tar.stdout.listen((_) {});
+    final decoder = ZstdStreamDecoder(
+      maxDecompressedMessageSize: 128 * 1024 * 1024,
+    );
+    RandomAccessFile? input;
+
     try {
-      // The prebake step converts absolute guest symlinks to relative links.
-      // Android's toybox tar can therefore extract the archive without
-      // Dart-side decompression or archive-wide buffering.
-      final result = await Process.run(
-        '/system/bin/tar',
-        <String>['-xzf', tarPath, '-C', destination],
-        stdoutEncoding: utf8,
-        stderrEncoding: utf8,
-      );
-      if (result.exitCode != 0) {
-        _appendLog('system tar exited ${result.exitCode}: ${result.stderr}');
-        return false;
+      input = await File(archivePath).open();
+      final buffer = Uint8List(_rootfsChunkBytes);
+      while (true) {
+        final count = await input.readInto(buffer);
+        if (count == 0) break;
+
+        final decoded = decoder.feed(Uint8List.sublistView(buffer, 0, count));
+        if (decoded.isNotEmpty) {
+          tar.stdin.add(decoded);
+          // Flush each chunk to apply back-pressure to the decoder.
+          await tar.stdin.flush();
+        }
       }
-      return File(p.join(destination, 'etc/os-release')).existsSync();
-    } catch (e) {
-      _appendLog('system tar failed: $e');
-      return false;
+
+      decoder.finish();
+      if (!decoder.isFrameComplete) {
+        throw StateError('The zstd rootfs archive ended before its frame completed');
+      }
+
+      await tar.stdin.close();
+      final exitCode = await tar.exitCode;
+      if (exitCode != 0) {
+        throw StateError(
+          'Android tar exited with code $exitCode: ${stderrText.toString()}',
+        );
+      }
+    } catch (_) {
+      try {
+        await tar.stdin.close();
+      } catch (_) {}
+      tar.kill();
+      rethrow;
+    } finally {
+      await input?.close();
+      decoder.dispose();
+      await stderrSubscription.cancel();
+      await stdoutSubscription.cancel();
     }
   }
 
@@ -407,7 +445,7 @@ class LinuxRuntime extends ChangeNotifier {
 
     void start() {
       _displayRequested = true;
-      runDetached(<String>['/bin/bash', '-lc', '/root/.microos/start-gui.sh']);
+      runDetached(<String>['/bin/bash', '-lc', '/root/.microos/start-desktop.sh']);
     }
 
     if (!_displayRequested || restart) start();

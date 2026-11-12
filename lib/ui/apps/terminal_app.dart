@@ -12,6 +12,138 @@ import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
 import '../../services/settings_store.dart';
 
+/// Multi-terminal workspace. Each child owns an independent flutter_pty
+/// PTY and xterm instance. IndexedStack keeps inactive sessions alive.
+class TerminalTabsApp extends StatefulWidget {
+  const TerminalTabsApp({
+    super.key,
+    required this.runtime,
+    this.argv,
+    required this.settings,
+  });
+
+  final LinuxRuntime runtime;
+  final List<String>? argv;
+  final SettingsStore settings;
+
+  @override
+  State<TerminalTabsApp> createState() => _TerminalTabsAppState();
+}
+
+class _TerminalTabsAppState extends State<TerminalTabsApp> {
+  final List<int> _sessionIds = <int>[0];
+  int _nextSessionId = 1;
+  int _activeIndex = 0;
+
+  void _addSession() {
+    setState(() {
+      _sessionIds.add(_nextSessionId++);
+      _activeIndex = _sessionIds.length - 1;
+    });
+  }
+
+  void _closeSession(int id) {
+    if (_sessionIds.length <= 1) return;
+    final index = _sessionIds.indexOf(id);
+    if (index < 0) return;
+    setState(() {
+      _sessionIds.removeAt(index);
+      if (_activeIndex > index) {
+        _activeIndex--;
+      } else if (_activeIndex >= _sessionIds.length) {
+        _activeIndex = _sessionIds.length - 1;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          height: 42,
+          color: const Color(0xFF101722),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (var index = 0; index < _sessionIds.length; index++)
+                      _buildTab(_sessionIds[index], index),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'New terminal tab',
+                visualDensity: VisualDensity.compact,
+                onPressed: _addSession,
+                icon: const Icon(Icons.add_rounded, size: 21),
+                color: MicroColors.green,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: IndexedStack(
+            index: _activeIndex,
+            children: [
+              for (final id in _sessionIds)
+                TerminalApp(
+                  key: ValueKey<int>(id),
+                  runtime: widget.runtime,
+                  argv: id == 0 ? widget.argv : null,
+                  settings: widget.settings,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTab(int id, int index) {
+    final selected = index == _activeIndex;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+      child: GestureDetector(
+        onLongPress: _sessionIds.length > 1 ? () => _closeSession(id) : null,
+        child: Material(
+          color: selected ? const Color(0xFF26364B) : const Color(0xFF18212E),
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => setState(() => _activeIndex = index),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.terminal_rounded,
+                    size: 13,
+                    color: selected ? MicroColors.green : MicroColors.subtle,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Terminal ${id + 1}',
+                    style: TextStyle(
+                      color: selected ? MicroColors.text : MicroColors.subtle,
+                      fontSize: 11,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A real PTY inside the Linux guest, rendered with xterm.dart.
 ///
 /// Input is written straight through to the PTY with no artificial delay, which

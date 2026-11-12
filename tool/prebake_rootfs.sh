@@ -4,12 +4,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="$ROOT/assets/rootfs/rootfs.tar.gz"
+OUT="$ROOT/assets/rootfs/rootfs.tar.zst"
 TMP="$(mktemp -d)"
 NAME="microos-rootfs-prebake-$GITHUB_RUN_ID"
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
 
 mkdir -p "$(dirname "$OUT")"
+command -v zstd >/dev/null 2>&1 || {
+  echo "zstd is required on the ARM64 build runner" >&2
+  exit 1
+}
 
 echo "==> Provisioning Ubuntu 24.04 ARM64 in Docker"
 docker run --platform linux/arm64 --name "$NAME" \
@@ -101,7 +105,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "3\\n" > /root/.microos/image-version
+    printf "4\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
@@ -133,10 +137,12 @@ for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
 PY
 
 # Keep ownership metadata and ordinary files instead of hard-link records.
+# Stream the tar directly into zstd so no second uncompressed archive is written.
 tar --hard-dereference --numeric-owner --owner=0 --group=0 \
-  -czf "$OUT" -C "$TMP/rootfs" .
+  -cf - -C "$TMP/rootfs" . | zstd -T0 -10 -f -o "$OUT"
 
-tar -tzf "$OUT" > "$TMP/rootfs-archive.list"
+zstd -t "$OUT"
+zstd -dc "$OUT" | tar -tf - > "$TMP/rootfs-archive.list"
 require_archive_path() {
   local expected="$1"
   if ! grep -qE "^(\\./)?${expected}(/)?$" "$TMP/rootfs-archive.list"; then
@@ -156,4 +162,4 @@ require_archive_path 'usr/local/bin/microos-jar'
 require_archive_path 'root/.opencode/bin/opencode'
 require_archive_path 'home/microos-browser'
 echo "==> All required rootfs paths verified"
-echo "==> Pre-baked ARM64 rootfs: $(du -h "$OUT" | cut -f1)"
+echo "==> Pre-baked ARM64 rootfs (zstd): $(du -h "$OUT" | cut -f1)"
