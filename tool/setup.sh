@@ -405,28 +405,51 @@ EOF
 stage 96 "Writing display bridge"
 cat > /root/.microos/start-gui.sh <<'EOF'
 #!/usr/bin/env bash
-# Xvfb + openbox + x11vnc + noVNC. The Flutter app renders noVNC in a window.
-set -uo pipefail
+# Supervise the complete X11 -> VNC -> noVNC chain for the Android WebView.
+set -Eeuo pipefail
 export DISPLAY=:1
 export XCURSOR_THEME=WhiteSur-cursors
 export XCURSOR_SIZE=24
+export XDG_RUNTIME_DIR=/tmp/microos-runtime
 GEOMETRY="${MICROOS_GEOMETRY:-1024x768x24}"
 LOG=/tmp/.microos
-mkdir -p "$LOG"
+mkdir -p "$LOG" "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
 
-pkill -f 'Xvfb :1'            2>/dev/null
-pkill -f 'x11vnc -display :1' 2>/dev/null
-pkill -f 'websockify.*6080'   2>/dev/null
-pkill -x openbox              2>/dev/null
-sleep 0.5
+# Stop stale servers by executable name. Avoid pkill -f patterns that can
+# accidentally match this shell or another launcher command line.
+pkill -x websockify 2>/dev/null || true
+pkill -x x11vnc 2>/dev/null || true
+pkill -x openbox 2>/dev/null || true
+pkill -x Xvfb 2>/dev/null || true
+sleep 0.4
 
-Xvfb :1 -screen 0 "$GEOMETRY" -nolisten tcp -dpi 96 >"$LOG/xvfb.log" 2>&1 &
-sleep 1.2
+Xvfb :1 -screen 0 "$GEOMETRY" -nolisten tcp -ac -noreset -dpi 96 >"$LOG/xvfb.log" 2>&1 &
+XVFB_PID=$!
+cleanup() {
+  kill "${WEBSOCKIFY_PID:-}" "${VNC_PID:-}" "${OPENBOX_PID:-}" "$XVFB_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# Do not start the next layer until the X server answers real X11 requests.
+for _ in $(seq 1 50); do
+  if xset -display :1 q >/dev/null 2>&1; then break; fi
+  if ! kill -0 "$XVFB_PID" 2>/dev/null; then
+    echo "[microos] ERROR: Xvfb exited during startup" >&2
+    cat "$LOG/xvfb.log" >&2 || true
+    exit 1
+  fi
+  sleep 0.2
+done
+if ! xset -display :1 q >"$LOG/xset.log" 2>&1; then
+  echo "[microos] ERROR: Xvfb :1 did not become usable" >&2
+  cat "$LOG/xvfb.log" >&2 || true
+  exit 1
+fi
 
 xrdb -merge /root/.Xresources 2>/dev/null || true
-xsetroot -solid '#0f131b' -cursor_name left_ptr 2>/dev/null || xsetroot -solid '#0f131b' 2>/dev/null
+xsetroot -solid '#0f131b' -cursor_name left_ptr 2>/dev/null || xsetroot -solid '#0f131b' 2>/dev/null || true
 
-# Minimal openbox config so the desktop has a right-click menu.
 mkdir -p /root/.config/openbox
 cat > /root/.config/openbox/menu.xml <<'MENU'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -441,50 +464,60 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 </openbox_menu>
 MENU
 openbox >"$LOG/openbox.log" 2>&1 &
+OPENBOX_PID=$!
 
 wait_for_port() {
-  local port="$1"
-  local attempts="$2"
+  local port="$1" attempts="$2"
   for ((i=0; i<attempts; i++)); do
-    if (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1; then
-      return 0
-    fi
+    if (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1; then return 0; fi
     sleep 0.25
   done
   return 1
 }
 
+# Disable XDamage and MIT-SHM: both can be unreliable in a proot/Xvfb stack.
 x11vnc -display :1 -forever -shared -rfbport 5900 -localhost -nopw \
-       -repeat -wait 15 -defer 15 >"$LOG/x11vnc.log" 2>&1 &
-if ! wait_for_port 5900 40; then
-  echo "[microos] ERROR: x11vnc did not open port 5900" >&2
+       -noxdamage -noshm -repeat -wait 15 -defer 15 \
+       >"$LOG/x11vnc.log" 2>&1 &
+VNC_PID=$!
+if ! wait_for_port 5900 60 || ! kill -0 "$VNC_PID" 2>/dev/null; then
+  echo "[microos] ERROR: x11vnc failed; port 5900 is unavailable" >&2
   cat "$LOG/x11vnc.log" >&2 || true
   exit 1
 fi
 
-if [ ! -d /usr/share/novnc ]; then
-  echo "[microos] ERROR: /usr/share/novnc is missing; cannot start the phone display bridge" >&2
+if [ ! -f /usr/share/novnc/vnc.html ]; then
+  echo "[microos] ERROR: noVNC web client is missing (/usr/share/novnc/vnc.html)" >&2
   exit 1
 fi
 websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 >"$LOG/websockify.log" 2>&1 &
-if ! wait_for_port 6080 40; then
-  echo "[microos] ERROR: websockify did not open port 6080" >&2
+WEBSOCKIFY_PID=$!
+if ! wait_for_port 6080 60 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then
+  echo "[microos] ERROR: noVNC bridge failed; port 6080 is unavailable" >&2
   cat "$LOG/websockify.log" >&2 || true
   cat "$LOG/x11vnc.log" >&2 || true
   exit 1
 fi
 
-echo "[microos] display :1 ready (VNC 5900, noVNC 6080)"
-wait
+# Keep the parent alive only while every layer remains alive. This prevents a
+# dead x11vnc from leaving a misleading, still-open noVNC HTTP port.
+echo "[microos] display :1 ready (Xvfb, VNC 5900, noVNC 6080)"
+while kill -0 "$XVFB_PID" 2>/dev/null &&
+      kill -0 "$VNC_PID" 2>/dev/null &&
+      kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; do
+  sleep 2
+done
+echo "[microos] ERROR: one of Xvfb/x11vnc/websockify exited; see $LOG/*.log" >&2
+exit 1
 EOF
 chmod 755 /root/.microos/start-gui.sh
 
 cat > /root/.microos/stop-gui.sh <<'EOF'
 #!/usr/bin/env bash
-pkill -f 'websockify.*6080'   2>/dev/null
-pkill -f 'x11vnc -display :1' 2>/dev/null
-pkill -x openbox              2>/dev/null
-pkill -f 'Xvfb :1'            2>/dev/null
+pkill -x websockify 2>/dev/null || true
+pkill -x x11vnc 2>/dev/null || true
+pkill -x openbox 2>/dev/null || true
+pkill -x Xvfb 2>/dev/null || true
 echo "[microos] display stopped"
 EOF
 chmod 755 /root/.microos/stop-gui.sh
