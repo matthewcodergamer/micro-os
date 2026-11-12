@@ -27,8 +27,10 @@ class _DesktopScreenState extends State<DesktopScreen> {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Colors.black,
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -45,6 +47,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
           return AnimatedBuilder(
             animation: scope.desktop,
             builder: (context, _) {
+              final fullScreen = compact && scope.desktop.focused?.maximized == true;
               return Stack(
                 children: [
                   const Positioned.fill(child: _Wallpaper()),
@@ -77,19 +80,20 @@ class _DesktopScreenState extends State<DesktopScreen> {
                       stats: scope.stats,
                     ),
                   ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: compact ? 10 : 14,
-                    child: Center(
-                      child: Dock(
-                        desktop: scope.desktop,
-                        compact: compact,
-                        onOpen: (app) =>
-                            scope.desktop.open(app, screen: size),
+                  if (!keyboardOpen && !fullScreen)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: compact ? 10 : 14,
+                      child: Center(
+                        child: Dock(
+                          desktop: scope.desktop,
+                          compact: compact,
+                          onOpen: (app) =>
+                              scope.desktop.open(app, screen: size),
+                        ),
                       ),
                     ),
-                  ),
                   if (!scope.runtime.isReady)
                     Positioned.fill(child: InstallScreen(runtime: scope.runtime)),
                 ],
