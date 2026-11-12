@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'package:xterm/xterm.dart';
 
@@ -34,6 +35,9 @@ class TerminalApp extends StatefulWidget {
 class _TerminalAppState extends State<TerminalApp> {
   final Terminal _terminal = Terminal(maxLines: 3000);
   final TerminalController _terminalController = TerminalController();
+  final FlutterTts _tts = FlutterTts();
+  bool _speaking = false;
+  bool _voiceReady = false;
 
   Pty? _pty;
   StreamSubscription? _output;
@@ -45,6 +49,7 @@ class _TerminalAppState extends State<TerminalApp> {
   @override
   void initState() {
     super.initState();
+    _configureTts();
     _terminal.onOutput = _send;
     _terminal.onResize = _resize;
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
@@ -82,6 +87,54 @@ class _TerminalAppState extends State<TerminalApp> {
     final chunk = _pendingOutput.toString();
     _pendingOutput.clear();
     _terminal.write(chunk);
+  }
+
+  Future<void> _configureTts() async {
+    try {
+      await _tts.setLanguage('en-US');
+      await _tts.setSpeechRate(0.48);
+      await _tts.setVolume(1.0);
+      await _tts.awaitSpeakCompletion(true);
+      _tts.setStartHandler(() { if (mounted) setState(() => _speaking = true); });
+      _tts.setCompletionHandler(() { if (mounted) setState(() => _speaking = false); });
+      _tts.setCancelHandler((_) { if (mounted) setState(() => _speaking = false); });
+      _tts.setErrorHandler((_) { if (mounted) setState(() => _speaking = false); });
+      _voiceReady = true;
+    } catch (_) {
+      _voiceReady = false;
+    }
+  }
+
+  Future<void> _readSelection() async {
+    final range = _terminalController.selection;
+    if (range == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Select terminal text first, then tap Read aloud')),
+        );
+      }
+      return;
+    }
+    final selected = _terminal.buffer.getText(range).trim();
+    if (selected.isEmpty) return;
+    try {
+      if (!_voiceReady) await _configureTts();
+      if (!_voiceReady) throw StateError('Android text-to-speech is unavailable');
+      await _tts.stop();
+      _terminalController.clearSelection();
+      await _tts.speak(selected, focus: true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not read selection: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopSpeaking() async {
+    await _tts.stop();
+    if (mounted) setState(() => _speaking = false);
   }
 
   Future<void> _copySelection() async {
@@ -171,6 +224,7 @@ class _TerminalAppState extends State<TerminalApp> {
       _pendingOutput.clear();
     }
     _output?.cancel();
+    _tts.stop();
     _terminalController.dispose();
     try {
       _pty?.kill();
@@ -216,6 +270,13 @@ class _TerminalAppState extends State<TerminalApp> {
                     'Terminal',
                     style: TextStyle(color: Color(0xFFBFBFBF), fontSize: 11),
                   ),
+                ),
+                IconButton(
+                  tooltip: _speaking ? 'Stop reading aloud' : 'Read selected text aloud',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _speaking ? _stopSpeaking : _readSelection,
+                  icon: Icon(_speaking ? Icons.stop_circle_outlined : Icons.volume_up, size: 18),
+                  color: _speaking ? MicroColors.green : const Color(0xFFF4F4F4),
                 ),
                 IconButton(
                   tooltip: 'Copy selected terminal text',
