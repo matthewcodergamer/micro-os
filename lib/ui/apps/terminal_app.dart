@@ -100,8 +100,8 @@ class _TerminalAppState extends State<TerminalApp> {
       await _tts.awaitSpeakCompletion(true);
       _tts.setStartHandler(() { if (mounted) setState(() => _speaking = true); });
       _tts.setCompletionHandler(() { if (mounted) setState(() => _speaking = false); });
-      _tts.setCancelHandler((_) { if (mounted) setState(() => _speaking = false); });
-      _tts.setErrorHandler(() { if (mounted) setState(() => _speaking = false); });
+      _tts.setCancelHandler(() { if (mounted) setState(() => _speaking = false); });
+      _tts.setErrorHandler((_) { if (mounted) setState(() => _speaking = false); });
       _voiceReady = true;
     } catch (_) {
       _voiceReady = false;
