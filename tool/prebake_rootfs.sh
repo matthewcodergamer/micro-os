@@ -142,8 +142,8 @@ require_archive_path() {
   fi
 }
 # Keep this list in sync with the APK workflow's transfer validation.
-require_archive_path 'root/\\.microos/ready'
-require_archive_path 'root/\\.microos/image-version'
+require_archive_path 'root/\.microos/ready'
+require_archive_path 'root/\.microos/image-version'
 require_archive_path 'opt/firefox/firefox'
 require_archive_path 'opt/firefox/firefox-bin'
 require_archive_path 'usr/local/bin/microos-browse'
