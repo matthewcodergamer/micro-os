@@ -32,7 +32,8 @@ class TerminalApp extends StatefulWidget {
 }
 
 class _TerminalAppState extends State<TerminalApp> {
-  final Terminal _terminal = Terminal(maxLines: 1000);
+  final Terminal _terminal = Terminal(maxLines: 3000);
+  final TerminalController _terminalController = TerminalController();
 
   Pty? _pty;
   StreamSubscription? _output;
@@ -81,6 +82,27 @@ class _TerminalAppState extends State<TerminalApp> {
     final chunk = _pendingOutput.toString();
     _pendingOutput.clear();
     _terminal.write(chunk);
+  }
+
+  Future<void> _copySelection() async {
+    final range = _terminalController.selection;
+    if (range == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Long-press text, drag the handles, then tap Copy')),
+        );
+      }
+      return;
+    }
+    final selected = _terminal.buffer.getText(range);
+    if (selected.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: selected));
+    _terminalController.clearSelection();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 1)),
+      );
+    }
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -214,6 +236,13 @@ class _TerminalAppState extends State<TerminalApp> {
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Copy selected terminal text',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _copySelection,
+                  icon: const Icon(Icons.copy, size: 17),
+                  color: const Color(0xFFF4F4F4),
+                ),
+                IconButton(
                   tooltip: 'Paste from Android clipboard',
                   visualDensity: VisualDensity.compact,
                   onPressed: _pasteFromClipboard,
@@ -224,13 +253,13 @@ class _TerminalAppState extends State<TerminalApp> {
             ),
           ),
           Expanded(
-            child: GestureDetector(
-              onLongPress: _showTerminalMenu,
-              child: RepaintBoundary(
-                child: AnimatedBuilder(
-                  animation: widget.settings,
-                  builder: (context, _) => TerminalView(
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: widget.settings,
+                builder: (context, _) => TerminalView(
                     _terminal,
+                    controller: _terminalController,
+                    deleteDetection: true,
                     autofocus: true,
                     padding: const EdgeInsets.all(8),
                     backgroundOpacity: 1,
@@ -242,7 +271,6 @@ class _TerminalAppState extends State<TerminalApp> {
                     ),
                     simulateScroll: true,
                   ),
-                ),
               ),
             ),
           ),
