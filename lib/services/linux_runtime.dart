@@ -400,8 +400,8 @@ class LinuxRuntime extends ChangeNotifier {
     return pty;
   }
 
-  /// Boots Xvfb + openbox + x11vnc + noVNC, then waits until the web socket
-  /// port actually accepts connections before the UI tries to connect.
+  /// Boots the complete X11/VNC/noVNC chain. A listening HTTP bridge is
+  /// not sufficient: noVNC is unusable unless the RFB server on 5900 is alive.
   Future<bool> ensureDisplay({bool restart = false}) async {
     if (!isReady) return false;
 
@@ -412,32 +412,41 @@ class LinuxRuntime extends ChangeNotifier {
 
     if (!_displayRequested || restart) start();
 
-    var up = await _waitForPort(6080, const Duration(seconds: 14));
-
-    // A previous attempt may have died (or Xvfb lost a race with the socket).
-    // Give it one clean restart before reporting failure to the UI.
+    var up = await _waitForDisplay(const Duration(seconds: 18));
     if (!up) {
-      _appendLog('[microos] display bridge not up, restarting it once');
+      _appendLog('[microos] display health check failed (5900/6080); restarting X11 stack once');
       start();
-      up = await _waitForPort(6080, const Duration(seconds: 18));
+      up = await _waitForDisplay(const Duration(seconds: 22));
+    }
+    if (!up) {
+      _appendLog('[microos] DISPLAY NOT READY: require both VNC 5900 and noVNC 6080');
     }
     return up;
   }
 
-  Future<bool> _waitForPort(int port, Duration timeout) async {
+  Future<bool> _waitForDisplay(Duration timeout) async {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      try {
-        final socket = await Socket.connect('127.0.0.1', port,
-            timeout: const Duration(seconds: 1));
-        socket.destroy();
-        return true;
-      } catch (_) {
-        await Future<void>.delayed(const Duration(milliseconds: 400));
-      }
+      final vnc = await _isPortOpen(5900);
+      final bridge = vnc && await _isPortOpen(6080);
+      if (vnc && bridge) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 350));
     }
-    _appendLog('[microos] display bridge did not open port $port in time');
     return false;
+  }
+
+  Future<bool> _isPortOpen(int port) async {
+    try {
+      final socket = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        port,
+        timeout: const Duration(milliseconds: 700),
+      );
+      socket.destroy();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Launches the desktop browser inside the guest.
@@ -447,7 +456,11 @@ class LinuxRuntime extends ChangeNotifier {
   /// (QtWebEngine, same Blink engine) when it does not.
   Future<void> launchBrowser({String? url, bool singleProcess = false}) async {
     if (!isReady) return;
-    await ensureDisplay();
+    final displayUp = await ensureDisplay();
+    if (!displayUp) {
+      _appendLog('[microos] browser launch blocked: the X11/VNC display is not healthy');
+      return;
+    }
     runDetached(
       <String>['/bin/bash', '-lc', '/usr/local/bin/microos-browse "${url ?? ''}"'],
       extraEnv: <String, String>{
