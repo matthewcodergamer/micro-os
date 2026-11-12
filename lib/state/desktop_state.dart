@@ -128,7 +128,7 @@ class DesktopState extends ChangeNotifier {
         0,
         kStatusBarHeight,
         screen.width,
-        screen.height - kStatusBarHeight - kDockReserved,
+        screen.height - kStatusBarHeight,
       );
       window.maximized = true;
     }
