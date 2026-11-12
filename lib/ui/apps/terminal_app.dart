@@ -111,25 +111,6 @@ class _TerminalAppState extends State<TerminalApp> {
     if (text != null && text.isNotEmpty) _terminal.paste(text);
   }
 
-  Future<void> _showTerminalMenu() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: MicroColors.panelSolid,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.content_paste),
-              title: const Text('Paste from clipboard'),
-              onTap: () => Navigator.pop(context, 'paste'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (choice == 'paste') await _pasteFromClipboard();
-  }
-
   void _send(String data) {
     if (_ctrlArmed && data.isNotEmpty) {
       _ctrlArmed = false;
