@@ -28,7 +28,7 @@ docker run --platform linux/arm64 --name "$NAME" \
         echo "Required pre-baked tool is missing: $tool" >&2
         exit 1
       }
-      printf '%-10s %s\n' "$tool" "$(command -v "$tool")"
+      printf "%-10s %s\\n" "$tool" "$(command -v "$tool")"
     done
     if command -v opencode >/dev/null 2>&1; then
       OPENCODE_BIN="$(command -v opencode)"
