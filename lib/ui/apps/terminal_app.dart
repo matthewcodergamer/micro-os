@@ -349,6 +349,34 @@ class _TerminalAppState extends State<TerminalApp> {
               ],
             ),
           ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: _speaking ? 34 : 0,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            color: const Color(0xFF252B38),
+            child: _speaking
+                ? Row(
+                    children: [
+                      const Icon(Icons.graphic_eq, color: MicroColors.green, size: 17),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text('Reading aloud',
+                          style: TextStyle(color: MicroColors.text, fontSize: 11)),
+                      ),
+                      TextButton.icon(
+                        onPressed: _stopSpeaking,
+                        icon: const Icon(Icons.stop, size: 14),
+                        label: const Text('Stop'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: MicroColors.text,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
           Expanded(
             child: RepaintBoundary(
               child: AnimatedBuilder(
