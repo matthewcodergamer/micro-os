@@ -122,7 +122,8 @@ jobs:
       - name: Verify transferred rootfs
         run: |
           test -s assets/rootfs/rootfs.tar.zst
-          tar -tzf assets/rootfs/rootfs.tar.zst > /tmp/rootfs-archive.list
+          zstd -t assets/rootfs/rootfs.tar.zst
+          zstd -dc assets/rootfs/rootfs.tar.zst | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
