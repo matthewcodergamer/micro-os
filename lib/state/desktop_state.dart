@@ -61,6 +61,19 @@ class DesktopState extends ChangeNotifier {
       args: args,
     )..pinned = false;
 
+    // Phone-first behavior: apps open as immersive workspaces, not tiny
+    // desktop windows. The green control still restores the desktop window.
+    if (screen.width < 720) {
+      window.restoreRect = window.rect;
+      window.rect = Rect.fromLTWH(
+        0,
+        kStatusBarHeight,
+        screen.width,
+        math.max(0.0, screen.height - kStatusBarHeight),
+      );
+      window.maximized = true;
+    }
+
     windows.add(window);
     notifyListeners();
     return window;
