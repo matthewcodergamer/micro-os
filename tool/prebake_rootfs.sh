@@ -134,7 +134,7 @@ tar --hard-dereference --numeric-owner --owner=0 --group=0 \
 tar -tzf "$OUT" > "$TMP/rootfs-archive.list"
 require_archive_path() {
   local expected="$1"
-  if ! grep -qE "^(\\./)?${expected}$" "$TMP/rootfs-archive.list"; then
+  if ! grep -qE "^(\\./)?${expected}(/)?$" "$TMP/rootfs-archive.list"; then
     echo "ERROR: exported rootfs is missing required path: ${expected}" >&2
     echo "Archive entries matching the expected basename:" >&2
     grep -F "$(basename "$expected")" "$TMP/rootfs-archive.list" | head -n 30 >&2 || true
