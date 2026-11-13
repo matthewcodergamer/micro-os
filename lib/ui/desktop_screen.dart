@@ -232,7 +232,15 @@ class _DesktopScreenState extends State<DesktopScreen> {
           singleProcess: scope.settings.singleProcessBrowser,
         );
       case AppId.files:
-        return FilesApp(runtime: scope.runtime);
+        return FilesApp(
+          runtime: scope.runtime,
+          onOpenTerminal: (args) => scope.desktop.open(
+            AppId.terminal,
+            screen: MediaQuery.sizeOf(context),
+            args: args,
+            newWindow: true,
+          ),
+        );
       case AppId.aiHub:
         return AiHubApp(runtime: scope.runtime, settings: scope.settings);
       case AppId.settings:
