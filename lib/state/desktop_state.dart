@@ -106,9 +106,9 @@ class DesktopState extends ChangeNotifier {
 
   void syncToScreen(
     Size screen, {
-    required double topReserve,
-    required double bottomReserve,
-    required double bottomInset,
+    double topReserve = kMenuBarHeight,
+    double bottomReserve = kDockReserved,
+    double bottomInset = 0,
   }) {
     final changed = _screen != screen ||
         this.topReserve != topReserve ||
@@ -136,9 +136,13 @@ class DesktopState extends ChangeNotifier {
 
   ManagedWindow open(
     AppId app, {
+    Size? screen,
     List<String>? args,
     bool newWindow = false,
   }) {
+    // Keep the legacy screen argument used by the desktop widgets while
+    // allowing callers that rely on syncToScreen() to omit it.
+    final layoutScreen = screen ?? _screen;
     if (!newWindow) {
       final existing = windowFor(app);
       if (existing != null) {
@@ -152,7 +156,7 @@ class DesktopState extends ChangeNotifier {
 
     final id = ++_sequence;
     final size = app.defaultSize;
-    final area = _area(_screen);
+    final area = _area(layoutScreen);
     final origin = Offset(
       area.left + (area.width - size.width) / 2 + (id % 5) * 24,
       area.top + (area.height - size.height) / 2 + (id % 5) * 24,
@@ -165,9 +169,9 @@ class DesktopState extends ChangeNotifier {
     );
 
     // Phone portrait: open maximized so the app owns the whole workspace.
-    final maximize = _compactFor(_screen);
+    final maximize = _compactFor(layoutScreen);
     if (maximize) {
-      rect = _maxRect(_screen);
+      rect = _maxRect(layoutScreen);
     }
 
     final w = ManagedWindow(
