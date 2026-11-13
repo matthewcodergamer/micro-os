@@ -26,6 +26,13 @@ class Dock extends StatefulWidget {
     AppId.desktop,
     AppId.aiHub,
     AppId.settings,
+    AppId.maps,
+    AppId.mail,
+    AppId.notes,
+    AppId.photos,
+    AppId.music,
+    AppId.appStore,
+    AppId.calculator,
   ];
 
   @override
@@ -127,10 +134,15 @@ class _DockState extends State<Dock> {
                           ),
                         ],
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
+                      child: SizedBox(
+                        width: math.min(screen.width - 20, 900),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
                           for (var index = 0; index < Dock._apps.length; index++) ...[
                             Builder(builder: (context) {
                               final app = Dock._apps[index];
@@ -165,7 +177,9 @@ class _DockState extends State<Dock> {
                             if (index != Dock._apps.length - 1)
                               SizedBox(width: spacing),
                           ],
-                        ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -186,7 +200,15 @@ Widget _dockAssetIcon(AppId app, double size) {
     AppId.terminal => 'assets/icons/dock/terminal-icon.png',
     AppId.browser => 'assets/icons/dock/safari-icon.png',
     AppId.settings => 'assets/icons/dock/settings-icon.png',
-    AppId.desktop || AppId.aiHub => null,
+    AppId.desktop ||
+    AppId.aiHub ||
+    AppId.maps ||
+    AppId.mail ||
+    AppId.notes ||
+    AppId.photos ||
+    AppId.music ||
+    AppId.appStore ||
+    AppId.calculator => null,
   };
   if (asset == null) return MacAppIcon(app: app, size: size);
   return ClipRRect(
