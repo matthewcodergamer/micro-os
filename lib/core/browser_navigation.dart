@@ -33,7 +33,7 @@ class BrowserNavigation {
 
   /// Quotes one POSIX shell argument without allowing expansion or injection.
   static String shellQuote(String value) =>
-      "'${value.replaceAll("'", r"'\''")}'";
+      "'" + value.replaceAll("'", r"'\''") + "'";
 
   static const Map<String, String> _shortcuts = <String, String>{
     'back': 'alt+Left',
@@ -43,8 +43,8 @@ class BrowserNavigation {
     'close-tab': 'ctrl+w',
     'new-window': 'ctrl+n',
     'focus-address': 'ctrl+l',
-    'home': 'alt+Home',
     'bookmarks': 'ctrl+shift+b',
+    'home': 'alt+Home',
     'fullscreen': 'F11',
     'zoom-in': 'ctrl+plus',
     'zoom-out': 'ctrl+minus',
