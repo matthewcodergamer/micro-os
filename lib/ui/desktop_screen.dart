@@ -37,6 +37,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
   double _lastInset = -1;
 
   bool _spotlight = false;
+  bool _launchpad = false;
   bool _control = false;
 
   // Dock auto-hide
@@ -153,11 +154,18 @@ class _DesktopScreenState extends State<DesktopScreen> {
                   height: top,
                   onSpotlight: () => setState(() {
                     _spotlight = true;
+                    _launchpad = false;
+                    _control = false;
+                  }),
+                  onLaunchpad: () => setState(() {
+                    _launchpad = true;
+                    _spotlight = false;
                     _control = false;
                   }),
                   onControlCenter: () => setState(() {
                     _control = true;
                     _spotlight = false;
+                    _launchpad = false;
                   }),
                   onLock: desktop.lock,
                 ),
@@ -197,6 +205,19 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     onClose: () => setState(() => _spotlight = false),
                     onOpen: (app) {
                       setState(() => _spotlight = false);
+                      desktop.open(app, screen: size);
+                    },
+                  ),
+                ),
+
+              // Launchpad
+              if (_launchpad)
+                _animateOverlay(
+                  LaunchpadOverlay(
+                    topPadding: top,
+                    onClose: () => setState(() => _launchpad = false),
+                    onOpen: (app) {
+                      setState(() => _launchpad = false);
                       desktop.open(app, screen: size);
                     },
                   ),
