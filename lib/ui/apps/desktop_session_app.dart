@@ -218,7 +218,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             cursorY=Math.max(r.top+1,Math.min(r.bottom-2,cursorY));
             cursor.style.left=cursorX+'px'; cursor.style.top=cursorY+'px';
           };
-          const moveCursor=(dx,dy)=>{cursorX+=dx*1.35;cursorY+=dy*1.35;clampCursor();};
+          const moveCursor=(dx,dy)=>{cursorX+=dx*1.35;cursorY+=dy*1.35;clampCursor();mouse('mousemove',cursorX,cursorY,-1,0);};
           const setMode=enabled=>{
             trackpad=!!enabled;
             cursor.style.display=trackpad?'block':'none';
@@ -269,17 +269,20 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
               e.preventDefault();const p=point(e.touches[0]);
               if(mode==='pending'&&Math.hypot(p.x-startX,p.y-startY)>8){
                 clear();moved=true;mode='move';
+                if(!trackpad)mouse('mousedown',startX,startY,0,1);
               }
               if(mode==='move'){
                 if(trackpad)moveCursor(p.x-lastX,p.y-lastY);
-                else mouse('mousemove',p.x,p.y,-1,0);
+                else mouse('mousemove',p.x,p.y,-1,1);
               }
               lastX=p.x;lastY=p.y;
             }
           },{passive:false});
-          const finish=()=>{
+          const finish=e=>{
+            if(e && e.touches && e.touches.length>0)return;
             clear();
             if(mode==='pending'&&!moved)clickAt(trackpad?cursorX:startX,trackpad?cursorY:startY,0);
+            if(mode==='move'&&!trackpad)mouse('mouseup',lastX,lastY,0,0);
             mode='idle';
           };
           target.addEventListener('touchend',finish,{passive:false});
