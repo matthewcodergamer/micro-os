@@ -184,8 +184,30 @@ exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" X
 BROWSER
 chmod 755 /usr/local/bin/start-browser.sh
 
+cat > /usr/local/bin/start-firefox.sh <<'BROWSER'
+#!/usr/bin/env bash
+set -euo pipefail
+export DISPLAY="${DISPLAY:-:1}"
+BROWSER_HOME=/home/microos-browser
+FIREFOX_BIN="$(command -v firefox || true)"
+if [ -z "$FIREFOX_BIN" ]; then
+  echo "[microos] Firefox is not installed in this rootfs image" >&2
+  exit 127
+fi
+install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.mozilla"
+# Only one engine should own the remote desktop at a time.
+pkill -u microos-browser -f 'chromium|chrome' 2>/dev/null || true
+sleep 0.4
+exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" \
+  MOZ_ENABLE_WAYLAND=0 "$FIREFOX_BIN" --no-remote --new-instance \
+  --profile "$BROWSER_HOME/.mozilla/microos" "$@"
+BROWSER
+chmod 755 /usr/local/bin/start-firefox.sh
+
+# Selecting Chromium closes Firefox first; Chromium reuses its persistent profile.
 cat > /usr/local/bin/microos-browse <<'BROWSER'
 #!/usr/bin/env bash
+pkill -u microos-browser -f '/opt/firefox/firefox' 2>/dev/null || true
 exec /usr/local/bin/start-browser.sh "$@"
 BROWSER
 chmod 755 /usr/local/bin/microos-browse

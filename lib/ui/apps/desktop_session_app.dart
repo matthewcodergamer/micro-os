@@ -41,10 +41,15 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   int _vncRetryCount = 0;
   bool _vncRetryCheckInFlight = false;
   bool _trackpadMode = true;
+  String _selectedBrowser = 'chromium';
+  late final TextEditingController _addressController;
 
   @override
   void initState() {
     super.initState();
+    _addressController = TextEditingController(
+      text: widget.url ?? 'https://www.google.com',
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
   }
 
@@ -83,7 +88,8 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     if (widget.launchBrowser) {
       setState(() => _status = 'Launching the browser…');
       await widget.runtime.launchBrowser(
-        url: widget.url ?? 'https://www.google.com',
+        url: _addressController.text,
+        browser: _selectedBrowser,
         singleProcess: widget.singleProcess,
       );
       // Give the browser a moment to map its window before the client connects.
@@ -176,7 +182,32 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   @override
   void dispose() {
     _vncRetryTimer?.cancel();
+    _addressController.dispose();
     super.dispose();
+  }
+
+  Future<void> _launchSelectedBrowser() async {
+    final url = _addressController.text.trim();
+    if (url.isEmpty) return;
+    setState(() => _status = 'Opening $url in ${_selectedBrowser == 'firefox' ? 'Firefox' : 'Chromium'}…');
+    await widget.runtime.launchBrowser(
+      browser: _selectedBrowser,
+      url: url,
+      singleProcess: widget.singleProcess,
+    );
+    if (mounted) setState(() => _status = 'Browser launch requested');
+  }
+
+  Future<void> _selectBrowser(String? browser) async {
+    if (browser == null || browser == _selectedBrowser) return;
+    setState(() => _selectedBrowser = browser);
+    await _launchSelectedBrowser();
+  }
+
+  Future<void> _showRemoteKeyboard() async {
+    await _controller?.runJavaScript(
+      "document.querySelector('#noVNC_keyboardinput')?.focus();",
+    );
   }
 
   // Translate mobile gestures into mouse/wheel input for noVNC. Trackpad
@@ -335,20 +366,65 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       child: Column(
         children: [
           Container(
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: widget.launchBrowser ? 46 : 38,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             color: const Color(0xFF141822),
             child: Row(
               children: [
                 const Icon(Icons.circle, size: 8, color: MicroColors.green),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _status,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
+                const SizedBox(width: 6),
+                if (widget.launchBrowser) ...[
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedBrowser,
+                      isDense: true,
+                      dropdownColor: const Color(0xFF202735),
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      items: const [
+                        DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
+                        DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
+                      ],
+                      onChanged: controller == null ? null : _selectBrowser,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: TextField(
+                      controller: _addressController,
+                      enabled: controller != null,
+                      textInputAction: TextInputAction.go,
+                      keyboardType: TextInputType.url,
+                      onSubmitted: (_) => _launchSelectedBrowser(),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'Enter website address',
+                        hintStyle: const TextStyle(color: MicroColors.subtle, fontSize: 11),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                        filled: true,
+                        fillColor: const Color(0xFF0B0E14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Go to address',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: controller == null ? null : _launchSelectedBrowser,
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 17),
+                    color: MicroColors.accent,
+                  ),
+                ] else
+                  Expanded(
+                    child: Text(
+                      _status,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
+                    ),
+                  ),
                 if (controller != null) ...[
                   IconButton(
                     tooltip: _trackpadMode ? 'Trackpad cursor enabled' : 'Direct touch enabled',
@@ -361,6 +437,14 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                     color: _trackpadMode ? MicroColors.accent : MicroColors.subtle,
                   ),
                   IconButton(
+                    tooltip: 'Show Linux keyboard',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _showRemoteKeyboard,
+                    icon: const Icon(Icons.keyboard_alt_outlined, size: 16),
+                    color: MicroColors.subtle,
+                  ),
+                  IconButton(
+                    tooltip: 'Reconnect desktop',
                     visualDensity: VisualDensity.compact,
                     onPressed: _reload,
                     icon: const Icon(Icons.refresh, size: 16),
@@ -368,6 +452,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                   ),
                 ],
                 IconButton(
+                  tooltip: 'Restart desktop session',
                   visualDensity: VisualDensity.compact,
                   onPressed: _boot,
                   icon: const Icon(Icons.restart_alt, size: 16),

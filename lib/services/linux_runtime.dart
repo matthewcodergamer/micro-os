@@ -576,20 +576,47 @@ class LinuxRuntime extends ChangeNotifier {
   /// The heavy flags are applied inside `/usr/local/bin/microos-browse`, which
   /// picks Chromium when the distro ships a real .deb and falls back to Falkon
   /// (QtWebEngine, same Blink engine) when it does not.
-  Future<void> launchBrowser({String? url, bool singleProcess = false}) async {
+  Future<void> launchBrowser({
+    String? url,
+    String browser = 'chromium',
+    bool singleProcess = false,
+  }) async {
     if (!isReady) return;
+    if (browser != 'chromium' && browser != 'firefox') {
+      throw ArgumentError.value(browser, 'browser', 'Use chromium or firefox');
+    }
     final displayUp = await ensureDisplay();
     if (!displayUp) {
       _appendLog('[microos] browser launch blocked: the X11/VNC display is not healthy');
       return;
     }
+    final requestedUrl = (url ?? '').trim();
+    final normalizedUrl = requestedUrl.isEmpty
+        ? 'https://www.google.com'
+        : (requestedUrl.contains('://') || requestedUrl.startsWith('about:')
+            ? requestedUrl
+            : 'https://$requestedUrl');
+    final parsedUrl = Uri.tryParse(normalizedUrl);
+    if (parsedUrl == null ||
+        (!const <String>['http', 'https', 'about'].contains(parsedUrl.scheme))) {
+      throw ArgumentError.value(url, 'url', 'Only http, https, or about URLs are supported');
+    }
+    final launcher = browser == 'firefox'
+        ? '/usr/local/bin/start-firefox.sh'
+        : '/usr/local/bin/start-browser.sh';
     runDetached(
-      <String>['/bin/bash', '-lc', '/usr/local/bin/microos-browse "${url ?? ''}"'],
+      <String>[
+        '/bin/bash',
+        '-lc',
+        '$launcher ${_shellQuote(normalizedUrl)}',
+      ],
       extraEnv: <String, String>{
         if (singleProcess) 'MICROOS_SINGLE_PROCESS': '1',
       },
     );
   }
+
+  String _shellQuote(String value) => "'${value.replaceAll("'", "'\\"'\\"'")}'";
 
   /// Attempts to repair interrupted dpkg configuration and broken dependencies.
   /// Output is streamed into the same diagnostic log shown in Settings.
