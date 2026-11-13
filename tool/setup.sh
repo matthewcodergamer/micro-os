@@ -234,7 +234,13 @@ fi
 # Ensure the shared X11 session has only one browser engine at a time.
 pkill -u microos-browser -f '[f]irefox' 2>/dev/null || true
 sleep 0.4
+CHROMIUM_EXTRA_ARGS=()
+if [ "${MICROOS_DISABLE_GPU:-0}" = "1" ]; then
+  # Used only by the CI Xvfb window test. Phone launches keep acceleration enabled.
+  CHROMIUM_EXTRA_ARGS+=(--disable-gpu)
+fi
 exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
+  "${CHROMIUM_EXTRA_ARGS[@]}" \
   --no-sandbox \
   --disable-gpu-sandbox \
   --process-per-site \
