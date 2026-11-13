@@ -114,7 +114,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
           });
         }
 
-        final compact = size.width < kCompactBreakpoint;
         final hideDock = settings.dockAutoHide &&
             desktop.focused != null &&
             !_dockRevealed;
