@@ -75,7 +75,8 @@ class _DockState extends State<Dock> {
       return 1 + scaleFactor * (maxScale - 1);
     });
 
-    return RepaintBoundary(\n      child: AnimatedSlide(
+    return RepaintBoundary(
+      child: AnimatedSlide(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
       offset: widget.visible ? Offset.zero : const Offset(0, 1.2),
