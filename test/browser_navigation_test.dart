@@ -47,13 +47,23 @@ void main() {
     );
   });
 
-  test('only exposes known browser shortcuts', () {
+  test('maps desktop Chromium controls to native keyboard shortcuts', () {
     expect(BrowserNavigation.shortcutFor('back'), 'alt+Left');
     expect(BrowserNavigation.shortcutFor('forward'), 'alt+Right');
     expect(BrowserNavigation.shortcutFor('reload'), 'ctrl+r');
     expect(BrowserNavigation.shortcutFor('new-tab'), 'ctrl+t');
-    expect(BrowserNavigation.shortcutFor('home'), 'alt+Home');
-    expect(BrowserNavigation.shortcutFor('bookmarks'), 'ctrl+shift+b');
+    expect(BrowserNavigation.shortcutFor('close-tab'), 'ctrl+w');
+    expect(BrowserNavigation.shortcutFor('focus-address'), 'ctrl+l');
+    expect(BrowserNavigation.shortcutFor('fullscreen'), 'F11');
     expect(BrowserNavigation.shortcutFor('evil; touch /tmp/pwned'), isNull);
+  });
+
+  test('allows only the explicit browser-window actions', () {
+    expect(BrowserNavigation.isSupportedAction('window-minimize'), isTrue);
+    expect(BrowserNavigation.isSupportedAction('window-maximize'), isTrue);
+    expect(BrowserNavigation.isSupportedAction('window-restore'), isTrue);
+    expect(BrowserNavigation.isSupportedAction('window-close'), isTrue);
+    expect(BrowserNavigation.isSupportedAction('evil'), isFalse);
+    expect(BrowserNavigation.shortcutFor('window-close'), isNull);
   });
 }
