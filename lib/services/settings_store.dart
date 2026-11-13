@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/terminal_profiles.dart';
 
-/// Small persisted preferences that are not sensitive (unlike the PAT, which
-/// lives in the platform keystore).
+/// Stores ordinary UI settings separately from secrets.
 ///
-/// The lock-screen password is a cosmetic gate for the MicroOS shell only. It
-/// is stored on this device and does not encrypt anything.
+/// The optional lock-screen password uses Android encrypted storage backed by
+/// the platform keystore. It gates the MicroOS shell only; it does not encrypt
+/// Linux files or replace Android device authentication.
 class SettingsStore extends ChangeNotifier {
   static const _kSingleProcess = 'browser.single_process';
   static const _kInstalledAt = 'runtime.installed_at';
@@ -19,6 +20,10 @@ class SettingsStore extends ChangeNotifier {
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
 
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
   bool singleProcessBrowser = false;
   String? installedAt;
   String openCodeTheme = 'light';
@@ -26,10 +31,14 @@ class SettingsStore extends ChangeNotifier {
   String terminalProfile = kDefaultTerminalProfile;
   String userName = 'MicroOS User';
   String? loginPassword;
+  bool loginPasswordStorageUnavailable = false;
+  bool loginPasswordMigrationPending = false;
   bool autoReadOpenCode = false;
   bool dockAutoHide = true;
 
-  bool get hasPassword => loginPassword != null && loginPassword!.isNotEmpty;
+  bool get hasPassword =>
+      loginPasswordStorageUnavailable ||
+      (loginPassword != null && loginPassword!.isNotEmpty);
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -41,9 +50,45 @@ class SettingsStore extends ChangeNotifier {
     terminalProfile =
         prefs.getString(_kTerminalProfile) ?? kDefaultTerminalProfile;
     userName = prefs.getString(_kUserName) ?? 'MicroOS User';
-    loginPassword = prefs.getString(_kLoginPassword);
     autoReadOpenCode = prefs.getBool(_kAutoReadOpenCode) ?? false;
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
+
+    // Migrate older installations that kept the password in plain preferences.
+    final legacyPassword = prefs.getString(_kLoginPassword);
+    try {
+      final securePassword = await _secureStorage.read(key: _kLoginPassword);
+      loginPasswordStorageUnavailable = false;
+      if (securePassword != null) {
+        loginPassword = securePassword;
+        if (legacyPassword != null) {
+          try {
+            await prefs.remove(_kLoginPassword);
+          } catch (_) {
+            loginPasswordMigrationPending = true;
+          }
+        }
+      } else if (legacyPassword != null) {
+        loginPassword = legacyPassword;
+        try {
+          await _secureStorage.write(
+            key: _kLoginPassword,
+            value: legacyPassword,
+          );
+          await prefs.remove(_kLoginPassword);
+          loginPasswordMigrationPending = false;
+        } catch (_) {
+          loginPasswordMigrationPending = true;
+        }
+      } else {
+        loginPassword = null;
+      }
+    } catch (_) {
+      // Fail closed if the secure password may exist but the keystore cannot
+      // be read. A legacy password remains usable while migration is pending.
+      loginPassword = legacyPassword;
+      loginPasswordStorageUnavailable = legacyPassword == null;
+      loginPasswordMigrationPending = legacyPassword != null;
+    }
     notifyListeners();
   }
 
@@ -78,14 +123,19 @@ class SettingsStore extends ChangeNotifier {
 
   Future<void> setLoginPassword(String? value) async {
     final next = (value == null || value.isEmpty) ? null : value;
-    loginPassword = next;
-    notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     if (next == null) {
+      await _secureStorage.delete(key: _kLoginPassword);
       await prefs.remove(_kLoginPassword);
     } else {
-      await prefs.setString(_kLoginPassword, next);
+      // Write the encrypted value first, then remove any legacy plaintext copy.
+      await _secureStorage.write(key: _kLoginPassword, value: next);
+      await prefs.remove(_kLoginPassword);
     }
+    loginPassword = next;
+    loginPasswordStorageUnavailable = false;
+    loginPasswordMigrationPending = false;
+    notifyListeners();
   }
 
   Future<void> setDockAutoHide(bool value) async {

@@ -26,44 +26,59 @@ class WindowFrame extends StatelessWidget {
     final focused = desktop.focused?.id == window.id;
     final maxed = window.maximized;
 
-    return Positioned(
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 230),
+      curve: Curves.easeOutCubic,
       left: window.rect.left,
       top: window.rect.top,
       width: window.rect.width,
       height: window.rect.height,
-      child: IgnorePointer(
-        ignoring: window.minimized,
-        child: Opacity(
-          opacity: window.minimized ? 0 : 1,
-          child: Listener(
-            onPointerDown: (_) => desktop.focus(window.id),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(maxed ? 0 : 12),
-                boxShadow: maxed
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: focused ? 0.45 : 0.28),
-                          blurRadius: focused ? 28 : 18,
-                          offset: const Offset(0, 10),
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey('window-entry-' + window.id.toString()),
+        tween: Tween<double>(begin: 0.975, end: 1),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        builder: (context, scale, child) => Transform.scale(
+          scale: scale,
+          child: Opacity(
+            opacity: ((scale - 0.975) / 0.025).clamp(0.0, 1.0),
+            child: child,
+          ),
+        ),
+        child: IgnorePointer(
+          ignoring: window.minimized,
+          child: Opacity(
+            opacity: window.minimized ? 0 : 1,
+            child: Listener(
+              onPointerDown: (_) => desktop.focus(window.id),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(maxed ? 0 : 12),
+                  boxShadow: maxed
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: focused ? 0.45 : 0.28),
+                            blurRadius: focused ? 28 : 18,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(maxed ? 0 : 12),
+                  child: Material(
+                    color: MicroColors.windowBody,
+                    child: Column(
+                      children: [
+                        _TitleBar(
+                          window: window,
+                          desktop: desktop,
+                          screen: screen,
+                          focused: focused,
                         ),
+                        Expanded(child: child),
                       ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(maxed ? 0 : 12),
-                child: Material(
-                  color: MicroColors.windowBody,
-                  child: Column(
-                    children: [
-                      _TitleBar(
-                        window: window,
-                        desktop: desktop,
-                        screen: screen,
-                        focused: focused,
-                      ),
-                      Expanded(child: child),
-                    ],
+                    ),
                   ),
                 ),
               ),

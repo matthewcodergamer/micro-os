@@ -536,9 +536,11 @@ class _LoginPage extends StatefulWidget {
 class _LoginPageState extends State<_LoginPage> {
   late final TextEditingController _name;
   final TextEditingController _password = TextEditingController();
+  final TextEditingController _confirmation = TextEditingController();
   bool _saving = false;
-  bool _obscurePassword = true;
+  bool _showPassword = false;
   String? _message;
+  String? _error;
 
   @override
   void initState() {
@@ -550,6 +552,7 @@ class _LoginPageState extends State<_LoginPage> {
   void dispose() {
     _name.dispose();
     _password.dispose();
+    _confirmation.dispose();
     super.dispose();
   }
 
@@ -559,19 +562,33 @@ class _LoginPageState extends State<_LoginPage> {
   }
 
   Future<void> _savePassword() async {
+    if (_password.text.length < 4) {
+      setState(() {
+        _error = 'Use at least 4 characters for the lock password.';
+        _message = null;
+      });
+      return;
+    }
+    if (_password.text != _confirmation.text) {
+      setState(() {
+        _error = 'The passwords do not match.';
+        _message = null;
+      });
+      return;
+    }
     setState(() {
       _saving = true;
+      _error = null;
       _message = null;
     });
     try {
-      await widget.settings.setLoginPassword(
-        _password.text.isEmpty ? null : _password.text,
-      );
+      await widget.settings.setLoginPassword(_password.text);
       _password.clear();
-      if (mounted) setState(() => _message = 'Lock screen password updated.');
-    } catch (error) {
+      _confirmation.clear();
+      if (mounted) setState(() => _message = 'Lock screen password saved securely.');
+    } catch (_) {
       if (mounted) {
-        setState(() => _message = 'Could not save the password: $error');
+        setState(() => _error = 'Encrypted storage could not save the password. Try again.');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -579,12 +596,28 @@ class _LoginPageState extends State<_LoginPage> {
   }
 
   Future<void> _removePassword() async {
-    await widget.settings.setLoginPassword(null);
-    if (mounted) setState(() => _message = 'Lock screen password removed.');
+    setState(() {
+      _saving = true;
+      _error = null;
+      _message = null;
+    });
+    try {
+      await widget.settings.setLoginPassword(null);
+      _password.clear();
+      _confirmation.clear();
+      if (mounted) setState(() => _message = 'Lock screen password removed.');
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Encrypted storage could not remove the password. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final settings = widget.settings;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -599,64 +632,83 @@ class _LoginPageState extends State<_LoginPage> {
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerLeft,
-          child: OutlinedButton(onPressed: _saveName, child: const Text('Save display name')),
+          child: OutlinedButton(
+            onPressed: _saving ? null : _saveName,
+            child: const Text('Save display name'),
+          ),
         ),
         const SizedBox(height: 20),
-        Row(
-          children: [
-            Icon(
-              widget.settings.hasPassword
-                  ? Icons.lock_rounded
-                  : Icons.lock_open_rounded,
-              size: 17,
-              color: widget.settings.hasPassword
-                  ? MicroColors.green
-                  : MicroColors.subtle,
+        Text(
+          settings.hasPassword ? 'Password protection is enabled' : 'No lock password is set',
+          style: TextStyle(
+            color: settings.hasPassword ? MicroColors.green : MicroColors.subtle,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _password,
+          obscureText: !_showPassword,
+          autocorrect: false,
+          enableSuggestions: false,
+          textInputAction: TextInputAction.next,
+          decoration: InputDecoration(
+            labelText: 'New lock screen password',
+            helperText: 'At least 4 characters. Saved using Android encrypted storage.',
+            suffixIcon: IconButton(
+              tooltip: _showPassword ? 'Hide password' : 'Show password',
+              onPressed: () => setState(() => _showPassword = !_showPassword),
+              icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
             ),
-            const SizedBox(width: 8),
-            Text(
-              widget.settings.hasPassword
-                  ? 'Password lock is enabled'
-                  : 'Password lock is disabled',
-              style: TextStyle(
-                color: widget.settings.hasPassword
-                    ? MicroColors.green
-                    : MicroColors.subtle,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
-          controller: _password,
-          obscureText: _obscurePassword,
+          controller: _confirmation,
+          obscureText: !_showPassword,
           autocorrect: false,
           enableSuggestions: false,
           textInputAction: TextInputAction.done,
-          decoration: InputDecoration(
-            labelText: 'Lock screen password (optional)',
-            helperText: 'Locks the MicroOS shell only; it does not encrypt your files or replace Android device security.',
-            suffixIcon: IconButton(
-              tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-              onPressed: () => setState(
-                () => _obscurePassword = !_obscurePassword,
-              ),
-              icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_rounded
-                    : Icons.visibility_off_rounded,
-              ),
-            ),
-          ),
+          decoration: const InputDecoration(labelText: 'Confirm new password'),
           onSubmitted: (_) => _savePassword(),
         ),
+        const SizedBox(height: 8),
+        const Text(
+          'This password protects the MicroOS lock screen only. It does not encrypt Linux files or replace your Android device lock.',
+          style: TextStyle(color: MicroColors.subtle, fontSize: 12, height: 1.4),
+        ),
+        if (settings.loginPasswordStorageUnavailable) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'Secure password storage is unavailable. MicroOS will keep the lock closed rather than bypass it.',
+            style: TextStyle(color: MicroColors.red, fontSize: 12),
+          ),
+        ],
+        if (settings.loginPasswordMigrationPending) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'An older password is still usable, but its secure migration is pending. Save a new password when storage is available.',
+            style: TextStyle(color: MicroColors.amber, fontSize: 12),
+          ),
+        ],
         const SizedBox(height: 12),
-        Wrap(spacing: 8, children: [
-          FilledButton(onPressed: _saving ? null : _savePassword, child: const Text('Save password')),
-          TextButton(onPressed: _saving ? null : _removePassword, child: const Text('Remove password')),
-        ]),
+        Wrap(
+          spacing: 8,
+          children: [
+            FilledButton(
+              onPressed: _saving ? null : _savePassword,
+              child: Text(_saving ? 'Saving…' : 'Save password'),
+            ),
+            TextButton(
+              onPressed: _saving || !settings.hasPassword ? null : _removePassword,
+              child: const Text('Remove password'),
+            ),
+          ],
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(_error!, style: const TextStyle(color: MicroColors.red, fontSize: 12)),
+        ],
         if (_message != null) ...[
           const SizedBox(height: 12),
           Text(_message!, style: const TextStyle(color: MicroColors.green, fontSize: 12)),
