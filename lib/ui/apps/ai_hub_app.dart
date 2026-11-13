@@ -50,7 +50,7 @@ exec bash -l
             ),
           ),
           Expanded(
-            child: TerminalApp(
+            child: TerminalTabsApp(
               runtime: runtime,
               settings: settings,
               argv: <String>['/bin/bash', '-lc', _command(theme)],
