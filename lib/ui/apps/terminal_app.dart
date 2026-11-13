@@ -189,7 +189,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
         }
       } finally {
         tab.pendingPasteCodeUnits =
-            (tab.pendingPasteCodeUnits - text.length).clamp(0, _maxQueuedPasteCodeUnits);
+            (tab.pendingPasteCodeUnits - text.length).clamp(0, _maxQueuedPasteCodeUnits).toInt();
       }
     });
     tab.pasteQueue = paste;

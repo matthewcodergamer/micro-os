@@ -15,7 +15,7 @@ void main() {
     });
 
     test('never splits emoji surrogate pairs and preserves UTF-8 bytes', () {
-      final input = 'NaN😀NaN🌴';
+      final input = '${List<String>.filled(499, 'a').join()}😀${List<String>.filled(501, 'b').join()}🌴';
       final chunks = splitTerminalPaste(input).toList();
 
       for (final chunk in chunks) {

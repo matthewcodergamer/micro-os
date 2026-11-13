@@ -10,7 +10,7 @@ Iterable<String> splitTerminalPaste(
 
   var start = 0;
   while (start < text.length) {
-    var end = (start + maxCodeUnits).clamp(0, text.length);
+    var end = (start + maxCodeUnits).clamp(0, text.length).toInt();
     if (end < text.length) {
       final previous = text.codeUnitAt(end - 1);
       final next = text.codeUnitAt(end);

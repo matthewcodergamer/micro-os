@@ -184,8 +184,25 @@ jobs:
           python3 -m pip install --quiet --user Pillow
           python3 tool/optimize_dock_icons.py
 
+      - name: Runner capacity diagnostics
+        run: |
+          echo "Available RAM:"
+          free -h
+          echo "Available disk:"
+          df -h /
+
       - name: Dependencies
         run: flutter pub get
+
+      - name: Validate shell scripts
+        run: |
+          bash -n tool/setup.sh
+          bash -n tool/prebake_rootfs.sh
+          bash -n tool/bootstrap_android.sh
+          bash -n tool/fetch_thanasos_wallpapers.sh
+
+      - name: Unit tests
+        run: flutter test
 
       - name: Generate premium adaptive launcher icon
         run: |
