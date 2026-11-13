@@ -32,7 +32,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     echo "==> Installed local Android read-aloud plugin for OpenCode"
 
     echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar; do
+    for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar xdotool; do
       command -v "$tool" >/dev/null 2>&1 || {
         echo "Required pre-baked tool is missing: $tool" >&2
         exit 1
@@ -151,7 +151,7 @@ TORRENT
     rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "7\\n" > /root/.microos/image-version
+    printf "8\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
