@@ -41,6 +41,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   int _vncRetryCount = 0;
   bool _vncRetryCheckInFlight = false;
   bool _trackpadMode = true;
+  double _trackpadSpeed = 1.35;
   String _selectedBrowser = 'chromium';
   late final TextEditingController _addressController;
 
@@ -210,6 +211,17 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     );
   }
 
+  void _rightClick() {
+    _controller?.runJavaScript('window.__microOsRightClick?.();');
+  }
+
+  void _setTrackpadSpeed(double speed) {
+    setState(() => _trackpadSpeed = speed);
+    _controller?.runJavaScript(
+      'window.__microOsSetTrackpadSpeed?.($speed);',
+    );
+  }
+
   // Translate mobile gestures into mouse/wheel input for noVNC. Trackpad
   // mode moves a visible cursor relatively; direct mode maps touch to pixels.
   Future<void> _installTouchBridge(WebViewController controller) async {
@@ -229,7 +241,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           if (window.__microOsTouchBridgeV2Installed) return;
           window.__microOsTouchBridgeV2Installed = true;
           target.style.touchAction = 'none';
-          let trackpad = true, mode = 'idle';
+          let trackpad = true, mode = 'idle', sensitivity = 1.35;
           let startX=0,startY=0,lastX=0,lastY=0,cursorX=0,cursorY=0;
           let timer=null,moved=false;
           const cursor=document.createElement('div');
@@ -249,7 +261,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             cursorY=Math.max(r.top+1,Math.min(r.bottom-2,cursorY));
             cursor.style.left=cursorX+'px'; cursor.style.top=cursorY+'px';
           };
-          const moveCursor=(dx,dy)=>{cursorX+=dx*1.35;cursorY+=dy*1.35;clampCursor();mouse('mousemove',cursorX,cursorY,-1,0);};
+          const moveCursor=(dx,dy)=>{cursorX+=dx*sensitivity;cursorY+=dy*sensitivity;clampCursor();mouse('mousemove',cursorX,cursorY,-1,0);};
           const setMode=enabled=>{
             trackpad=!!enabled;
             cursor.style.display=trackpad?'block':'none';
@@ -267,6 +279,14 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             mouse('mousedown',x,y,button,button===0?1:2);
             mouse('mouseup',x,y,button,0);
             mouse(button===2?'contextmenu':'click',x,y,button,0);
+          };
+          window.__microOsSetTrackpadSpeed=value=>{
+            const next=Number(value);
+            if(Number.isFinite(next))sensitivity=Math.max(0.7,Math.min(2.2,next));
+          };
+          window.__microOsRightClick=()=>{
+            const x=trackpad?cursorX:lastX,y=trackpad?cursorY:lastY;
+            clickAt(x,y,2);
           };
           const point=t=>({x:t.clientX,y:t.clientY});
           const clear=()=>{if(timer)clearTimeout(timer);timer=null;};
@@ -328,6 +348,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     """);
     await controller.runJavaScript(
       'window.__microOsSetTrackpadMode(${_trackpadMode ? 'true' : 'false'});',
+    );
+    await controller.runJavaScript(
+      'window.__microOsSetTrackpadSpeed($_trackpadSpeed);',
     );
   }
 
@@ -435,6 +458,25 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                       size: 16,
                     ),
                     color: _trackpadMode ? MicroColors.accent : MicroColors.subtle,
+                  ),
+                  IconButton(
+                    tooltip: 'Right-click at cursor',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _rightClick,
+                    icon: const Icon(Icons.mouse_outlined, size: 16),
+                    color: MicroColors.subtle,
+                  ),
+                  PopupMenuButton<double>(
+                    tooltip: 'Trackpad speed',
+                    initialValue: _trackpadSpeed,
+                    onSelected: _setTrackpadSpeed,
+                    icon: const Icon(Icons.speed, size: 16, color: MicroColors.subtle),
+                    color: const Color(0xFF202735),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 0.9, child: Text('Slow cursor')),
+                      PopupMenuItem(value: 1.35, child: Text('Normal cursor')),
+                      PopupMenuItem(value: 1.8, child: Text('Fast cursor')),
+                    ],
                   ),
                   IconButton(
                     tooltip: 'Show Linux keyboard',
