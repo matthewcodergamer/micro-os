@@ -83,7 +83,8 @@ TORRENT
     apt-get update -y
     apt-get install -y --no-install-recommends chromium libgbm1 libx11-xcb1 libnss3 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libxkbcommon0 libwayland-client0 libegl1 libgl1
     CHROMIUM_BIN="$(command -v chromium)"
-    CHROMIUM_REAL="$(readlink -f "$CHROMIUM_BIN")"
+    CHROMIUM_REAL=/usr/lib/chromium/chromium
+    test -x "$CHROMIUM_REAL"
     file "$CHROMIUM_REAL" | grep -Eqi "ARM aarch64|ARM64"
     if ldd "$CHROMIUM_REAL" 2>&1 | tee /tmp/chromium-ldd.txt | grep -q "not found"; then cat /tmp/chromium-ldd.txt >&2; exit 1; fi
     "$CHROMIUM_BIN" --version
@@ -196,6 +197,7 @@ require_archive_path() {
 require_archive_path 'root/\.microos/ready'
 require_archive_path 'root/\.microos/image-version'
 require_archive_path 'usr/bin/chromium'
+require_archive_path 'usr/lib/chromium/chromium'
 require_archive_path 'usr/local/bin/start-browser.sh'
 require_archive_path 'root/.microos/start-desktop.sh'
 require_archive_path 'opt/firefox/firefox'
