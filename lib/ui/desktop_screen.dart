@@ -19,6 +19,7 @@ import 'spotlight.dart';
 import 'status_bar.dart';
 import 'wallpaper.dart';
 import 'window_frame.dart';
+import 'mac_icons.dart';
 
 /// The desktop: wallpaper, window layer, menu bar, Dock, Spotlight,
 /// Control Center, Setup Assistant and the login window.
@@ -265,6 +266,76 @@ class _DesktopScreenState extends State<DesktopScreen> {
         return AiHubApp(runtime: scope.runtime, settings: scope.settings);
       case AppId.settings:
         return SettingsApp(runtime: scope.runtime);
+      case AppId.maps:
+      case AppId.mail:
+      case AppId.notes:
+      case AppId.photos:
+      case AppId.music:
+      case AppId.appStore:
+      case AppId.calculator:
+        return _placeholderApp(window.app);
     }
+  }
+
+  Widget _placeholderApp(AppId app) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 420;
+        final iconSize = compact ? 68.0 : 88.0;
+        return Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MacAppIcon(app: app, size: iconSize),
+                  const SizedBox(height: 22),
+                  Text(
+                    app.title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: MicroColors.text,
+                      fontSize: compact ? 23 : 28,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    app.subtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: MicroColors.subtle, fontSize: 14),
+                  ),
+                  const SizedBox(height: 22),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                    decoration: BoxDecoration(
+                      color: MicroColors.sidebar,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.hourglass_top_rounded, size: 17, color: MicroColors.accent),
+                        SizedBox(width: 9),
+                        Flexible(
+                          child: Text(
+                            'This app is registered. Its full native integration is coming next.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: MicroColors.text, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
