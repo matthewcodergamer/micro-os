@@ -57,6 +57,7 @@ jobs:
           bash -n tool/setup.sh
           grep -q 'start-browser.sh' tool/setup.sh
           grep -q 'start-firefox.sh' tool/setup.sh
+          grep -q 'microos-browser-control' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
           chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh
@@ -70,6 +71,8 @@ jobs:
           grep -qxE '(\./)?usr/lib/chromium/chromium' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-browser.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-firefox.sh' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-browser-control' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/xdotool' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/.microos/start-desktop.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
