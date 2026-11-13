@@ -14,7 +14,7 @@ class Wallpaper extends StatelessWidget {
     final decodeWidth = (media.size.width * dpr).round().clamp(1, 1440).toInt();
     final decodeHeight = (media.size.height * dpr).round().clamp(1, 3200).toInt();
     return Image.asset(
-      'assets/wallpapers/wallpaper-bigsur.jpg',
+      'assets/wallpapers/wallpaper-bigsur.png',
       width: double.infinity,
       height: double.infinity,
       fit: BoxFit.cover,
