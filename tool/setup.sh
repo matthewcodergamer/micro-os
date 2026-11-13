@@ -33,7 +33,43 @@ stage() {
   fi
 }
 
-mkdir -p /root/.microos /root/projects /root/.local/bin /root/.config
+mkdir -p /root/.microos /root/projects /root/.local/bin /root/.config /mnt/android/Download
+ln -sfn /mnt/android/Download /root/Downloads
+
+# Android shared storage is commonly mounted noexec. Copy a requested download
+# into the guest's executable /tmp before running it, while keeping its working
+# directory beside the original download for relative file access.
+cat > /usr/local/bin/microos-run <<'MICROOS_RUN'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "$#" -lt 1 ]; then
+  echo "Usage: microos-run ~/Downloads/script.sh [arguments...]" >&2
+  exit 2
+fi
+SOURCE="$(realpath -e -- "$1")"
+case "$SOURCE" in
+  /mnt/android/Download/*) ;;
+  *) echo "microos-run only executes files from /mnt/android/Download" >&2; exit 2 ;;
+esac
+if [ ! -f "$SOURCE" ]; then
+  echo "Not a regular file: $SOURCE" >&2
+  exit 2
+fi
+shift
+WORK="$(mktemp -d /tmp/microos-run.XXXXXX)"
+trap 'rm -rf "$WORK"' EXIT
+TARGET="$WORK/$(basename "$SOURCE")"
+cp -- "$SOURCE" "$TARGET"
+chmod 700 "$TARGET"
+cd "$(dirname "$SOURCE")"
+case "$SOURCE" in
+  *.sh) bash "$TARGET" "$@" ;;
+  *.py) python3 "$TARGET" "$@" ;;
+  *.js|*.mjs|*.cjs) node "$TARGET" "$@" ;;
+  *) "$TARGET" "$@" ;;
+esac
+MICROOS_RUN
+chmod 755 /usr/local/bin/microos-run
 
 # -----------------------------------------------------------------------------
 # 0. Sanity: are we really inside the guest?
@@ -117,7 +153,7 @@ command -v npm >/dev/null && npm config set fund false --global 2>/dev/null
 # -----------------------------------------------------------------------------
 stage 76 "Installing X11 and VNC"
 apt-get install "${APT_OPTS[@]}" \
-  xvfb openbox xterm x11-xserver-utils x11vnc novnc websockify xauth dbus-x11 \
+  xvfb openbox xterm x11-utils x11-xserver-utils x11vnc novnc websockify xauth dbus-x11 xdotool \
   libgl1-mesa-dri mesa-utils \
   fonts-dejavu-core fonts-liberation \
   || warn "some X11 packages failed to install"
@@ -171,8 +207,91 @@ export DISPLAY="${DISPLAY:-:1}"
 BROWSER_HOME=/home/microos-browser
 CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || true)"
 if [ -z "$CHROMIUM_BIN" ]; then echo "[microos] Chromium .deb is not installed" >&2; exit 127; fi
-install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.config/chromium" "$BROWSER_HOME/.cache"
+install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.config/chromium" "$BROWSER_HOME/.config/chromium/Default" "$BROWSER_HOME/.cache"
+CHROMIUM_PREFS="$BROWSER_HOME/.config/chromium/Default/Preferences"
+python3 - "$CHROMIUM_PREFS" <<'CHROMIUM_PREFS'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, encoding="utf-8") as source:
+        preferences = json.load(source)
+except FileNotFoundError:
+    preferences = {}
+if not isinstance(preferences, dict):
+    preferences = {}
+bookmark_bar = preferences.setdefault("bookmark_bar", {})
+browser = preferences.setdefault("browser", {})
+download = preferences.setdefault("download", {})
+changed = False
+if "show_on_all_tabs" not in bookmark_bar:
+    bookmark_bar["show_on_all_tabs"] = True
+    changed = True
+if "show_home_button" not in browser:
+    browser["show_home_button"] = True
+    changed = True
+if download.get("default_directory") != "/mnt/android/Download":
+    download["default_directory"] = "/mnt/android/Download"
+    changed = True
+if download.get("prompt_for_download", True):
+    download["prompt_for_download"] = False
+    changed = True
+if changed or not os.path.exists(path):
+    temporary = path + ".microos-tmp"
+    with open(temporary, "w", encoding="utf-8") as target:
+        json.dump(preferences, target, separators=(",", ":"))
+    os.replace(temporary, path)
+CHROMIUM_PREFS
+chown microos-browser:microos-browser "$CHROMIUM_PREFS"
+
+# Seed a useful native Chromium bookmarks bar once. Never replace a user's
+# existing Bookmarks database after their first browser launch.
+BOOKMARKS_FILE="$BROWSER_HOME/.config/chromium/Default/Bookmarks"
+if [ ! -s "$BOOKMARKS_FILE" ]; then
+  cat > "$BOOKMARKS_FILE" <<'BOOKMARKS'
+{
+  "checksum": "",
+  "roots": {
+    "bookmark_bar": {
+      "children": [
+        {"date_added":"13370000000000000","id":"4","name":"Google","type":"url","url":"https://www.google.com/"},
+        {"date_added":"13370000000000000","id":"5","name":"YouTube","type":"url","url":"https://www.youtube.com/"},
+        {"date_added":"13370000000000000","id":"6","name":"GitHub","type":"url","url":"https://github.com/"}
+      ],
+      "date_modified": "0",
+      "id": "1",
+      "name": "Bookmarks bar",
+      "type": "folder"
+    },
+    "other": {"children":[],"date_modified":"0","id":"2","name":"Other bookmarks","type":"folder"},
+    "synced": {"children":[],"date_modified":"0","id":"3","name":"Mobile bookmarks","type":"folder"}
+  },
+  "version": 1
+}
+BOOKMARKS
+  chown microos-browser:microos-browser "$BOOKMARKS_FILE"
+fi
+
+# Ensure the shared X11 session has only one browser engine at a time.
+pkill -u microos-browser -f '[f]irefox' 2>/dev/null || true
+sleep 0.4
+CHROMIUM_EXTRA_ARGS=(
+  --ignore-gpu-blocklist
+  --canvas-oop-rasterization
+)
+if [ "${MICROOS_DISABLE_GPU:-0}" = "1" ]; then
+  # Used only by the CI Xvfb window test. Phone launches keep acceleration enabled.
+  CHROMIUM_EXTRA_ARGS+=(--disable-gpu)
+fi
+if [ "${MICROOS_HARDWARE_GPU_ONLY:-0}" = "1" ]; then
+  # Opt-in only: disabling SwiftShader/software fallback can blank rendering on
+  # devices where PRoot cannot expose a usable host GPU. Enable after device test.
+  CHROMIUM_EXTRA_ARGS+=(--disable-software-rasterizer)
+fi
 exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
+  "${CHROMIUM_EXTRA_ARGS[@]}" \
   --no-sandbox \
   --disable-gpu-sandbox \
   --process-per-site \
@@ -180,15 +299,128 @@ exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" X
   --disable-features=Translate,OptimizationHints \
   --js-flags="--max-old-space-size=512" \
   --disable-dev-shm-usage --no-first-run \
+  --disk-cache-size=67108864 --media-cache-size=16777216 \
+  --start-maximized \
   --user-data-dir="$BROWSER_HOME/.config/chromium" "$@"
 BROWSER
 chmod 755 /usr/local/bin/start-browser.sh
 
+cat > /usr/local/bin/start-firefox.sh <<'BROWSER'
+#!/usr/bin/env bash
+set -euo pipefail
+export DISPLAY="${DISPLAY:-:1}"
+BROWSER_HOME=/home/microos-browser
+FIREFOX_BIN="$(command -v firefox || true)"
+if [ -z "$FIREFOX_BIN" ]; then
+  echo "[microos] Firefox is not installed in this rootfs image" >&2
+  exit 127
+fi
+FIREFOX_PROFILE="$BROWSER_HOME/.mozilla/microos"
+install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.mozilla" "$FIREFOX_PROFILE"
+FIREFOX_PREFS="$FIREFOX_PROFILE/prefs.js"
+if ! grep -q 'browser.toolbars.bookmarks.visibility' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.toolbars.bookmarks.visibility", "always");' >> "$FIREFOX_PREFS"
+fi
+if ! grep -q 'browser.startup.homepage' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.startup.homepage", "about:home");' >> "$FIREFOX_PREFS"
+  printf '%s\n' 'user_pref("browser.startup.page", 1);' >> "$FIREFOX_PREFS"
+fi
+if ! grep -q 'browser.shell.checkDefaultBrowser' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.shell.checkDefaultBrowser", false);' >> "$FIREFOX_PREFS"
+fi
+if ! grep -q 'browser.download.dir' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.download.dir", "/mnt/android/Download");' \
+    'user_pref("browser.download.folderList", 2);' \
+    'user_pref("browser.download.useDownloadDir", true);' \
+    'user_pref("browser.download.manager.showWhenStarting", false);' >> "$FIREFOX_PREFS"
+fi
+chown microos-browser:microos-browser "$FIREFOX_PREFS"
+# Only one engine should own the remote desktop at a time.
+pkill -u microos-browser -f '[c]hromium|[c]hrome' 2>/dev/null || true
+sleep 0.4
+# Run a regular Firefox window (not kiosk/app mode), then maximize it through
+# Openbox once its real X11 window is available.
+runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" \
+  MOZ_ENABLE_WAYLAND=0 MOZ_DISABLE_CONTENT_SANDBOX=1 MOZ_DISABLE_GMP_SANDBOX=1 \
+  "$FIREFOX_BIN" --profile "$FIREFOX_PROFILE" --new-window "$@" &
+FIREFOX_PID=$!
+for attempt in $(seq 1 40); do
+  WINDOW_ID="$(xdotool search --onlyvisible --class firefox 2>/dev/null | head -n 1 || true)"
+  if [ -n "$WINDOW_ID" ]; then
+    xdotool windowactivate --sync "$WINDOW_ID" 2>/dev/null || true
+    xdotool key --clearmodifiers alt+F10 2>/dev/null || true
+    break
+  fi
+  kill -0 "$FIREFOX_PID" 2>/dev/null || break
+  sleep 0.2
+done
+wait "$FIREFOX_PID"
+BROWSER
+chmod 755 /usr/local/bin/start-firefox.sh
+
+# Compatibility alias for older launchers; the canonical script switches engines.
 cat > /usr/local/bin/microos-browse <<'BROWSER'
 #!/usr/bin/env bash
 exec /usr/local/bin/start-browser.sh "$@"
 BROWSER
 chmod 755 /usr/local/bin/microos-browse
+
+cat > /usr/local/bin/microos-browser-control <<'BROWSER'
+#!/usr/bin/env bash
+set -euo pipefail
+export DISPLAY="${DISPLAY:-:1}"
+ACTION="${1:-}"
+case "$ACTION" in
+  back)          KEY='alt+Left' ;;
+  forward)       KEY='alt+Right' ;;
+  reload)        KEY='ctrl+r' ;;
+  new-tab)       KEY='ctrl+t' ;;
+  close-tab)     KEY='ctrl+w' ;;
+  new-window)    KEY='ctrl+n' ;;
+  focus-address) KEY='ctrl+l' ;;
+  home)          KEY='alt+Home' ;;
+  bookmarks)     KEY='ctrl+shift+b' ;;
+  fullscreen)    KEY='F11' ;;
+  zoom-in)       KEY='ctrl+plus' ;;
+  zoom-out)      KEY='ctrl+minus' ;;
+  zoom-reset)    KEY='ctrl+0' ;;
+  window-minimize|window-maximize|window-restore|window-close) KEY='' ;;
+  *) echo "Unsupported browser action: $ACTION" >&2; exit 2 ;;
+esac
+
+# Select the real Linux browser window. Do not depend on EWMH
+# _NET_ACTIVE_WINDOW: some Xvfb/proot window-manager configurations omit it.
+WINDOW_ID="$(xdotool search --class 'chromium|Chromium|chrome|Chrome|firefox|Firefox|Navigator' 2>/dev/null | tail -n 1 || true)"
+if [ -z "$WINDOW_ID" ]; then
+  echo "[microos] no Chromium/Firefox window is available" >&2
+  exit 1
+fi
+
+case "$ACTION" in
+  window-minimize)
+    exec xdotool windowminimize "$WINDOW_ID"
+    ;;
+  window-maximize)
+    xdotool windowstate --add MAXIMIZED_VERT "$WINDOW_ID"
+    exec xdotool windowstate --add MAXIMIZED_HORZ "$WINDOW_ID"
+    ;;
+  window-restore)
+    xdotool windowmap "$WINDOW_ID" 2>/dev/null || true
+    xdotool windowstate --remove MAXIMIZED_VERT "$WINDOW_ID" 2>/dev/null || true
+    xdotool windowstate --remove MAXIMIZED_HORZ "$WINDOW_ID" 2>/dev/null || true
+    exec xdotool windowfocus --sync "$WINDOW_ID"
+    ;;
+  window-close)
+    exec xdotool windowclose "$WINDOW_ID"
+    ;;
+  *)
+    xdotool windowraise "$WINDOW_ID" 2>/dev/null || true
+    xdotool windowfocus --sync "$WINDOW_ID"
+    exec xdotool key --clearmodifiers "$KEY"
+    ;;
+esac
+BROWSER
+chmod 755 /usr/local/bin/microos-browser-control
 # 6. ZRAM
 #    ZRAM is a kernel feature owned by Android. A proot guest shares the host
 #    kernel and cannot create or re-configure swap devices (swapon returns
@@ -432,17 +664,20 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 MENU
 openbox --display :1 >"$LOG/openbox.log" 2>&1 &
 OPENBOX_PID=$!
-# 8 ms polling/defer is a balanced latency setting for the 4 GB mobile target.
-# Avoid -ncache here: noVNC does not benefit reliably from x11vnc's VNC-client
-# framebuffer cache extensions and they can increase memory/artifact risk.
-x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost -noxdamage -noshm -repeat -wait 8 -defer 8 >"$LOG/x11vnc.log" 2>&1 &
+# Keep the RFB listener loopback-only: websockify is the only exposed bridge.
+# Use low defer/wait for interactive latency and the LAN profile because the
+# VNC client and server are on the same device (Starlink does not carry VNC).
+# ncache is bounded to 10 framebuffer rows and is verified in the X11 smoke test.
+x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost \
+  -noxdamage -noshm -repeat -ncache 10 -ncache_cr \
+  -wait 1 -defer 1 -speeds 6,5000,1 >"$LOG/x11vnc.log" 2>&1 &
 VNC_PID=$!
 if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then echo "[microos] ERROR: x11vnc failed to open port 5900" >&2; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
 if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client is missing" >&2; exit 1; fi
 websockify --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
 WEBSOCKIFY_PID=$!
 if ! wait_for_port 6080 80 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then echo "[microos] ERROR: websockify failed to open port 6080" >&2; cat "$LOG/websockify.log" >&2 || true; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
-if ! pgrep -u microos-browser -f chromium >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window about:home >"$LOG/chromium.log" 2>&1 & fi
+if ! pgrep -u microos-browser -f 'chromium|firefox' >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window chrome://newtab/ >"$LOG/chromium.log" 2>&1 & fi
 echo "[microos] display :1 ready (Xvfb 1280x720, Openbox, VNC 5900, noVNC 6080)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
 echo "[microos] ERROR: X11/VNC/noVNC process exited; inspect $LOG/*.log" >&2

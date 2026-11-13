@@ -14,12 +14,14 @@ class StatusBar extends StatefulWidget {
     super.key,
     required this.height,
     required this.onSpotlight,
+    required this.onLaunchpad,
     required this.onControlCenter,
     required this.onLock,
   });
 
   final double height;
   final VoidCallback onSpotlight;
+  final VoidCallback onLaunchpad;
   final VoidCallback onControlCenter;
   final VoidCallback onLock;
 
@@ -98,6 +100,13 @@ class _StatusBarState extends State<StatusBar> {
               constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
               onPressed: widget.onSpotlight,
               tooltip: 'Spotlight',
+            ),
+            IconButton(
+              icon: const Icon(Icons.apps_rounded, size: 19, color: Colors.white),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+              onPressed: widget.onLaunchpad,
+              tooltip: 'Launchpad',
             ),
             IconButton(
               icon: const Icon(Icons.toggle_on_rounded, size: 20, color: Colors.white),

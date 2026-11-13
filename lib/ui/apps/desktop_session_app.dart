@@ -41,6 +41,8 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   int _vncRetryCount = 0;
   bool _vncRetryCheckInFlight = false;
   bool _trackpadMode = true;
+  double _trackpadSpeed = 1.35;
+  String _selectedBrowser = 'chromium';
 
   @override
   void initState() {
@@ -84,6 +86,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       setState(() => _status = 'Launching the browser…');
       await widget.runtime.launchBrowser(
         url: widget.url ?? 'https://www.google.com',
+        browser: _selectedBrowser,
         singleProcess: widget.singleProcess,
       );
       // Give the browser a moment to map its window before the client connects.
@@ -179,6 +182,42 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     super.dispose();
   }
 
+  Future<void> _launchSelectedBrowser() async {
+    final url = widget.url ?? 'https://www.google.com';
+    if (!mounted) return;
+    setState(() => _status =
+        'Opening $url in ${_selectedBrowser == 'firefox' ? 'Firefox' : 'Chromium'}…');
+    await widget.runtime.launchBrowser(
+      browser: _selectedBrowser,
+      url: url,
+      singleProcess: widget.singleProcess,
+    );
+    if (mounted) setState(() => _status = 'Browser launch requested');
+  }
+
+  Future<void> _selectBrowser(String? browser) async {
+    if (browser == null || browser == _selectedBrowser) return;
+    setState(() => _selectedBrowser = browser);
+    await _launchSelectedBrowser();
+  }
+
+  Future<void> _showRemoteKeyboard() async {
+    await _controller?.runJavaScript(
+      "document.querySelector('#noVNC_keyboardinput')?.focus();",
+    );
+  }
+
+  void _rightClick() {
+    _controller?.runJavaScript('window.__microOsRightClick?.();');
+  }
+
+  void _setTrackpadSpeed(double speed) {
+    setState(() => _trackpadSpeed = speed);
+    _controller?.runJavaScript(
+      'window.__microOsTrackpadSpeed=$speed;window.__microOsSetTrackpadSpeed?.($speed);',
+    );
+  }
+
   // Translate mobile gestures into mouse/wheel input for noVNC. Trackpad
   // mode moves a visible cursor relatively; direct mode maps touch to pixels.
   Future<void> _installTouchBridge(WebViewController controller) async {
@@ -198,7 +237,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           if (window.__microOsTouchBridgeV2Installed) return;
           window.__microOsTouchBridgeV2Installed = true;
           target.style.touchAction = 'none';
-          let trackpad = true, mode = 'idle';
+          let trackpad = true, mode = 'idle', sensitivity = Number(window.__microOsTrackpadSpeed)||1.35;
           let startX=0,startY=0,lastX=0,lastY=0,cursorX=0,cursorY=0;
           let timer=null,moved=false;
           const cursor=document.createElement('div');
@@ -218,7 +257,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             cursorY=Math.max(r.top+1,Math.min(r.bottom-2,cursorY));
             cursor.style.left=cursorX+'px'; cursor.style.top=cursorY+'px';
           };
-          const moveCursor=(dx,dy)=>{cursorX+=dx*1.35;cursorY+=dy*1.35;clampCursor();mouse('mousemove',cursorX,cursorY,-1,0);};
+          const moveCursor=(dx,dy)=>{cursorX+=dx*sensitivity;cursorY+=dy*sensitivity;clampCursor();mouse('mousemove',cursorX,cursorY,-1,0);};
           const setMode=enabled=>{
             trackpad=!!enabled;
             cursor.style.display=trackpad?'block':'none';
@@ -236,6 +275,14 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             mouse('mousedown',x,y,button,button===0?1:2);
             mouse('mouseup',x,y,button,0);
             mouse(button===2?'contextmenu':'click',x,y,button,0);
+          };
+          window.__microOsSetTrackpadSpeed=value=>{
+            const next=Number(value);
+            if(Number.isFinite(next))sensitivity=Math.max(0.7,Math.min(2.2,next));
+          };
+          window.__microOsRightClick=()=>{
+            const x=trackpad?cursorX:lastX,y=trackpad?cursorY:lastY;
+            clickAt(x,y,2);
           };
           const point=t=>({x:t.clientX,y:t.clientY});
           const clear=()=>{if(timer)clearTimeout(timer);timer=null;};
@@ -298,6 +345,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     await controller.runJavaScript(
       'window.__microOsSetTrackpadMode(${_trackpadMode ? 'true' : 'false'});',
     );
+    await controller.runJavaScript(
+      'window.__microOsSetTrackpadSpeed($_trackpadSpeed);',
+    );
   }
 
   void _toggleTrackpadMode() {
@@ -322,6 +372,87 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     return '$base?${query.join('&')}';
   }
 
+  Widget _moreControlsButton() {
+    return PopupMenuButton<String>(
+      tooltip: 'More desktop controls',
+      icon: const Icon(Icons.more_vert, size: 18, color: MicroColors.subtle),
+      color: const Color(0xFF202735),
+      onSelected: (action) {
+        switch (action) {
+          case 'right':
+            _rightClick();
+            break;
+          case 'keyboard':
+            _showRemoteKeyboard();
+            break;
+          case 'back':
+          case 'forward':
+          case 'reload':
+          case 'new-tab':
+          case 'close-tab':
+          case 'new-window':
+          case 'focus-address':
+          case 'home':
+          case 'bookmarks':
+          case 'fullscreen':
+          case 'zoom-in':
+          case 'zoom-out':
+          case 'zoom-reset':
+          case 'window-minimize':
+          case 'window-maximize':
+          case 'window-restore':
+          case 'window-close':
+            widget.runtime.controlBrowser(action);
+            break;
+          case 'slow':
+            _setTrackpadSpeed(0.9);
+            break;
+          case 'normal':
+            _setTrackpadSpeed(1.35);
+            break;
+          case 'fast':
+            _setTrackpadSpeed(1.8);
+            break;
+          case 'reconnect':
+            _reload();
+            break;
+          case 'restart':
+            _boot();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'right', child: Text('Right-click')),
+        const PopupMenuItem(value: 'keyboard', child: Text('Show Linux keyboard')),
+        if (widget.launchBrowser) ...[
+          const PopupMenuDivider(),
+          const PopupMenuItem(value: 'back', child: Text('Back')),
+          const PopupMenuItem(value: 'forward', child: Text('Forward')),
+          const PopupMenuItem(value: 'reload', child: Text('Reload')),
+          const PopupMenuItem(value: 'new-tab', child: Text('New browser tab')),
+          const PopupMenuItem(value: 'close-tab', child: Text('Close browser tab')),
+          const PopupMenuItem(value: 'new-window', child: Text('New browser window')),
+          const PopupMenuItem(value: 'focus-address', child: Text('Focus address bar')),
+          const PopupMenuItem(value: 'home', child: Text('Browser home')),
+          const PopupMenuItem(value: 'bookmarks', child: Text('Toggle bookmarks bar')),
+          const PopupMenuItem(value: 'fullscreen', child: Text('Toggle full screen')),
+          const PopupMenuDivider(),
+          const PopupMenuItem(value: 'window-minimize', child: Text('Minimize browser window')),
+          const PopupMenuItem(value: 'window-maximize', child: Text('Maximize browser window')),
+          const PopupMenuItem(value: 'window-restore', child: Text('Restore browser window')),
+          const PopupMenuItem(value: 'window-close', child: Text('Close browser window')),
+        ],
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: 'slow', child: Text('Cursor speed: slow')),
+        const PopupMenuItem(value: 'normal', child: Text('Cursor speed: normal')),
+        const PopupMenuItem(value: 'fast', child: Text('Cursor speed: fast')),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: 'reconnect', child: Text('Reconnect desktop')),
+        const PopupMenuItem(value: 'restart', child: Text('Restart desktop')),
+      ],
+    );
+  }
+
   void _reload() {
     _controller?.reload();
   }
@@ -335,13 +466,29 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       child: Column(
         children: [
           Container(
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             color: const Color(0xFF141822),
             child: Row(
               children: [
                 const Icon(Icons.circle, size: 8, color: MicroColors.green),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
+                if (widget.launchBrowser) ...[
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedBrowser,
+                      isDense: true,
+                      dropdownColor: const Color(0xFF202735),
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      items: const [
+                        DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
+                        DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
+                      ],
+                      onChanged: controller == null ? null : _selectBrowser,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Expanded(
                   child: Text(
                     _status,
@@ -351,23 +498,25 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                 ),
                 if (controller != null) ...[
                   IconButton(
-                    tooltip: _trackpadMode ? 'Trackpad cursor enabled' : 'Direct touch enabled',
+                    tooltip: _trackpadMode
+                        ? 'Trackpad cursor enabled'
+                        : 'Direct touch enabled',
                     visualDensity: VisualDensity.compact,
                     onPressed: _toggleTrackpadMode,
                     icon: Icon(
-                      _trackpadMode ? Icons.track_changes_rounded : Icons.touch_app_rounded,
+                      _trackpadMode
+                          ? Icons.track_changes_rounded
+                          : Icons.touch_app_rounded,
                       size: 16,
                     ),
-                    color: _trackpadMode ? MicroColors.accent : MicroColors.subtle,
+                    color: _trackpadMode
+                        ? MicroColors.accent
+                        : MicroColors.subtle,
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _reload,
-                    icon: const Icon(Icons.refresh, size: 16),
-                    color: MicroColors.subtle,
-                  ),
+                  _moreControlsButton(),
                 ],
                 IconButton(
+                  tooltip: 'Restart desktop session',
                   visualDensity: VisualDensity.compact,
                   onPressed: _boot,
                   icon: const Icon(Icons.restart_alt, size: 16),

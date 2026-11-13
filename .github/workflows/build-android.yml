@@ -55,19 +55,56 @@ jobs:
         run: |
           bash -n tool/prebake_rootfs.sh
           bash -n tool/setup.sh
+          python3 - <<'PY'
+          import pathlib
+          import re
+          runtime = pathlib.Path("lib/services/linux_runtime.dart").read_text()
+          prebake = pathlib.Path("tool/prebake_rootfs.sh").read_text()
+          runtime_match = re.search(r"_rootfsVersion = '(\d+)'", runtime)
+          version_line = next((line for line in prebake.splitlines() if " > /root/.microos/image-version" in line), "")
+          image_match = re.search(r'printf "(\d+)', version_line)
+          if not runtime_match or not image_match or runtime_match.group(1) != image_match.group(1):
+              raise SystemExit("Runtime/rootfs image versions do not match")
+          print("Runtime/rootfs image version:", runtime_match.group(1))
+          PY
           grep -q 'start-browser.sh' tool/setup.sh
+          grep -q 'start-firefox.sh' tool/setup.sh
+          grep -q 'microos-run' tool/setup.sh
+          grep -q 'microos-browser-control' tool/setup.sh
+          grep -q 'bookmark_bar' tool/setup.sh
+          grep -q 'BOOKMARKS_FILE' tool/setup.sh
+          grep -q 'GitHub' tool/setup.sh
+          grep -q 'browser.toolbars.bookmarks.visibility' tool/setup.sh
+          grep -q -- '--start-maximized' tool/setup.sh
+          grep -q 'window-maximize' tool/setup.sh
+          grep -q 'window-restore' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
+          grep -q 'openbox --sm-disable' tool/prebake_rootfs.sh
+          grep -q '_NET_SUPPORTING_WM_CHECK' tool/prebake_rootfs.sh
           chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh
           ROOTFS="assets/rootfs/rootfs.tar.zst"
           test -s "$ROOTFS"
+          test -s assets/rootfs/rootfs.tar.size
+          test "$(cat assets/rootfs/rootfs.tar.size)" -gt 0
           zstd -t "$ROOTFS"
+          ACTUAL_ROOTFS_BYTES="$(zstd -dc "$ROOTFS" | wc -c | tr -d '[:space:]')"
+          EXPECTED_ROOTFS_BYTES="$(tr -d '[:space:]' < assets/rootfs/rootfs.tar.size)"
+          echo "Rootfs expanded bytes: actual=$ACTUAL_ROOTFS_BYTES manifest=$EXPECTED_ROOTFS_BYTES"
+          if [ "$ACTUAL_ROOTFS_BYTES" != "$EXPECTED_ROOTFS_BYTES" ]; then
+            echo "ERROR: rootfs size manifest does not match the compressed archive" >&2
+            exit 1
+          fi
           zstd -dc "$ROOTFS" | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/bin/chromium' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/lib/chromium/chromium' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-browser.sh' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/start-firefox.sh' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-browser-control' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/xdotool' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/xprop' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/.microos/start-desktop.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
@@ -85,7 +122,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MicroOS-rootfs-arm64
-          path: assets/rootfs/rootfs.tar.zst
+          path: |
+            assets/rootfs/rootfs.tar.zst
+            assets/rootfs/rootfs.tar.size
           if-no-files-found: error
           retention-days: 2
 
@@ -130,6 +169,8 @@ jobs:
       - name: Verify transferred rootfs
         run: |
           test -s assets/rootfs/rootfs.tar.zst
+          test -s assets/rootfs/rootfs.tar.size
+          test "$(zstd -dc assets/rootfs/rootfs.tar.zst | wc -c | tr -d '[:space:]')" = "$(cat assets/rootfs/rootfs.tar.size)"
           zstd -t assets/rootfs/rootfs.tar.zst
           zstd -dc assets/rootfs/rootfs.tar.zst | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
@@ -228,6 +269,11 @@ jobs:
           unzip -l "$APK" | grep -q "AndroidManifest.xml"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/"
           ROOTFS_BYTES="$(unzip -l "$APK" | awk '$4 == "assets/flutter_assets/assets/rootfs/rootfs.tar.zst" {print $1}')"
+          ROOTFS_SIZE_BYTES="$(unzip -l "$APK" | awk '$4 == "assets/flutter_assets/assets/rootfs/rootfs.tar.size" {print $1}')"
+          if [ -z "$ROOTFS_SIZE_BYTES" ] || [ "$ROOTFS_SIZE_BYTES" -lt 1 ]; then
+            echo "ERROR: uncompressed rootfs size manifest is missing from APK"
+            exit 1
+          fi
           if [ -z "$ROOTFS_BYTES" ] || [ "$ROOTFS_BYTES" -lt 1048576 ]; then
             echo "ERROR: bundled rootfs asset is missing or unexpectedly small (bytes: ${ROOTFS_BYTES:-0})"
             exit 1

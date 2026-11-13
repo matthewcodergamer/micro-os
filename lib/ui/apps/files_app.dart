@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 
 import '../../core/theme.dart';
@@ -10,9 +11,10 @@ import '../../services/linux_runtime.dart';
 
 /// Finder-style browser for the real Linux guest filesystem and Android bind mounts.
 class FilesApp extends StatefulWidget {
-  const FilesApp({super.key, required this.runtime});
+  const FilesApp({super.key, required this.runtime, this.onOpenTerminal});
 
   final LinuxRuntime runtime;
+  final ValueChanged<List<String>>? onOpenTerminal;
 
   @override
   State<FilesApp> createState() => _FilesAppState();
@@ -23,6 +25,8 @@ class _FilesAppState extends State<FilesApp> {
   List<_FileEntry> _entries = const [];
   bool _loading = true;
   bool _listView = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _search = '';
   String? _error;
   int _request = 0;
 
@@ -37,6 +41,12 @@ class _FilesAppState extends State<FilesApp> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -147,11 +157,184 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     _load();
   }
 
+  List<_FileEntry> get _visibleEntries {
+    final query = _search.trim().toLowerCase();
+    if (query.isEmpty) return _entries;
+    return _entries.where((entry) => entry.name.toLowerCase().contains(query)).toList(growable: false);
+  }
+
   String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  String _entryPath(_FileEntry entry) =>
+      _path == '/' ? '/${entry.name}' : '$_path/${entry.name}';
+
+  Future<void> _runGuest(String script, List<String> args) async {
+    final pty = widget.runtime.startShell(
+      argv: <String>['/bin/bash', '-lc', script, 'microos-finder', ...args],
+    );
+    final output = BytesBuilder(copy: false);
+    final subscription = pty.output.listen(output.add);
+    try {
+      final code = await pty.exitCode.timeout(const Duration(seconds: 15));
+      final message = utf8.decode(output.takeBytes(), allowMalformed: true).trim();
+      if (code != 0) throw StateError(message.isEmpty ? 'Linux file operation failed.' : message);
+    } finally {
+      await subscription.cancel();
+      pty.kill();
+    }
+  }
+
+  Future<String?> _askName(String title, String initial) async {
+    final controller = TextEditingController(text: initial);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: MicroColors.panelSolid,
+        title: Text(title, style: const TextStyle(color: MicroColors.text)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: MicroColors.text),
+          decoration: const InputDecoration(hintText: 'Name'),
+          onSubmitted: (text) => Navigator.pop(context, text),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    return value;
+  }
+
+  bool _validName(String value) =>
+      value.trim().isNotEmpty && !value.contains('/') && value != '.' && value != '..';
+
+  void _notifyActionError(Object error) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+
+  Future<void> _createFolder() async {
+    final name = await _askName('New Folder', '');
+    if (name == null) return;
+    if (!_validName(name)) {
+      _notifyActionError('Enter a valid folder name.');
+      return;
+    }
+    final path = _path == '/' ? '/${name.trim()}' : '$_path/${name.trim()}';
+    try {
+      await _runGuest(r'mkdir -- "$1"', <String>[path]);
+      await _load();
+    } catch (error) {
+      _notifyActionError(error);
+    }
+  }
+
+  Future<void> _showEntryActions(_FileEntry entry) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: MicroColors.panelSolid,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(entry.isDirectory ? Icons.folder_open_rounded : Icons.info_outline_rounded),
+              title: Text(entry.isDirectory ? 'Open' : 'Get Info'),
+              onTap: () => Navigator.pop(context, 'open'),
+            ),
+            if (entry.isDirectory && widget.onOpenTerminal != null)
+              ListTile(
+                leading: const Icon(Icons.terminal_rounded),
+                title: const Text('Open in Terminal'),
+                onTap: () => Navigator.pop(context, 'terminal'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: const Text('Copy Path'),
+              onTap: () => Navigator.pop(context, 'copy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline_rounded),
+              title: const Text('Rename'),
+              onTap: () => Navigator.pop(context, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: MicroColors.red),
+              title: const Text('Move to Trash'),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    final path = _entryPath(entry);
+    if (action == 'open') {
+      if (entry.isDirectory) {
+        _navigate(path);
+      } else {
+        _showFileDetails(entry);
+      }
+    } else if (action == 'terminal') {
+      widget.onOpenTerminal?.call(<String>[
+        '/bin/bash',
+        '-lc',
+        r'cd -- "$1"; exec bash',
+        'microos-terminal',
+        path,
+      ]);
+    } else if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: path));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Path copied')));
+    } else if (action == 'rename') {
+      final name = await _askName('Rename', entry.name);
+      if (name == null) return;
+      if (!_validName(name)) {
+        _notifyActionError('Enter a valid name.');
+        return;
+      }
+      final destination = _path == '/' ? '/${name.trim()}' : '$_path/${name.trim()}';
+      try {
+        await _runGuest(r'if [ -e "$2" ] || [ -L "$2" ]; then echo "A file with that name already exists." >&2; exit 1; fi; mv -- "$1" "$2"', <String>[path, destination]);
+        await _load();
+      } catch (error) {
+        _notifyActionError(error);
+      }
+    } else if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: MicroColors.panelSolid,
+          title: const Text('Delete this item?', style: TextStyle(color: MicroColors.text)),
+          content: Text('“${entry.name}” will be moved to the Linux Trash. You can restore it from the Trash folder.', style: const TextStyle(color: MicroColors.subtle)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Move to Trash', style: TextStyle(color: MicroColors.red)),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        try {
+          await _runGuest(r'mkdir -p /root/.local/share/Trash/files; target="/root/.local/share/Trash/files/$(basename -- "$1")"; if [ -e "$target" ] || [ -L "$target" ]; then target="$target.$(date +%s%N)"; fi; mv -- "$1" "$target"', <String>[path]);
+          await _load();
+        } catch (error) {
+          _notifyActionError(error);
+        }
+      }
+    }
   }
 
   void _showFileDetails(_FileEntry entry) {
@@ -195,6 +378,12 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                 ),
               ),
               IconButton(
+                tooltip: 'New folder',
+                icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+                color: MicroColors.text,
+                onPressed: _loading ? null : _createFolder,
+              ),
+              IconButton(
                 tooltip: 'Refresh',
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 color: MicroColors.text,
@@ -207,6 +396,33 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                 onPressed: () => setState(() => _listView = !_listView),
               ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _search = value),
+            style: const TextStyle(color: MicroColors.text, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Search this folder',
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
+              suffixIcon: _search.isEmpty ? null : IconButton(
+                tooltip: 'Clear search',
+                icon: const Icon(Icons.close_rounded, size: 16),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _search = '');
+                },
+              ),
+              isDense: true,
+              filled: true,
+              fillColor: MicroColors.sidebar,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
           ),
         ),
         SizedBox(
@@ -251,14 +467,17 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                         ),
                       ),
                     )
-                  : _entries.isEmpty
-                      ? const Center(
-                          child: Text('This folder is empty', style: TextStyle(color: MicroColors.subtle)),
+                  : _visibleEntries.isEmpty
+                      ? Center(
+                          child: Text(
+                            _entries.isEmpty ? 'This folder is empty' : 'No matching files',
+                            style: const TextStyle(color: MicroColors.subtle),
+                          ),
                         )
                       : _listView
                           ? ListView.builder(
-                              itemCount: _entries.length,
-                              itemBuilder: (_, i) => _listTile(_entries[i]),
+                              itemCount: _visibleEntries.length,
+                              itemBuilder: (_, i) => _listTile(_visibleEntries[i]),
                             )
                           : GridView.builder(
                               padding: const EdgeInsets.all(14),
@@ -268,8 +487,8 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                                 crossAxisSpacing: 10,
                                 mainAxisSpacing: 10,
                               ),
-                              itemCount: _entries.length,
-                              itemBuilder: (_, i) => _gridItem(_entries[i]),
+                              itemCount: _visibleEntries.length,
+                              itemBuilder: (_, i) => _gridItem(_visibleEntries[i]),
                             ),
         ),
       ],
@@ -286,7 +505,8 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       ),
       title: Text(entry.name, style: const TextStyle(color: MicroColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(folder ? 'Folder' : _formatSize(entry.size), style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
-      onTap: folder ? () => _navigate(_path == '/' ? '/${entry.name}' : '$_path/${entry.name}') : () => _showFileDetails(entry),
+      onTap: folder ? () => _navigate(_entryPath(entry)) : () => _showFileDetails(entry),
+      onLongPress: () => _showEntryActions(entry),
     );
   }
 
@@ -294,7 +514,8 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     final folder = entry.isDirectory;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: folder ? () => _navigate(_path == '/' ? '/${entry.name}' : '$_path/${entry.name}') : () => _showFileDetails(entry),
+      onTap: folder ? () => _navigate(_entryPath(entry)) : () => _showFileDetails(entry),
+      onLongPress: () => _showEntryActions(entry),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

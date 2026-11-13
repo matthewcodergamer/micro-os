@@ -100,6 +100,48 @@ class MacAppIcon extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [Color(0xFF8E8E93), Color(0xFF636366)],
         );
+      case AppId.maps:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF30B0C7), Color(0xFF007AFF)],
+        );
+      case AppId.mail:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF64D2FF), Color(0xFF0A84FF)],
+        );
+      case AppId.notes:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFD60A), Color(0xFFFF9F0A)],
+        );
+      case AppId.photos:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFF375F), Color(0xFFBF5AF2)],
+        );
+      case AppId.music:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFF2D55), Color(0xFFAF52DE)],
+        );
+      case AppId.appStore:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF5E5CE6), Color(0xFF0A84FF)],
+        );
+      case AppId.calculator:
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF636366), Color(0xFF48484A)],
+        );
     }
   }
 
@@ -124,6 +166,27 @@ class MacAppIcon extends StatelessWidget {
         break;
       case AppId.settings:
         icon = Icons.settings_rounded;
+        break;
+      case AppId.maps:
+        icon = Icons.map_rounded;
+        break;
+      case AppId.mail:
+        icon = Icons.mail_rounded;
+        break;
+      case AppId.notes:
+        icon = Icons.note_alt_rounded;
+        break;
+      case AppId.photos:
+        icon = Icons.photo_library_rounded;
+        break;
+      case AppId.music:
+        icon = Icons.music_note_rounded;
+        break;
+      case AppId.appStore:
+        icon = Icons.shopping_bag_rounded;
+        break;
+      case AppId.calculator:
+        icon = Icons.calculate_rounded;
         break;
     }
     return Center(

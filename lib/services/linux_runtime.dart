@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:zstd_dart/zstd_dart.dart';
 
+import '../core/browser_navigation.dart';
 import 'background_session.dart';
 
 enum RuntimeStatus { checking, missing, installing, ready, failed }
@@ -22,13 +23,14 @@ enum RuntimeStatus { checking, missing, installing, ready, failed }
 /// remote host.
 class LinuxRuntime extends ChangeNotifier {
   static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.zst';
+  static const String _rootfsSizeAsset = 'assets/rootfs/rootfs.tar.size';
   static const int _rootfsChunkBytes = 8 * 1024 * 1024;
   static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '7';
+  static const String _rootfsVersion = '12';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -109,6 +111,8 @@ class LinuxRuntime extends ChangeNotifier {
         'TERM': 'xterm-256color',
         'LANG': 'en_US.UTF-8',
         'LC_ALL': 'en_US.UTF-8',
+        'PLAYWRIGHT_BROWSERS_PATH': '/opt/ms-playwright',
+        'NODE_PATH': '/opt/node-global',
         'DISPLAY': ':1',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
             '/root/.opencode/bin:/root/.local/bin',
@@ -184,14 +188,14 @@ class LinuxRuntime extends ChangeNotifier {
     _provisioningFinished = false;
     error = null;
     logLines.clear();
-    progress = 0.01;
+    progress = 0.0;
     stage = 'Preparing storage';
     _notify();
 
     try {
       await _extractProot();
 
-      progress = 0.08;
+      progress = 0.0;
       stage = 'Unpacking pre-baked Ubuntu workstation';
       _notify();
       await _extractRootfs();
@@ -199,8 +203,8 @@ class LinuxRuntime extends ChangeNotifier {
       if (_hasCurrentImage) {
         // The APK already contains Firefox, OpenCode and the complete toolchain.
         // Do not run apt or download packages on the phone during first launch.
-        progress = 0.95;
-        stage = 'Finalising pre-baked workstation';
+        progress = 1.0;
+        stage = 'Finishing up…';
         _notify();
         await _refreshGuestDns();
         status = RuntimeStatus.ready;
@@ -283,7 +287,22 @@ class LinuxRuntime extends ChangeNotifier {
       });
     }
 
-    await _extractZstdWithSystemTar(archive.path, target.path);
+    final totalExtractBytes = int.parse(
+      (await rootBundle.loadString(_rootfsSizeAsset)).trim(),
+    );
+    await _extractZstdWithSystemTar(
+      archive.path,
+      target.path,
+      totalBytes: totalExtractBytes,
+      onProgress: (extractedBytes) {
+        final fraction = totalExtractBytes == 0
+            ? 0.0
+            : (extractedBytes / totalExtractBytes).clamp(0.0, 1.0).toDouble();
+        progress = fraction;
+        stage = 'Unpacking Linux workstation · ${(fraction * 100).round()}%';
+        _notify();
+      },
+    );
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');
     }
@@ -300,8 +319,10 @@ class LinuxRuntime extends ChangeNotifier {
   /// wholesale into memory or written as a second giant temporary file.
   Future<void> _extractZstdWithSystemTar(
     String archivePath,
-    String destination,
-  ) async {
+    String destination, {
+    required int totalBytes,
+    required ValueChanged<int> onProgress,
+  }) async {
     final tar = await Process.start(
       '/system/bin/tar',
       <String>['-x', '-f', '-', '-C', destination],
@@ -314,6 +335,7 @@ class LinuxRuntime extends ChangeNotifier {
       maxDecompressedMessageSize: 128 * 1024 * 1024,
     );
     RandomAccessFile? input;
+    var extractedBytes = 0;
 
     try {
       input = await File(archivePath).open();
@@ -325,8 +347,11 @@ class LinuxRuntime extends ChangeNotifier {
         final decoded = decoder.feed(Uint8List.sublistView(buffer, 0, count));
         if (decoded.isNotEmpty) {
           tar.stdin.add(decoded);
-          // Flush each chunk to apply back-pressure to the decoder.
+          // Flush each chunk to apply back-pressure to the decoder. Progress
+          // counts uncompressed tar bytes actually handed to the extractor.
           await tar.stdin.flush();
+          extractedBytes += decoded.length;
+          onProgress(extractedBytes.clamp(0, totalBytes).toInt());
         }
       }
 
@@ -334,6 +359,7 @@ class LinuxRuntime extends ChangeNotifier {
       if (!decoder.isFrameComplete) {
         throw StateError('The zstd rootfs archive ended before its frame completed');
       }
+      onProgress(totalBytes);
 
       await tar.stdin.close();
       final exitCode = await tar.exitCode;
@@ -399,7 +425,6 @@ class LinuxRuntime extends ChangeNotifier {
 
   List<String> _prootArgs(List<String> argv) {
     final shared = Directory('/storage/emulated/0');
-    final downloads = Directory('/storage/emulated/0/Download');
 
     return <String>[
       '--link2symlink',
@@ -412,11 +437,10 @@ class LinuxRuntime extends ChangeNotifier {
       '/proc',
       '-b',
       '/sys',
-      // Android shared storage, so the guest sees the phone's real files.
-      // Binds are only added when the path exists: a missing bind aborts proot.
+      // Android shared storage is the live backing store for guest Downloads.
+      // Keep it as a single writable bind; /root/Downloads is a guest symlink
+      // to /mnt/android/Download, avoiding two aliases with different metadata.
       if (shared.existsSync()) ...<String>['-b', '/storage/emulated/0:/mnt/android'],
-      if (downloads.existsSync())
-        ...<String>['-b', '/storage/emulated/0/Download:/root/Downloads'],
       '-b',
       '${base.path}/tmp:/tmp',
       '-w',
@@ -573,21 +597,53 @@ class LinuxRuntime extends ChangeNotifier {
 
   /// Launches the desktop browser inside the guest.
   ///
-  /// The heavy flags are applied inside `/usr/local/bin/microos-browse`, which
-  /// picks Chromium when the distro ships a real .deb and falls back to Falkon
-  /// (QtWebEngine, same Blink engine) when it does not.
-  Future<void> launchBrowser({String? url, bool singleProcess = false}) async {
+  /// Launches the native Linux browser as a normal X11 desktop window.
+  /// Chromium/Firefox own their tabs, address bars, bookmarks and window chrome;
+  /// Flutter only provides compact touch controls around the VNC desktop.
+  Future<void> launchBrowser({
+    String? url,
+    String browser = 'chromium',
+    bool singleProcess = false,
+  }) async {
     if (!isReady) return;
+    if (browser != 'chromium' && browser != 'firefox') {
+      throw ArgumentError.value(browser, 'browser', 'Use chromium or firefox');
+    }
     final displayUp = await ensureDisplay();
     if (!displayUp) {
       _appendLog('[microos] browser launch blocked: the X11/VNC display is not healthy');
       return;
     }
+    final normalizedUrl = BrowserNavigation.normalizeAddress(
+      url ?? 'https://www.google.com',
+    );
+    final launcher = browser == 'firefox'
+        ? '/usr/local/bin/start-firefox.sh'
+        : '/usr/local/bin/microos-browse';
     runDetached(
-      <String>['/bin/bash', '-lc', '/usr/local/bin/microos-browse "${url ?? ''}"'],
+      <String>[
+        '/bin/bash',
+        '-lc',
+        '$launcher ${_shellQuote(normalizedUrl)}',
+      ],
       extraEnv: <String, String>{
         if (singleProcess) 'MICROOS_SINGLE_PROCESS': '1',
       },
+    );
+  }
+
+  String _shellQuote(String value) => BrowserNavigation.shellQuote(value);
+
+  /// Send a native X11 keyboard shortcut to the focused Linux browser window.
+  /// Only predefined actions are accepted; arbitrary key strings never reach X.
+  Future<void> controlBrowser(String action) async {
+    if (!isReady) return;
+    if (!BrowserNavigation.isSupportedAction(action)) {
+      throw ArgumentError.value(action, 'action', 'Unsupported browser action');
+    }
+    runDetached(
+      <String>['/usr/local/bin/microos-browser-control', action],
+      extraEnv: const <String, String>{'DISPLAY': ':1'},
     );
   }
 

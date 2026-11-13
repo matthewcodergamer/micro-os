@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 /// Every application that can be hosted in a desktop window.
-enum AppId { terminal, desktop, browser, files, aiHub, settings }
+enum AppId { terminal, desktop, browser, files, aiHub, settings, maps, mail, notes, photos, music, appStore, calculator }
 
 extension AppIdInfo on AppId {
   String get title => switch (this) {
@@ -11,6 +11,13 @@ extension AppIdInfo on AppId {
         AppId.files => 'Finder',
         AppId.aiHub => 'AI Hub',
         AppId.settings => 'System Settings',
+        AppId.maps => 'Maps',
+        AppId.mail => 'Mail',
+        AppId.notes => 'Notes',
+        AppId.photos => 'Photos',
+        AppId.music => 'Music',
+        AppId.appStore => 'App Store',
+        AppId.calculator => 'Calculator',
       };
 
   String get subtitle => switch (this) {
@@ -20,6 +27,13 @@ extension AppIdInfo on AppId {
         AppId.files => 'Android storage',
         AppId.aiHub => 'OpenCode agent',
         AppId.settings => 'Preferences',
+        AppId.maps => 'Explore places',
+        AppId.mail => 'Email client',
+        AppId.notes => 'Notes and writing',
+        AppId.photos => 'Photo library',
+        AppId.music => 'Music player',
+        AppId.appStore => 'App catalogue',
+        AppId.calculator => 'Calculator',
       };
 
   /// Sensible default window size on a tablet-sized screen.
@@ -30,6 +44,13 @@ extension AppIdInfo on AppId {
         AppId.files => const Size(680, 460),
         AppId.aiHub => const Size(680, 440),
         AppId.settings => const Size(700, 520),
+        AppId.maps => const Size(720, 520),
+        AppId.mail => const Size(760, 540),
+        AppId.notes => const Size(700, 520),
+        AppId.photos => const Size(760, 540),
+        AppId.music => const Size(620, 460),
+        AppId.appStore => const Size(760, 540),
+        AppId.calculator => const Size(360, 520),
       };
 }
 

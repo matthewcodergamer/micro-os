@@ -33,34 +33,41 @@ def make_background():
 
 
 def make_foreground():
+    """Transparent adaptive foreground: a luminous M inside a microchip."""
     layer = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    shadow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle(
-        (192, 242, 832, 778), radius=86, fill=(0, 0, 0, 150)
-    )
-    layer = Image.alpha_composite(layer, shadow.filter(ImageFilter.GaussianBlur(30)))
+    glow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.rounded_rectangle((210, 205, 814, 819), radius=150,
+                         outline=(0, 190, 255, 245), width=34)
+    for i in range(6):
+        x = 330 + i * 72
+        gd.line((x, 132, x, 210), fill=(30, 205, 255, 220), width=18)
+        gd.line((x, 814, x, 892), fill=(30, 205, 255, 220), width=18)
+        y = 330 + i * 72
+        gd.line((132, y, 210, y), fill=(30, 205, 255, 220), width=18)
+        gd.line((814, y, 892, y), fill=(30, 205, 255, 220), width=18)
+    layer = Image.alpha_composite(layer, glow.filter(ImageFilter.GaussianBlur(38)))
+
     draw = ImageDraw.Draw(layer)
-    draw.rounded_rectangle(
-        (180, 220, 844, 770), radius=88,
-        fill=(10, 17, 34, 255), outline=(137, 204, 255, 245), width=12
-    )
-    draw.rounded_rectangle((194, 234, 830, 756), radius=72, fill=(17, 25, 46, 255))
-    draw.rounded_rectangle((194, 234, 830, 360), radius=72, fill=(32, 45, 75, 255))
-    draw.rectangle((194, 300, 830, 360), fill=(32, 45, 75, 255))
-    draw.line((226, 360, 798, 360), fill=(91, 127, 177, 150), width=4)
-    draw.ellipse((246, 270, 286, 310), fill=(255, 103, 111, 255))
-    draw.ellipse((310, 270, 350, 310), fill=(255, 197, 77, 255))
-    draw.ellipse((374, 270, 414, 310), fill=(67, 211, 139, 255))
-    draw.line([(306, 486), (390, 548), (306, 610)],
-              fill=(89, 198, 255, 255), width=32, joint="curve")
-    draw.line([(306, 486), (390, 548), (306, 610)],
-              fill=(190, 238, 255, 110), width=8, joint="curve")
-    draw.rounded_rectangle((440, 590, 590, 622), radius=10,
-                           fill=(240, 248, 255, 255))
-    draw.rounded_rectangle((276, 684, 748, 700), radius=8,
-                           fill=(72, 132, 196, 90))
-    draw.rounded_rectangle((276, 684, 492, 700), radius=8,
-                           fill=(66, 190, 255, 235))
+    draw.rounded_rectangle((210, 205, 814, 819), radius=150,
+                           outline=(75, 220, 255, 255), width=24)
+    draw.rounded_rectangle((252, 247, 772, 777), radius=116,
+                           outline=(30, 132, 255, 230), width=12)
+
+    # The custom M is drawn as one continuous, rounded neon stroke.
+    m = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    md = ImageDraw.Draw(m)
+    points = [(340, 680), (340, 365), (512, 555), (684, 365), (684, 680)]
+    md.line(points, fill=(60, 205, 255, 255), width=78, joint="curve")
+    for x, y in (points[0], points[-1]):
+        md.ellipse((x - 39, y - 39, x + 39, y + 39),
+                   fill=(60, 205, 255, 255))
+    layer = Image.alpha_composite(layer, m.filter(ImageFilter.GaussianBlur(34)))
+    layer = Image.alpha_composite(layer, m)
+    highlight = ImageDraw.Draw(layer)
+    highlight.line([(370, 646), (370, 415), (512, 570),
+                    (654, 415), (654, 646)],
+                   fill=(218, 249, 255, 255), width=12, joint="curve")
     return layer
 
 
@@ -78,12 +85,11 @@ def main():
 
     mono = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(mono)
-    draw.rounded_rectangle((220, 265, 804, 735), radius=80,
-                           outline=(255, 255, 255, 255), width=22)
-    draw.line([(330, 420), (415, 500), (330, 580)],
-              fill=(255, 255, 255, 255), width=30, joint="curve")
-    draw.rounded_rectangle((470, 560, 650, 592), radius=10,
-                           fill=(255, 255, 255, 255))
+    draw.rounded_rectangle((220, 220, 804, 804), radius=142,
+                           outline=(255, 255, 255, 255), width=24)
+    draw.line([(350, 680), (350, 390), (512, 560),
+               (674, 390), (674, 680)],
+              fill=(255, 255, 255, 255), width=58, joint="curve")
     mono.save(ROOT / "microos_monochrome.png", optimize=True)
     print(f"Generated MicroOS launcher assets in {ROOT}")
 
