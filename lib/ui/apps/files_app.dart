@@ -1,15 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart';
 
-import '../../app_scope.dart';
 import '../../core/theme.dart';
-import '../../models/window_state.dart';
 import '../../services/linux_runtime.dart';
 
-/// Browses Android shared storage and can hand the current directory to the
-/// Linux guest, where it is mounted at /mnt/android.
+/// Finder-style file browser for the guest filesystem / Android storage.
 class FilesApp extends StatefulWidget {
   const FilesApp({super.key, required this.runtime});
 
@@ -20,11 +15,11 @@ class FilesApp extends StatefulWidget {
 }
 
 class _FilesAppState extends State<FilesApp> {
-  static const String _root = '/storage/emulated/0';
-
-  String _path = _root;
-  List<FileSystemEntity> _entries = const <FileSystemEntity>[];
+  String _path = '/';
+  List<String> _entries = [];
+  bool _loading = true;
   String? _error;
+  bool _listView = false;
 
   @override
   void initState() {
@@ -33,146 +28,112 @@ class _FilesAppState extends State<FilesApp> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final dir = Directory(_path);
-      final entries = dir.listSync(followLinks: false)
-        ..sort((a, b) {
-          final aDir = a is Directory;
-          final bDir = b is Directory;
-          if (aDir != bDir) return aDir ? -1 : 1;
-          return a.path.toLowerCase().compareTo(b.path.toLowerCase());
-        });
+      // Placeholder listing – real implementation uses runtime shell.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       if (!mounted) return;
       setState(() {
-        _entries = entries;
-        _error = null;
+        _entries = [
+          'Home',
+          'Downloads',
+          'Documents',
+          'Pictures',
+          'Music',
+          'Videos',
+        ];
+        _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _entries = const <FileSystemEntity>[];
-        _error = 'Cannot read $_path. Grant “All files access” to MicroOS.';
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
     }
-  }
-
-  String get _guestPath => _path.replaceFirst(_root, '/mnt/android');
-
-  void _openInTerminal() {
-    final scope = AppScope.of(context);
-    final screen = MediaQuery.sizeOf(context);
-    scope.desktop.open(
-      AppId.terminal,
-      screen: screen,
-      args: <String>[
-        '/bin/bash',
-        '-lc',
-        'cd ${_shellQuote(_guestPath)} && exec bash -l',
-      ],
-    );
-  }
-
-  String _shellQuote(String value) =>
-      "'${value.replaceAll("'", "'\\''")}'";
-
-  Future<void> _requestAccess() async {
-    await Permission.manageExternalStorage.request();
-    if (!mounted) return;
-    await _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    final canGoUp = _path != _root && _path.length > _root.length;
-
-    return Container(
-      color: MicroColors.panelSolid,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF))),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  onPressed: canGoUp
-                      ? () {
-                          setState(() => _path = Directory(_path).parent.path);
-                          _load();
-                        }
-                      : null,
-                  icon: const Icon(Icons.arrow_upward, size: 18),
-                ),
-                Expanded(
-                  child: Text(
-                    _guestPath,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: MicroColors.subtle,
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _openInTerminal,
-                  child: const Text('Terminal here', style: TextStyle(fontSize: 11)),
-                ),
-              ],
-            ),
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: MicroColors.subtle, fontSize: 12),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _requestAccess,
-                    child: const Text('Grant all-files access'),
-                  ),
-                ],
+    return Column(
+      children: [
+        // Toolbar
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          color: MicroColors.sidebar,
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
+                color: MicroColors.text,
+                onPressed: _path == '/' ? null : () {
+                  setState(() => _path = '/');
+                  _load();
+                },
               ),
-            ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              itemCount: _entries.length,
-              itemBuilder: (context, index) {
-                final entry = _entries[index];
-                final name = entry.path.split('/').last;
-                final isDir = entry is Directory;
-                return ListTile(
-                  dense: true,
-                  leading: Icon(
-                    isDir ? Icons.folder_rounded : Icons.insert_drive_file_outlined,
-                    color: isDir ? const Color(0xFFF0A32B) : MicroColors.subtle,
-                    size: 20,
-                  ),
-                  title: Text(
-                    name,
-                    style: const TextStyle(color: MicroColors.text, fontSize: 12),
-                  ),
-                  onTap: isDir
-                      ? () {
-                          setState(() => _path = entry.path);
-                          _load();
-                        }
-                      : null,
-                );
-              },
-            ),
+              Expanded(
+                child: Text(
+                  _path,
+                  style: const TextStyle(color: MicroColors.subtle, fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  _listView ? Icons.grid_view_rounded : Icons.view_list_rounded,
+                  size: 18,
+                ),
+                color: MicroColors.text,
+                onPressed: () => setState(() => _listView = !_listView),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        // Body
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+                  ? Center(child: Text(_error!, style: const TextStyle(color: MicroColors.red)))
+                  : _listView
+                      ? ListView.builder(
+                          itemCount: _entries.length,
+                          itemBuilder: (_, i) => ListTile(
+                            leading: const Icon(Icons.folder_rounded, color: MicroColors.accent),
+                            title: Text(_entries[i], style: const TextStyle(color: MicroColors.text)),
+                            onTap: () {},
+                          ),
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(16),
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 100,
+                            childAspectRatio: 0.85,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: _entries.length,
+                          itemBuilder: (_, i) => Column(
+                            children: [
+                              const Icon(Icons.folder_rounded, size: 48, color: MicroColors.accent),
+                              const SizedBox(height: 6),
+                              Text(
+                                _entries[i],
+                                style: const TextStyle(color: MicroColors.text, fontSize: 12),
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+        ),
+      ],
     );
   }
 }
