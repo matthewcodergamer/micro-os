@@ -108,7 +108,6 @@ class InstallScreen extends StatelessWidget {
                                   color: failed ? MicroColors.red : Colors.white,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  fontFeatures: const [FontFeature.tabularFigures()],
                                 ),
                               ),
                             ],
@@ -152,7 +151,7 @@ class InstallScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            failed ? 'Installation stopped' : 'Finishing up…',
+                            failed ? 'Installation stopped' : progress >= 0.92 ? 'Finishing up…' : runtime.stage,
                             style: const TextStyle(
                               color: Color(0xFF858995),
                               fontSize: 11,
