@@ -590,10 +590,10 @@ class _AboutPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ListView(
-      padding: EdgeInsets.all(24),
+    return ListView(
+      padding: const EdgeInsets.all(24),
       children: [
-        Text('About MicroOS', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text('About MicroOS', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
         SizedBox(height: 12),
         Text('Golden Gate UI · macOS 27 style window manager for a mobile Linux workstation.', style: TextStyle(color: MicroColors.subtle)),
       ],
