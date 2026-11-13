@@ -150,46 +150,39 @@ rm -rf /tmp/WhiteSur-cursors
 
 # -----------------------------------------------------------------------------
 # 5. Browser
-#    Firefox is downloaded from Mozilla and baked into the ARM64 rootfs by
-#    tool/prebake_rootfs.sh. Run it as a dedicated unprivileged guest user:
-#    Firefox intentionally refuses to run as root, and its profile must not
-#    be owned by the proot root account.
-# -----------------------------------------------------------------------------
-stage 84 "Preparing Firefox desktop browser"
+# Chromium is pre-baked as a native ARM64 .deb; do not use Ubuntu Snap.
+stage 84 "Preparing Chromium desktop browser"
 apt-get install "${APT_OPTS[@]}" passwd util-linux || warn "browser user tools unavailable"
 if ! id microos-browser >/dev/null 2>&1; then
-  useradd --system --create-home --home-dir /home/microos-browser \
-    --shell /usr/sbin/nologin microos-browser || warn "could not create Firefox user"
+  useradd --system --create-home --home-dir /home/microos-browser --shell /usr/sbin/nologin microos-browser || warn "browser user creation failed"
 fi
 
-cat > /usr/local/bin/microos-browse <<'BROWSER'
+cat > /usr/local/bin/start-browser.sh <<'BROWSER'
 #!/usr/bin/env bash
 set -euo pipefail
 export DISPLAY="${DISPLAY:-:1}"
+BROWSER_HOME=/home/microos-browser
+CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || true)"
+if [ -z "$CHROMIUM_BIN" ]; then echo "[microos] Chromium .deb is not installed" >&2; exit 127; fi
+install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.config/chromium" "$BROWSER_HOME/.cache"
+exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
+  --no-sandbox \
+  --disable-gpu-sandbox \
+  --single-process \
+  --process-per-site \
+  --disable-background-networking \
+  --disable-features=Translate,OptimizationHints \
+  --js-flags="--max-old-space-size=512" \
+  --disable-dev-shm-usage --no-first-run \
+  --user-data-dir="$BROWSER_HOME/.config/chromium" "$@"
+BROWSER
+chmod 755 /usr/local/bin/start-browser.sh
 
-if command -v firefox >/dev/null 2>&1; then
-  # PRoot runs the desktop as guest root. Firefox must run as a normal user.
-  # The rootfs archive normalizes ownership to root, so give the browser a
-  # persistent, explicitly writable profile home inside the guest instead.
-  BROWSER_HOME=/home/microos-browser
-  # Ensure the normalized rootfs home is writable by the browser account.
-  # Firefox manages its default profile beneath HOME/.mozilla itself.
-  install -d -o microos-browser -g microos-browser -m 700 \
-    "$BROWSER_HOME" "$BROWSER_HOME/.mozilla" "$BROWSER_HOME/.cache"
-  exec runuser -u microos-browser -- env \
-    DISPLAY="$DISPLAY" \
-    HOME="$BROWSER_HOME" \
-    MOZ_DISABLE_CONTENT_SANDBOX=1 \
-    MOZ_DISABLE_GMP_SANDBOX=1 \
-    firefox --display=:1 "$@"
-fi
-
-echo "Firefox is missing from this MicroOS image. Reinstall/update MicroOS with a pre-baked Firefox build." >&2
-exit 127
+cat > /usr/local/bin/microos-browse <<'BROWSER'
+#!/usr/bin/env bash
+exec /usr/local/bin/start-browser.sh "$@"
 BROWSER
 chmod 755 /usr/local/bin/microos-browse
-
-# -----------------------------------------------------------------------------
 # 6. ZRAM
 #    ZRAM is a kernel feature owned by Android. A proot guest shares the host
 #    kernel and cannot create or re-configure swap devices (swapon returns
@@ -405,115 +398,44 @@ EOF
 stage 96 "Writing display bridge"
 cat > /root/.microos/start-gui.sh <<'EOF'
 #!/usr/bin/env bash
-# Supervise the complete X11 -> VNC -> noVNC chain for the Android WebView.
 set -Eeuo pipefail
-export DISPLAY=:1
-export XCURSOR_THEME=WhiteSur-cursors
-export XCURSOR_SIZE=24
+export DISPLAY=:1 XCURSOR_THEME=WhiteSur-cursors XCURSOR_SIZE=24
 export XDG_RUNTIME_DIR=/tmp/microos-runtime
-GEOMETRY="${MICROOS_GEOMETRY:-1024x768x24}"
+GEOMETRY="1280x720x24"
 LOG=/tmp/.microos
-mkdir -p "$LOG" "$XDG_RUNTIME_DIR"
-chmod 700 "$XDG_RUNTIME_DIR"
-
-# Stop stale servers by executable name. Avoid pkill -f patterns that can
-# accidentally match this shell or another launcher command line.
-pkill -x websockify 2>/dev/null || true
-pkill -x x11vnc 2>/dev/null || true
-pkill -x openbox 2>/dev/null || true
-pkill -x Xvfb 2>/dev/null || true
-sleep 0.4
-
+mkdir -p "$LOG" "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
+for process in websockify x11vnc openbox Xvfb; do pkill -9 -x "$process" 2>/dev/null || true; done
+sleep 0.5
 Xvfb :1 -screen 0 "$GEOMETRY" -nolisten tcp -ac -noreset -dpi 96 >"$LOG/xvfb.log" 2>&1 &
 XVFB_PID=$!
-cleanup() {
-  kill "${WEBSOCKIFY_PID:-}" "${VNC_PID:-}" "${OPENBOX_PID:-}" "$XVFB_PID" 2>/dev/null || true
-}
+cleanup() { kill "${WEBSOCKIFY_PID:-}" "${VNC_PID:-}" "${OPENBOX_PID:-}" "$XVFB_PID" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
-
-# Do not start the next layer until the X server answers real X11 requests.
-for _ in $(seq 1 50); do
-  if xset -display :1 q >/dev/null 2>&1; then break; fi
-  if ! kill -0 "$XVFB_PID" 2>/dev/null; then
-    echo "[microos] ERROR: Xvfb exited during startup" >&2
-    cat "$LOG/xvfb.log" >&2 || true
-    exit 1
-  fi
-  sleep 0.2
-done
-if ! xset -display :1 q >"$LOG/xset.log" 2>&1; then
-  echo "[microos] ERROR: Xvfb :1 did not become usable" >&2
-  cat "$LOG/xvfb.log" >&2 || true
-  exit 1
-fi
-
+wait_for_x() { for _ in $(seq 1 60); do xset -display :1 q >/dev/null 2>&1 && return 0; kill -0 "$XVFB_PID" 2>/dev/null || { cat "$LOG/xvfb.log" >&2 || true; return 1; }; sleep 0.2; done; return 1; }
+wait_for_port() { local port="$1" attempts="$2"; for ((i=0;i<attempts;i++)); do (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && return 0; sleep 0.25; done; return 1; }
+if ! wait_for_x; then echo "[microos] ERROR: Xvfb :1 did not become usable" >&2; exit 1; fi
 xrdb -merge /root/.Xresources 2>/dev/null || true
-xsetroot -solid '#0f131b' -cursor_name left_ptr 2>/dev/null || xsetroot -solid '#0f131b' 2>/dev/null || true
-
+xsetroot -solid '#0f131b' -cursor_name left_ptr 2>/dev/null || true
 mkdir -p /root/.config/openbox
 cat > /root/.config/openbox/menu.xml <<'MENU'
 <?xml version="1.0" encoding="UTF-8"?>
-<openbox_menu>
-  <menu id="root-menu" label="MicroOS">
-    <item label="Terminal"><action name="Execute"><command>xterm -fa Monospace -fs 10</command></action></item>
-    <item label="Firefox"><action name="Execute"><command>/usr/local/bin/microos-browse</command></action></item>
-    <item label="OpenCode"><action name="Execute"><command>xterm -fa Monospace -fs 10 -e opencode</command></action></item>
-    <separator/>
-    <item label="Restart window manager"><action name="Restart"/></item>
-  </menu>
-</openbox_menu>
+<openbox_menu><menu id="root-menu" label="MicroOS">
+<item label="Chromium"><action name="Execute"><command>/usr/local/bin/start-browser.sh</command></action></item>
+<item label="Terminal"><action name="Execute"><command>xterm -fa Monospace -fs 10</command></action></item>
+</menu></openbox_menu>
 MENU
-openbox >"$LOG/openbox.log" 2>&1 &
+openbox --display :1 >"$LOG/openbox.log" 2>&1 &
 OPENBOX_PID=$!
-
-wait_for_port() {
-  local port="$1" attempts="$2"
-  for ((i=0; i<attempts; i++)); do
-    if (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1; then return 0; fi
-    sleep 0.25
-  done
-  return 1
-}
-
-# Disable XDamage and MIT-SHM: both can be unreliable in a proot/Xvfb stack.
-x11vnc -display :1 -forever -shared -rfbport 5900 -localhost -nopw \
-       -noxdamage -noshm -repeat -wait 15 -defer 15 \
-       >"$LOG/x11vnc.log" 2>&1 &
+x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost -noxdamage -noshm -repeat -wait 15 -defer 15 >"$LOG/x11vnc.log" 2>&1 &
 VNC_PID=$!
-if ! wait_for_port 5900 60 || ! kill -0 "$VNC_PID" 2>/dev/null; then
-  echo "[microos] ERROR: x11vnc failed; port 5900 is unavailable" >&2
-  cat "$LOG/x11vnc.log" >&2 || true
-  exit 1
-fi
-
-if [ ! -f /usr/share/novnc/vnc.html ]; then
-  echo "[microos] ERROR: noVNC web client is missing (/usr/share/novnc/vnc.html)" >&2
-  exit 1
-fi
-websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 >"$LOG/websockify.log" 2>&1 &
+if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then echo "[microos] ERROR: x11vnc failed to open port 5900" >&2; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
+if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client is missing" >&2; exit 1; fi
+websockify --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
 WEBSOCKIFY_PID=$!
-if ! wait_for_port 6080 60 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then
-  echo "[microos] ERROR: noVNC bridge failed; port 6080 is unavailable" >&2
-  cat "$LOG/websockify.log" >&2 || true
-  cat "$LOG/x11vnc.log" >&2 || true
-  exit 1
-fi
-
-# Launch Firefox only after Xvfb, VNC and noVNC are accepting connections.
-if ! pgrep -u microos-browser -f 'firefox' >/dev/null 2>&1; then
-  /usr/local/bin/microos-browse --new-window about:home >"$LOG/firefox.log" 2>&1 &
-  FIREFOX_PID=$!
-fi
-
-# Keep the parent alive only while every layer remains alive. This prevents a
-# dead x11vnc from leaving a misleading, still-open noVNC HTTP port.
-echo "[microos] display :1 ready (Xvfb, VNC 5900, noVNC 6080)"
-while kill -0 "$XVFB_PID" 2>/dev/null &&
-      kill -0 "$VNC_PID" 2>/dev/null &&
-      kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; do
-  sleep 2
-done
-echo "[microos] ERROR: one of Xvfb/x11vnc/websockify exited; see $LOG/*.log" >&2
+if ! wait_for_port 6080 80 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then echo "[microos] ERROR: websockify failed to open port 6080" >&2; cat "$LOG/websockify.log" >&2 || true; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
+if ! pgrep -u microos-browser -f chromium >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window about:home >"$LOG/chromium.log" 2>&1 & fi
+echo "[microos] display :1 ready (Xvfb 1280x720, Openbox, VNC 5900, noVNC 6080)"
+while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
+echo "[microos] ERROR: X11/VNC/noVNC process exited; inspect $LOG/*.log" >&2
 exit 1
 EOF
 chmod 755 /root/.microos/start-gui.sh
@@ -529,7 +451,7 @@ echo "[microos] display stopped"
 EOF
 chmod 755 /root/.microos/stop-gui.sh
 
-# Browser launcher was installed above with the Firefox-first, unprivileged-user wrapper.
+# Chromium is launched through the unprivileged ARM64 wrapper above.
 
 # Optional Steam/Box64 feasibility check. This intentionally does not install
 # Steam or alter the guest: the Steam Linux client has 32-bit components and
