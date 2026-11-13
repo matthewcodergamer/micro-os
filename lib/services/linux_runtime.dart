@@ -294,7 +294,7 @@ class LinuxRuntime extends ChangeNotifier {
       onProgress: (extractedBytes) {
         final fraction = archiveBytes == 0
             ? 0.0
-            : (extractedBytes / archiveBytes).clamp(0.0, 1.0);
+            : (extractedBytes / archiveBytes).clamp(0.0, 1.0).toDouble();
         progress = 0.08 + (fraction * 0.84);
         stage = 'Unpacking Linux workstation · ${(fraction * 100).round()}%';
         _notify();
