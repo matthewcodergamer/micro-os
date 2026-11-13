@@ -36,6 +36,41 @@ stage() {
 mkdir -p /root/.microos /root/projects /root/.local/bin /root/.config /mnt/android/Download
 ln -sfn /mnt/android/Download /root/Downloads
 
+# Android shared storage is commonly mounted noexec. Copy a requested download
+# into the guest's executable /tmp before running it, while keeping its working
+# directory beside the original download for relative file access.
+cat > /usr/local/bin/microos-run <<'MICROOS_RUN'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "$#" -lt 1 ]; then
+  echo "Usage: microos-run ~/Downloads/script.sh [arguments...]" >&2
+  exit 2
+fi
+SOURCE="$(realpath -e -- "$1")"
+case "$SOURCE" in
+  /mnt/android/Download/*) ;;
+  *) echo "microos-run only executes files from /mnt/android/Download" >&2; exit 2 ;;
+esac
+if [ ! -f "$SOURCE" ]; then
+  echo "Not a regular file: $SOURCE" >&2
+  exit 2
+fi
+shift
+WORK="$(mktemp -d /tmp/microos-run.XXXXXX)"
+trap 'rm -rf "$WORK"' EXIT
+TARGET="$WORK/$(basename "$SOURCE")"
+cp -- "$SOURCE" "$TARGET"
+chmod 700 "$TARGET"
+cd "$(dirname "$SOURCE")"
+case "$SOURCE" in
+  *.sh) bash "$TARGET" "$@" ;;
+  *.py) python3 "$TARGET" "$@" ;;
+  *.js|*.mjs|*.cjs) node "$TARGET" "$@" ;;
+  *) "$TARGET" "$@" ;;
+esac
+MICROOS_RUN
+chmod 755 /usr/local/bin/microos-run
+
 # -----------------------------------------------------------------------------
 # 0. Sanity: are we really inside the guest?
 # -----------------------------------------------------------------------------
