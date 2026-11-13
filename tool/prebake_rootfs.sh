@@ -298,6 +298,10 @@ tar --hard-dereference --numeric-owner --owner=0 --group=0 \
   -cf - -C "$TMP/rootfs" . | zstd -T0 -10 -f -o "$OUT"
 
 zstd -t "$OUT"
+# Store the exact uncompressed tar-stream size so the Android installer can
+# report bytes actually extracted, not compressed-input estimates.
+zstd -dc "$OUT" | wc -c | tr -d '[:space:]' > "$ROOT/assets/rootfs/rootfs.tar.size"
+test "$(cat "$ROOT/assets/rootfs/rootfs.tar.size")" -gt 0
 zstd -dc "$OUT" | tar -tf - > "$TMP/rootfs-archive.list"
 require_archive_path() {
   local expected="$1"
