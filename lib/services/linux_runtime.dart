@@ -616,7 +616,7 @@ class LinuxRuntime extends ChangeNotifier {
     );
   }
 
-  String _shellQuote(String value) => "'${value.replaceAll("'", "'\\"'\\"'")}'";
+  String _shellQuote(String value) => "'${value.replaceAll("'", r"'\''")}'";
 
   /// Attempts to repair interrupted dpkg configuration and broken dependencies.
   /// Output is streamed into the same diagnostic log shown in Settings.

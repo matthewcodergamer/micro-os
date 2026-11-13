@@ -112,6 +112,8 @@ TORRENT
     mkdir -p /opt
     tar -xJf /tmp/firefox.tar.xz -C /opt
     ln -sf /opt/firefox/firefox /usr/local/bin/firefox
+    bash -n /usr/local/bin/start-browser.sh /usr/local/bin/start-firefox.sh /usr/local/bin/microos-browse
+    test -x /usr/local/bin/start-firefox.sh
     # The shell launcher is a script; verify the actual ARM64 ELF binary.
     test -x /opt/firefox/firefox-bin
     file /opt/firefox/firefox-bin | grep -Eqi "ARM aarch64|ARM64"
