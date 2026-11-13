@@ -78,6 +78,8 @@ jobs:
           grep -q 'window-maximize' tool/setup.sh
           grep -q 'window-restore' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
+          grep -q 'openbox --sm-disable' tool/prebake_rootfs.sh
+          grep -q '_NET_SUPPORTING_WM_CHECK' tool/prebake_rootfs.sh
           chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh
           ROOTFS="assets/rootfs/rootfs.tar.zst"
@@ -92,6 +94,7 @@ jobs:
           grep -qxE '(\./)?usr/local/bin/start-firefox.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browser-control' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/bin/xdotool' /tmp/rootfs-archive.list
+          grep -qxE '(\\./)?usr/bin/xprop' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/.microos/start-desktop.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list

@@ -117,7 +117,7 @@ command -v npm >/dev/null && npm config set fund false --global 2>/dev/null
 # -----------------------------------------------------------------------------
 stage 76 "Installing X11 and VNC"
 apt-get install "${APT_OPTS[@]}" \
-  xvfb openbox xterm x11-xserver-utils x11vnc novnc websockify xauth dbus-x11 xdotool \
+  xvfb openbox xterm x11-utils x11-xserver-utils x11vnc novnc websockify xauth dbus-x11 xdotool \
   libgl1-mesa-dri mesa-utils \
   fonts-dejavu-core fonts-liberation \
   || warn "some X11 packages failed to install"

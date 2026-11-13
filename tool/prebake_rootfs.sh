@@ -32,7 +32,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     echo "==> Installed local Android read-aloud plugin for OpenCode"
 
     echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar xdotool; do
+    for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar xdotool xprop; do
       command -v "$tool" >/dev/null 2>&1 || {
         echo "Required pre-baked tool is missing: $tool" >&2
         exit 1
@@ -106,9 +106,28 @@ TORRENT
       sleep 0.25
     done
     xset -display :99 q >/dev/null
-    openbox --display :99 >/tmp/microos-openbox.log 2>&1 &
+    # DISPLAY is already :99; Openbox has no --display command-line option.
+    openbox --sm-disable >/tmp/microos-openbox.log 2>&1 &
     MICROOS_OPENBOX_PID=$!
-    sleep 0.5
+    # Wait for Openbox's EWMH handshake instead of assuming its PID means
+    # the window manager is ready to accept maximize and focus requests.
+    WM_READY=0
+    for attempt in $(seq 1 40); do
+      if ! kill -0 "$MICROOS_OPENBOX_PID" 2>/dev/null; then
+        cat /tmp/microos-openbox.log >&2 || true
+        exit 1
+      fi
+      if xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "window id"; then
+        WM_READY=1
+        break
+      fi
+      sleep 0.25
+    done
+    if [ "$WM_READY" -ne 1 ]; then
+      echo "Openbox did not publish the EWMH window-manager handshake" >&2
+      cat /tmp/microos-openbox.log >&2 || true
+      exit 1
+    fi
     MICROOS_DISABLE_GPU=1 timeout 45 /usr/local/bin/start-browser.sh about:blank >/tmp/microos-chromium-x11.log 2>&1 &
     MICROOS_BROWSER_PID=$!
     WINDOW_ID=""
@@ -199,7 +218,7 @@ TORRENT
     rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "10\\n" > /root/.microos/image-version
+    printf "11\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
