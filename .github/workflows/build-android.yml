@@ -61,7 +61,8 @@ jobs:
           runtime = pathlib.Path("lib/services/linux_runtime.dart").read_text()
           prebake = pathlib.Path("tool/prebake_rootfs.sh").read_text()
           runtime_match = re.search(r"_rootfsVersion = '(\d+)'", runtime)
-          image_match = re.search(r'printf "(\d+)\\\\n" > /root/.microos/image-version', prebake)
+          version_line = next((line for line in prebake.splitlines() if " > /root/.microos/image-version" in line), "")
+          image_match = re.search(r'printf "(\d+)', version_line)
           if not runtime_match or not image_match or runtime_match.group(1) != image_match.group(1):
               raise SystemExit("Runtime/rootfs image versions do not match")
           print("Runtime/rootfs image version:", runtime_match.group(1))
