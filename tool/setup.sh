@@ -331,7 +331,8 @@ case "$ACTION" in
   *) echo "Unsupported browser action: $ACTION" >&2; exit 2 ;;
 esac
 
-# Find the actual Chromium/Firefox X11 window, not the Flutter WebView window.
+# Select the real Linux browser window. Do not depend on EWMH
+# _NET_ACTIVE_WINDOW: some Xvfb/proot window-manager configurations omit it.
 WINDOW_ID="$(xdotool search --class 'chromium|Chromium|chrome|Chrome|firefox|Firefox|Navigator' 2>/dev/null | tail -n 1 || true)"
 if [ -z "$WINDOW_ID" ]; then
   echo "[microos] no Chromium/Firefox window is available" >&2
@@ -343,7 +344,6 @@ case "$ACTION" in
     exec xdotool windowminimize "$WINDOW_ID"
     ;;
   window-maximize)
-    xdotool windowactivate --sync "$WINDOW_ID"
     xdotool windowstate --add MAXIMIZED_VERT "$WINDOW_ID"
     exec xdotool windowstate --add MAXIMIZED_HORZ "$WINDOW_ID"
     ;;
@@ -351,13 +351,14 @@ case "$ACTION" in
     xdotool windowmap "$WINDOW_ID" 2>/dev/null || true
     xdotool windowstate --remove MAXIMIZED_VERT "$WINDOW_ID" 2>/dev/null || true
     xdotool windowstate --remove MAXIMIZED_HORZ "$WINDOW_ID" 2>/dev/null || true
-    exec xdotool windowactivate --sync "$WINDOW_ID"
+    exec xdotool windowfocus --sync "$WINDOW_ID"
     ;;
   window-close)
     exec xdotool windowclose "$WINDOW_ID"
     ;;
   *)
-    xdotool windowactivate --sync "$WINDOW_ID"
+    xdotool windowraise "$WINDOW_ID" 2>/dev/null || true
+    xdotool windowfocus --sync "$WINDOW_ID"
     exec xdotool key --clearmodifiers "$KEY"
     ;;
 esac
