@@ -110,6 +110,8 @@ class LinuxRuntime extends ChangeNotifier {
         'TERM': 'xterm-256color',
         'LANG': 'en_US.UTF-8',
         'LC_ALL': 'en_US.UTF-8',
+        'PLAYWRIGHT_BROWSERS_PATH': '/opt/ms-playwright',
+        'NODE_PATH': '/usr/local/lib/node_modules',
         'DISPLAY': ':1',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
             '/root/.opencode/bin:/root/.local/bin',
@@ -417,7 +419,6 @@ class LinuxRuntime extends ChangeNotifier {
 
   List<String> _prootArgs(List<String> argv) {
     final shared = Directory('/storage/emulated/0');
-    final downloads = Directory('/storage/emulated/0/Download');
 
     return <String>[
       '--link2symlink',
@@ -430,8 +431,9 @@ class LinuxRuntime extends ChangeNotifier {
       '/proc',
       '-b',
       '/sys',
-      // Android shared storage, so the guest sees the phone's real files.
-      // Binds are only added when the path exists: a missing bind aborts proot.
+      // Android shared storage is the live backing store for guest Downloads.
+      // Keep it as a single writable bind; /root/Downloads is a guest symlink
+      // to /mnt/android/Download, avoiding two aliases with different metadata.
       if (shared.existsSync()) ...<String>['-b', '/storage/emulated/0:/mnt/android'],
       '-b',
       '${base.path}/tmp:/tmp',
