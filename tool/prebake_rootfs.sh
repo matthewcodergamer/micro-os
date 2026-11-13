@@ -76,6 +76,20 @@ echo "[microos] qBittorrent-nox started on 127.0.0.1:8080"
 TORRENT
     chmod 755 /root/.microos/start-torrent.sh
 
+    echo "==> Installing native ARM64 Chromium from the Xtradeb .deb PPA (no Snap)"
+    apt-get update -y
+    apt-get install -y --no-install-recommends software-properties-common ca-certificates
+    add-apt-repository -y ppa:xtradeb/apps
+    apt-get update -y
+    apt-get install -y --no-install-recommends chromium libgbm1 libx11-xcb1 libnss3 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libxkbcommon0 libwayland-client0 libegl1 libgl1
+    CHROMIUM_BIN="$(command -v chromium)"
+    CHROMIUM_REAL="$(readlink -f "$CHROMIUM_BIN")"
+    file "$CHROMIUM_REAL" | grep -Eqi "ARM aarch64|ARM64"
+    if ldd "$CHROMIUM_REAL" 2>&1 | tee /tmp/chromium-ldd.txt | grep -q "not found"; then cat /tmp/chromium-ldd.txt >&2; exit 1; fi
+    "$CHROMIUM_BIN" --version
+    runuser -u microos-browser -- env HOME=/home/microos-browser timeout 90 "$CHROMIUM_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --dump-dom "data:text/html,<title>MicroOS Chromium smoke test</title><h1>Chromium is ready</h1>" > /tmp/microos-chromium-smoke.html
+    grep -q "Chromium is ready" /tmp/microos-chromium-smoke.html
+    echo "==> Chromium ARM64 startup and DOM rendering test passed"
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
     apt-get install -y --no-install-recommends \
@@ -128,10 +142,10 @@ TORRENT
     install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME"
     rm -f /tmp/microos-firefox-smoke.png /tmp/firefox-ldd.txt
 
-    rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
+    rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "5\\n" > /root/.microos/image-version
+    printf "6\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
@@ -181,6 +195,9 @@ require_archive_path() {
 # Keep this list in sync with the APK workflow's transfer validation.
 require_archive_path 'root/\.microos/ready'
 require_archive_path 'root/\.microos/image-version'
+require_archive_path 'usr/bin/chromium'
+require_archive_path 'usr/local/bin/start-browser.sh'
+require_archive_path 'root/.microos/start-desktop.sh'
 require_archive_path 'opt/firefox/firefox'
 require_archive_path 'opt/firefox/firefox-bin'
 require_archive_path 'usr/local/bin/microos-browse'
