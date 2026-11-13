@@ -111,7 +111,7 @@ class LinuxRuntime extends ChangeNotifier {
         'LANG': 'en_US.UTF-8',
         'LC_ALL': 'en_US.UTF-8',
         'PLAYWRIGHT_BROWSERS_PATH': '/opt/ms-playwright',
-        'NODE_PATH': '/usr/local/lib/node_modules',
+        'NODE_PATH': '/opt/node-global',
         'DISPLAY': ':1',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
             '/root/.opencode/bin:/root/.local/bin',
