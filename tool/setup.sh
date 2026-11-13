@@ -117,7 +117,7 @@ command -v npm >/dev/null && npm config set fund false --global 2>/dev/null
 # -----------------------------------------------------------------------------
 stage 76 "Installing X11 and VNC"
 apt-get install "${APT_OPTS[@]}" \
-  xvfb openbox xterm x11-xserver-utils x11vnc novnc websockify xauth dbus-x11 \
+  xvfb openbox xterm x11-xserver-utils x11vnc novnc websockify xauth dbus-x11 xdotool \
   libgl1-mesa-dri mesa-utils \
   fonts-dejavu-core fonts-liberation \
   || warn "some X11 packages failed to install"
@@ -172,6 +172,9 @@ BROWSER_HOME=/home/microos-browser
 CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || true)"
 if [ -z "$CHROMIUM_BIN" ]; then echo "[microos] Chromium .deb is not installed" >&2; exit 127; fi
 install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.config/chromium" "$BROWSER_HOME/.cache"
+# Ensure the shared X11 session has only one browser engine at a time.
+pkill -u microos-browser -f '[f]irefox' 2>/dev/null || true
+sleep 0.4
 exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
   --no-sandbox \
   --disable-gpu-sandbox \
@@ -196,11 +199,12 @@ if [ -z "$FIREFOX_BIN" ]; then
 fi
 install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.mozilla"
 # Only one engine should own the remote desktop at a time.
-pkill -u microos-browser -f 'chromium|chrome' 2>/dev/null || true
+pkill -u microos-browser -f '[c]hromium|[c]hrome' 2>/dev/null || true
 sleep 0.4
+# Keep Firefox's normal profile routing so later URL launches reuse this session.
 exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" \
-  MOZ_ENABLE_WAYLAND=0 "$FIREFOX_BIN" --no-remote --new-instance \
-  --profile "$BROWSER_HOME/.mozilla/microos" "$@"
+  MOZ_ENABLE_WAYLAND=0 MOZ_DISABLE_CONTENT_SANDBOX=1 MOZ_DISABLE_GMP_SANDBOX=1 \
+  "$FIREFOX_BIN" --profile "$BROWSER_HOME/.mozilla/microos" "$@"
 BROWSER
 chmod 755 /usr/local/bin/start-firefox.sh
 
@@ -211,6 +215,22 @@ pkill -u microos-browser -f 'firefox' 2>/dev/null || true
 exec /usr/local/bin/start-browser.sh "$@"
 BROWSER
 chmod 755 /usr/local/bin/microos-browse
+
+cat > /usr/local/bin/microos-browser-control <<'BROWSER'
+#!/usr/bin/env bash
+set -euo pipefail
+export DISPLAY="${DISPLAY:-:1}"
+case "${1:-}" in
+  back)     KEY='alt+Left' ;;
+  forward)  KEY='alt+Right' ;;
+  reload)   KEY='ctrl+r' ;;
+  new-tab)  KEY='ctrl+t' ;;
+  home)     KEY='alt+Home' ;;
+  *) echo "Usage: microos-browser-control {back|forward|reload|new-tab|home}" >&2; exit 2 ;;
+esac
+exec xdotool key --clearmodifiers "$KEY"
+BROWSER
+chmod 755 /usr/local/bin/microos-browser-control
 # 6. ZRAM
 #    ZRAM is a kernel feature owned by Android. A proot guest shares the host
 #    kernel and cannot create or re-configure swap devices (swapon returns
@@ -464,7 +484,7 @@ if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client 
 websockify --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
 WEBSOCKIFY_PID=$!
 if ! wait_for_port 6080 80 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then echo "[microos] ERROR: websockify failed to open port 6080" >&2; cat "$LOG/websockify.log" >&2 || true; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
-if ! pgrep -u microos-browser -f chromium >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window about:home >"$LOG/chromium.log" 2>&1 & fi
+if ! pgrep -u microos-browser -f 'chromium|firefox' >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window about:home >"$LOG/chromium.log" 2>&1 & fi
 echo "[microos] display :1 ready (Xvfb 1280x720, Openbox, VNC 5900, noVNC 6080)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
 echo "[microos] ERROR: X11/VNC/noVNC process exited; inspect $LOG/*.log" >&2
