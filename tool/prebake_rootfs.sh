@@ -104,9 +104,9 @@ TORRENT
     MICROOS_OPENBOX_PID=""
     MICROOS_BROWSER_PID=""
     cleanup_x11_smoke() {
-      [ -z "$MICROOS_BROWSER_PID" ] || kill "$MICROOS_BROWSER_PID" 2>/dev/null || true
-      [ -z "$MICROOS_OPENBOX_PID" ] || kill "$MICROOS_OPENBOX_PID" 2>/dev/null || true
-      [ -z "$MICROOS_XVFB_PID" ] || kill "$MICROOS_XVFB_PID" 2>/dev/null || true
+      [ -z "${MICROOS_BROWSER_PID:-}" ] || kill "$MICROOS_BROWSER_PID" 2>/dev/null || true
+      [ -z "${MICROOS_OPENBOX_PID:-}" ] || kill "$MICROOS_OPENBOX_PID" 2>/dev/null || true
+      [ -z "${MICROOS_XVFB_PID:-}" ] || kill "$MICROOS_XVFB_PID" 2>/dev/null || true
       pkill -u microos-browser -f '[c]hromium' 2>/dev/null || true
     }
     trap cleanup_x11_smoke EXIT
