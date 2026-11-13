@@ -23,6 +23,7 @@ enum RuntimeStatus { checking, missing, installing, ready, failed }
 /// remote host.
 class LinuxRuntime extends ChangeNotifier {
   static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.zst';
+  static const String _rootfsSizeAsset = 'assets/rootfs/rootfs.tar.size';
   static const int _rootfsChunkBytes = 8 * 1024 * 1024;
   static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
@@ -286,11 +287,13 @@ class LinuxRuntime extends ChangeNotifier {
       });
     }
 
-    final archiveBytes = await archive.length();
+    final totalExtractBytes = int.parse(
+      (await rootBundle.loadString(_rootfsSizeAsset)).trim(),
+    );
     await _extractZstdWithSystemTar(
       archive.path,
       target.path,
-      totalBytes: archiveBytes,
+      totalBytes: totalExtractBytes,
       onProgress: (extractedBytes) {
         final fraction = archiveBytes == 0
             ? 0.0
@@ -332,6 +335,7 @@ class LinuxRuntime extends ChangeNotifier {
       maxDecompressedMessageSize: 128 * 1024 * 1024,
     );
     RandomAccessFile? input;
+    var extractedBytes = 0;
 
     try {
       input = await File(archivePath).open();
@@ -341,11 +345,13 @@ class LinuxRuntime extends ChangeNotifier {
         if (count == 0) break;
 
         final decoded = decoder.feed(Uint8List.sublistView(buffer, 0, count));
-        onProgress(await input.position());
         if (decoded.isNotEmpty) {
           tar.stdin.add(decoded);
-          // Flush each chunk to apply back-pressure to the decoder.
+          // Flush each chunk to apply back-pressure to the decoder. Progress
+          // counts uncompressed tar bytes actually handed to the extractor.
           await tar.stdin.flush();
+          extractedBytes += decoded.length;
+          onProgress(extractedBytes.clamp(0, totalBytes));
         }
       }
 
