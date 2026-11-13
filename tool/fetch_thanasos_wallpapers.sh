@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Pin the source revision so builds remain reproducible if upstream main moves.
-readonly source_revision="5a430db1abf4c4545c88c717fbbaa1d789a0ae"
+readonly source_revision="5a68c89bff531101c9dec603e0486fd39380333d"
 readonly source_base="https://raw.githubusercontent.com/Thanas-R/Thanas-OS/${source_revision}/src/assets"
 readonly destination="assets/wallpapers"
 
