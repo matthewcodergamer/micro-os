@@ -8,10 +8,13 @@ import '../state/desktop_state.dart';
 
 /// macOS menu bar: active app on the left, live system readouts on the right.
 class StatusBar extends StatelessWidget {
-  const StatusBar({super.key, required this.desktop, required this.stats});
+  const StatusBar({super.key, required this.desktop, required this.stats, required this.compact, required this.onSpotlight, required this.onControlCenter});
 
   final DesktopState desktop;
   final SystemStats stats;
+  final bool compact;
+  final VoidCallback onSpotlight;
+  final VoidCallback onControlCenter;
 
   @override
   Widget build(BuildContext context) {
@@ -42,13 +45,14 @@ class StatusBar extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  _Stat(
-                    icon: Icons.memory,
-                    label: stats.ramTotalMb == 0
-                        ? '--'
-                        : '${stats.ramUsedMb}/${stats.ramTotalMb} MB',
-                  ),
-                  if (stats.swapTotalMb > 0)
+                  if (!compact)
+                    _Stat(
+                      icon: Icons.memory,
+                      label: stats.ramTotalMb == 0
+                          ? '--'
+                          : '${stats.ramUsedMb}/${stats.ramTotalMb} MB',
+                    ),
+                  if (!compact && stats.swapTotalMb > 0)
                     _Stat(
                       icon: Icons.compress,
                       label: 'zram ${stats.swapUsedMb} MB',
@@ -87,6 +91,22 @@ class StatusBar extends StatelessWidget {
                         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
                       ),
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Spotlight',
+                    onPressed: onSpotlight,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                    icon: const Icon(Icons.search_rounded, color: MicroColors.text, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: 'Control Center',
+                    onPressed: onControlCenter,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                    icon: const Icon(Icons.tune_rounded, color: MicroColors.text, size: 17),
                   ),
                   const SizedBox(width: 4),
                   Text(
