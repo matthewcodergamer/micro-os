@@ -80,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Spacer(flex: shortScreen ? 1 : 2),
                 Text(
                   lockTime(now),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: clockSize,
                     fontWeight: FontWeight.w200,
