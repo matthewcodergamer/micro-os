@@ -125,7 +125,7 @@ TORRENT
     # the window manager is ready to accept maximize and focus requests.
     WM_READY=0
     for attempt in $(seq 1 40); do
-      if ! kill -0 "$MICROOS_OPENBOX_PID" 2>/dev/null; then
+      if [ -z "${MICROOS_OPENBOX_PID:-}" ] || ! kill -0 "$MICROOS_OPENBOX_PID" 2>/dev/null; then
         cat /tmp/microos-openbox.log >&2 || true
         exit 1
       fi
@@ -146,7 +146,7 @@ TORRENT
     for attempt in $(seq 1 100); do
       WINDOW_ID="$(xdotool search --onlyvisible --class "chromium|Chromium" 2>/dev/null | tail -n 1 || true)"
       if [ -n "$WINDOW_ID" ]; then break; fi
-      if ! kill -0 "$MICROOS_BROWSER_PID" 2>/dev/null; then break; fi
+      if [ -z "${MICROOS_BROWSER_PID:-}" ] || ! kill -0 "$MICROOS_BROWSER_PID" 2>/dev/null; then break; fi
       sleep 0.25
     done
     if [ -z "$WINDOW_ID" ]; then
@@ -165,7 +165,7 @@ TORRENT
     if [ "${WIDTH:-0}" -lt 1000 ] || [ "${HEIGHT:-0}" -lt 600 ]; then
       echo "Chromium X11 window did not maximize: $GEOMETRY" >&2
       cat /tmp/microos-chromium-x11.log >&2 || true
-      kill -9 "$MICROOS_BROWSER_PID" "$MICROOS_OPENBOX_PID" "$MICROOS_XVFB_PID" 2>/dev/null || true
+      kill -9 "${MICROOS_BROWSER_PID:-}" "${MICROOS_OPENBOX_PID:-}" "${MICROOS_XVFB_PID:-}" 2>/dev/null || true
       exit 1
     fi
     echo "==> Native Chromium window verified: ${WIDTH}x${HEIGHT}"
