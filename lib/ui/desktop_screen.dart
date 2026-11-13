@@ -12,7 +12,6 @@ import 'apps/terminal_app.dart';
 import 'control_center.dart';
 import 'dock.dart';
 import 'login_screen.dart';
-import 'mac_icons.dart';
 import 'spotlight.dart';
 import 'install_screen.dart';
 import 'status_bar.dart';
