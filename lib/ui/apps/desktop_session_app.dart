@@ -218,7 +218,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   void _setTrackpadSpeed(double speed) {
     setState(() => _trackpadSpeed = speed);
     _controller?.runJavaScript(
-      'window.__microOsSetTrackpadSpeed?.($speed);',
+      'window.__microOsTrackpadSpeed=$speed;window.__microOsSetTrackpadSpeed?.($speed);',
     );
   }
 
@@ -241,7 +241,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           if (window.__microOsTouchBridgeV2Installed) return;
           window.__microOsTouchBridgeV2Installed = true;
           target.style.touchAction = 'none';
-          let trackpad = true, mode = 'idle', sensitivity = 1.35;
+          let trackpad = true, mode = 'idle', sensitivity = Number(window.__microOsTrackpadSpeed)||1.35;
           let startX=0,startY=0,lastX=0,lastY=0,cursorX=0,cursorY=0;
           let timer=null,moved=false;
           const cursor=document.createElement('div');
@@ -459,47 +459,41 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                     ),
                     color: _trackpadMode ? MicroColors.accent : MicroColors.subtle,
                   ),
-                  IconButton(
-                    tooltip: 'Right-click at cursor',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _rightClick,
-                    icon: const Icon(Icons.mouse_outlined, size: 16),
-                    color: MicroColors.subtle,
-                  ),
-                  PopupMenuButton<double>(
-                    tooltip: 'Trackpad speed',
-                    initialValue: _trackpadSpeed,
-                    onSelected: _setTrackpadSpeed,
-                    icon: const Icon(Icons.speed, size: 16, color: MicroColors.subtle),
+                  PopupMenuButton<String>(
+                    tooltip: 'More desktop controls',
+                    icon: const Icon(Icons.more_vert, size: 18, color: MicroColors.subtle),
                     color: const Color(0xFF202735),
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 0.9, child: Text('Slow cursor')),
-                      PopupMenuItem(value: 1.35, child: Text('Normal cursor')),
-                      PopupMenuItem(value: 1.8, child: Text('Fast cursor')),
+                    onSelected: (action) {
+                      switch (action) {
+                        case 'right':
+                          _rightClick();
+                        case 'keyboard':
+                          _showRemoteKeyboard();
+                        case 'slow':
+                          _setTrackpadSpeed(0.9);
+                        case 'normal':
+                          _setTrackpadSpeed(1.35);
+                        case 'fast':
+                          _setTrackpadSpeed(1.8);
+                        case 'reconnect':
+                          _reload();
+                        case 'restart':
+                          _boot();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(value: 'right', child: Text('Right-click')),
+                      const PopupMenuItem(value: 'keyboard', child: Text('Show Linux keyboard')),
+                      const PopupMenuDivider(),
+                      PopupMenuItem(value: 'slow', child: Text('Cursor speed: slow', textAlign: TextAlign.start)),
+                      PopupMenuItem(value: 'normal', child: Text('Cursor speed: normal')),
+                      PopupMenuItem(value: 'fast', child: Text('Cursor speed: fast')),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(value: 'reconnect', child: Text('Reconnect desktop')),
+                      const PopupMenuItem(value: 'restart', child: Text('Restart desktop')),
                     ],
                   ),
-                  IconButton(
-                    tooltip: 'Show Linux keyboard',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _showRemoteKeyboard,
-                    icon: const Icon(Icons.keyboard_alt_outlined, size: 16),
-                    color: MicroColors.subtle,
-                  ),
-                  IconButton(
-                    tooltip: 'Reconnect desktop',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _reload,
-                    icon: const Icon(Icons.refresh, size: 16),
-                    color: MicroColors.subtle,
-                  ),
                 ],
-                IconButton(
-                  tooltip: 'Restart desktop session',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _boot,
-                  icon: const Icon(Icons.restart_alt, size: 16),
-                  color: MicroColors.subtle,
-                ),
               ],
             ),
           ),
