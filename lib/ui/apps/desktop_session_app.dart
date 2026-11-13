@@ -467,18 +467,25 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                       switch (action) {
                         case 'right':
                           _rightClick();
+                          break;
                         case 'keyboard':
                           _showRemoteKeyboard();
+                          break;
                         case 'slow':
                           _setTrackpadSpeed(0.9);
+                          break;
                         case 'normal':
                           _setTrackpadSpeed(1.35);
+                          break;
                         case 'fast':
                           _setTrackpadSpeed(1.8);
+                          break;
                         case 'reconnect':
                           _reload();
+                          break;
                         case 'restart':
                           _boot();
+                          break;
                       }
                     },
                     itemBuilder: (context) => [
