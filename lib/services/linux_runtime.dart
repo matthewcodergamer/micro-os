@@ -10,6 +10,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:zstd_dart/zstd_dart.dart';
 
+import 'background_session.dart';
+
 enum RuntimeStatus { checking, missing, installing, ready, failed }
 
 /// Owns the Linux guest: unpacks the bundled, pre-provisioned rootfs and
@@ -46,6 +48,9 @@ class LinuxRuntime extends ChangeNotifier {
 
   final List<String> logLines = <String>[];
   final List<Pty> _background = <Pty>[];
+  final Set<Pty> _activePtys = <Pty>{};
+  Future<void>? _backgroundServiceStart;
+  bool _backgroundServiceActive = false;
 
   Directory? _base;
   bool _displayRequested = false;
@@ -57,6 +62,7 @@ class LinuxRuntime extends ChangeNotifier {
 
   bool get isReady => status == RuntimeStatus.ready;
   bool get isBusy => status == RuntimeStatus.installing;
+  bool get hasActiveSession => _activePtys.isNotEmpty;
   bool get canContinueManually =>
       _provisioningFinished &&
       File(p.join(rootfsPath, 'etc/os-release')).existsSync() &&
@@ -419,24 +425,78 @@ class LinuxRuntime extends ChangeNotifier {
     ];
   }
 
+  Future<void> _ensureBackgroundSession() {
+    if (!Platform.isAndroid || _backgroundServiceActive) {
+      return Future<void>.value();
+    }
+    return _backgroundServiceStart ??= BackgroundSession.start().then((started) {
+      _backgroundServiceActive = started;
+      if (!started) {
+        _appendLog('[microos] Android foreground service did not start; background protection is unavailable');
+      }
+    }).whenComplete(() {
+      _backgroundServiceStart = null;
+    });
+  }
+
+  void _trackPty(Pty pty) {
+    _activePtys.add(pty);
+    unawaited(
+      pty.exitCode.then<void>((code) {
+        _activePtys.remove(pty);
+        _background.remove(pty);
+        _appendLog('[microos] Linux process exited with code $code');
+      }).catchError((Object error) {
+        _activePtys.remove(pty);
+        _background.remove(pty);
+        _appendLog('[microos] Linux process monitor error: $error');
+      }),
+    );
+  }
+
   /// Starts an interactive shell (or [argv]) inside the guest.
   Pty startShell({List<String>? argv}) {
+    unawaited(_ensureBackgroundSession());
     final pty = Pty.start(
       prootPath,
       arguments: _prootArgs(argv ?? <String>['/bin/bash', '-l']),
       environment: _prootEnv,
     );
+    _trackPty(pty);
     return pty;
+  }
+
+  /// Stops every PTY owned by this runtime and removes the foreground-service
+  /// notification. This is an explicit user-requested shutdown, not app pause.
+  Future<void> stopSession() async {
+    final pendingStart = _backgroundServiceStart;
+    if (pendingStart != null) await pendingStart;
+    for (final pty in _activePtys.toList()) {
+      try {
+        pty.kill();
+      } catch (_) {
+        // The process may already have exited.
+      }
+    }
+    _activePtys.clear();
+    _background.clear();
+    _displayRequested = false;
+    _torrentStartRequested = false;
+    await BackgroundSession.stop();
+    _backgroundServiceActive = false;
+    _appendLog('[microos] Linux session stopped by user');
   }
 
   /// Fire-and-forget process inside the guest (window manager, browser...).
   Pty runDetached(List<String> argv, {Map<String, String> extraEnv = const {}}) {
+    unawaited(_ensureBackgroundSession());
     final pty = Pty.start(
       prootPath,
       arguments: _prootArgs(argv),
       environment: <String, String>{..._prootEnv, ...extraEnv},
     );
     _background.add(pty);
+    _trackPty(pty);
     pty.output.listen(
       (data) => _appendLog(utf8.decode(data, allowMalformed: true)),
       onDone: () => _background.remove(pty),
@@ -465,6 +525,7 @@ class LinuxRuntime extends ChangeNotifier {
   /// not sufficient: noVNC is unusable unless the RFB server on 5900 is alive.
   Future<bool> ensureDisplay({bool restart = false}) async {
     if (!isReady) return false;
+    await _ensureBackgroundSession();
 
     void start() {
       _displayRequested = true;
@@ -629,13 +690,16 @@ class LinuxRuntime extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    for (final pty in _background) {
+    for (final pty in _activePtys.toList()) {
       try {
         pty.kill();
       } catch (_) {
         // Already gone.
       }
     }
+    _activePtys.clear();
+    _background.clear();
+    unawaited(BackgroundSession.stop());
     super.dispose();
   }
 }

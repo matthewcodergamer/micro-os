@@ -398,6 +398,32 @@ class _LinuxPage extends StatelessWidget {
     );
   }
 
+  Future<void> _stopSession(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Stop Linux session?'),
+        content: const Text('This will terminate active Linux terminals, desktop services and browser processes.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Stop session'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await runtime.stopSession();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Linux session stopped.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -429,6 +455,11 @@ class _LinuxPage extends StatelessWidget {
         OutlinedButton(
           onPressed: !runtime.isReady || runtime.isBusy ? null : () => _repair(context),
           child: const Text('Repair Linux packages'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: runtime.hasActiveSession ? () => _stopSession(context) : null,
+          child: const Text('Stop Linux session'),
         ),
       ],
     );

@@ -29,6 +29,8 @@ mkdir -p "$(dirname "$MAIN_ACTIVITY")"
 cat > "$MAIN_ACTIVITY" <<'KOTLIN'
 package com.matthewcodergamer.micro_os
 
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -79,12 +81,116 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "microos/session")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        try {
+                            val intent = Intent(this, MicroOSSessionService::class.java)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(intent)
+                            } else {
+                                startService(intent)
+                            }
+                            result.success(true)
+                        } catch (error: Exception) {
+                            result.error("SESSION_START_FAILED", error.message, null)
+                        }
+                    }
+                    "stop" -> {
+                        result.success(stopService(Intent(this, MicroOSSessionService::class.java)))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     override fun onDestroy() {
         assetCopyExecutor.shutdown()
         super.onDestroy()
     }
+}
+KOTLIN
+
+SESSION_SERVICE="android/app/src/main/kotlin/com/matthewcodergamer/micro_os/MicroOSSessionService.kt"
+cat > "$SESSION_SERVICE" <<'KOTLIN'
+package com.matthewcodergamer.micro_os
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Intent
+import android.os.Build
+import android.os.IBinder
+
+class MicroOSSessionService : Service() {
+    companion object {
+        private const val CHANNEL_ID = "microos_linux_session"
+        private const val NOTIFICATION_ID = 4201
+        private const val ACTION_STOP = "com.matthewcodergamer.micro_os.STOP_BACKGROUND_PROTECTION"
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "MicroOS Linux session",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+
+        startForeground(NOTIFICATION_ID, buildNotification())
+        return START_STICKY
+    }
+
+    private fun buildNotification(): Notification {
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val openPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val stopIntent = Intent(this, MicroOSSessionService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("MicroOS Linux session")
+            .setContentText("Your Linux session is active in the background")
+            .setContentIntent(openPendingIntent)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .addAction(
+                Notification.Action.Builder(null, "Stop protection", stopPendingIntent).build()
+            )
+            .build()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
 }
 KOTLIN
 
@@ -111,6 +217,19 @@ permissions = """    <uses-permission android:name="android.permission.INTERNET"
 """
 if "MANAGE_EXTERNAL_STORAGE" not in xml:
     xml = re.sub(r"(<manifest[^>]*>)", r"\1\n" + permissions, xml, count=1)
+
+# Keep the native session service in every generated Android project.
+if "MicroOSSessionService" not in xml:
+    xml = xml.replace(
+        "</application>",
+        """        <service
+            android:name=".MicroOSSessionService"
+            android:enabled="true"
+            android:exported="false"
+            android:stopWithTask="false"/>
+    </application>""",
+        1,
+    )
 
 # Android 11+ only exposes installed TTS engines when this service query exists.
 if "android.intent.action.TTS_SERVICE" not in xml:

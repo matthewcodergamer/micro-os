@@ -281,7 +281,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           const finish=e=>{
             if(e && e.touches && e.touches.length>0)return;
             clear();
-            if(mode==='pending'&&!moved)clickAt(trackpad?cursorX:startX,trackpad?cursorY:startY,0);
+            if((!e || e.type!=='touchcancel')&&mode==='pending'&&!moved){
+              clickAt(trackpad?cursorX:startX,trackpad?cursorY:startY,0);
+            }
             if(mode==='move'&&!trackpad)mouse('mouseup',lastX,lastY,0,0);
             mode='idle';
           };

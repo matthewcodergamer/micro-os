@@ -47,6 +47,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
     final terminal = Terminal(maxLines: 1000);
     final controller = TerminalController();
     Pty? pty;
+    late final _Tab tab;
 
     if (widget.runtime.isReady) {
       try {
@@ -56,12 +57,12 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
             .map<List<int>>((chunk) => chunk)
             .transform(utf8.decoder)
             .listen((text) => terminal.write(text));
-        terminal.onOutput = (data) => pty?.write(utf8.encode(data));
+        terminal.onOutput = (data) => _sendTerminalInput(tab, data);
         terminal.onResize = (w, h, pw, ph) => pty?.resize(h, w);
       } catch (_) {}
     }
 
-    final tab = _Tab(
+    tab = _Tab(
       terminal: terminal,
       controller: controller,
       pty: pty,
@@ -156,11 +157,29 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
   }
 
 
-  // Clipboard text is kept in a bounded per-tab queue and delivered in small
-  // Unicode-safe pieces. Pty.write is synchronous in flutter_pty, so pacing
-  // gives the PTY/event loop time to drain between writes instead of flooding it.
+  // Clipboard and platform keyboard pastes share the same bounded input path.
+  // flutter_pty exposes synchronous writes rather than a drain acknowledgement,
+  // so short paced writes are used as conservative flow control.
+  static const int _pasteChunkSize = 500;
   static const int _maxQueuedPasteCodeUnits = 2 * 1024 * 1024;
   static const Duration _pasteChunkDelay = Duration(milliseconds: 4);
+
+  void _sendTerminalInput(_Tab tab, String text) {
+    if (text.isEmpty || tab.disposed || tab.pty == null) return;
+    if (text.length > _pasteChunkSize) {
+      unawaited(_enqueuePaste(tab, text));
+      return;
+    }
+    try {
+      tab.pty!.write(utf8.encode(text));
+    } catch (error) {
+      if (mounted && !tab.disposed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Terminal input failed: $error')),
+        );
+      }
+    }
+  }
 
   Future<void> _enqueuePaste(_Tab tab, String text) async {
     if (tab.disposed || tab.pty == null) return;
@@ -176,9 +195,12 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
     tab.pendingPasteCodeUnits += text.length;
     final paste = tab.pasteQueue.then((_) async {
       try {
-        for (final chunk in splitTerminalPaste(text)) {
+        for (final chunk in splitTerminalPaste(
+          text,
+          maxCodeUnits: _pasteChunkSize,
+        )) {
           if (!mounted || tab.disposed || tab.pty == null) break;
-          tab.terminal.textInput(chunk);
+          tab.pty!.write(utf8.encode(chunk));
           await Future<void>.delayed(_pasteChunkDelay);
         }
       } catch (error) {
