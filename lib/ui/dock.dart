@@ -85,6 +85,7 @@ class Dock extends StatelessWidget {
     AppId.desktop => _DockItem(app, Icons.desktop_windows, const Color(0xFF1F6FEB)),
     AppId.browser => _DockItem(app, Icons.travel_explore, const Color(0xFF7C4DFF)),
     AppId.files => _DockItem(app, Icons.folder_rounded, const Color(0xFFF0A32B)),
+    AppId.torrents => _DockItem(app, Icons.downloading_rounded, const Color(0xFF36B7A5)),
     AppId.aiHub => _DockItem(app, Icons.auto_awesome, const Color(0xFF00A67E)),
     AppId.settings => _DockItem(app, Icons.settings, const Color(0xFF5A6472)),
   };
@@ -96,6 +97,7 @@ class Dock extends StatelessWidget {
       _DockItem(AppId.desktop, Icons.desktop_windows, const Color(0xFF1F6FEB)),
       _DockItem(AppId.browser, Icons.travel_explore, const Color(0xFF7C4DFF)),
       _DockItem(AppId.files, Icons.folder_rounded, const Color(0xFFF0A32B)),
+      _DockItem(AppId.torrents, Icons.downloading_rounded, const Color(0xFF36B7A5)),
       _DockItem(AppId.aiHub, Icons.auto_awesome, const Color(0xFF00A67E)),
       _DockItem(AppId.settings, Icons.settings, const Color(0xFF5A6472)),
     ];
@@ -177,7 +179,7 @@ class _DockButtonState extends State<_DockButton> {
 
   @override
   Widget build(BuildContext context) {
-    final size = widget.compact ? 44.0 : 52.0;
+    final size = widget.compact ? 38.0 : 52.0;
     final enlarged = _hovered || _pressed;
 
     return Semantics(
@@ -206,7 +208,7 @@ class _DockButtonState extends State<_DockButton> {
           onHighlightChanged: (value) => setState(() => _pressed = value),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: widget.compact ? 3 : 5),
+            padding: EdgeInsets.symmetric(horizontal: widget.compact ? 1 : 5),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -282,9 +284,9 @@ class _LaunchpadButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 5),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 1 : 5),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: compact ? 44 : 52, height: compact ? 44 : 52,
+          Container(width: compact ? 38 : 52, height: compact ? 38 : 52,
             decoration: BoxDecoration(
               gradient: const LinearGradient(colors: [Color(0xFF6C7CFF), Color(0xFF9B55E8)]),
               borderRadius: BorderRadius.circular(14)),
