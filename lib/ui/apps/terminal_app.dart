@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -51,7 +52,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
         pty.output.cast<List<int>>().listen((data) {
           terminal.write(String.fromCharCodes(data));
         });
-        terminal.onOutput = (data) => pty?.write(const SystemEncoding().encode(data));
+        terminal.onOutput = (data) => pty?.write(utf8.encode(data));
         terminal.onResize = (w, h, pw, ph) => pty?.resize(h, w);
       } catch (_) {}
     }
