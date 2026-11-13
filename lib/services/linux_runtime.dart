@@ -26,7 +26,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '4';
+  static const String _rootfsVersion = '5';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -49,6 +49,7 @@ class LinuxRuntime extends ChangeNotifier {
 
   Directory? _base;
   bool _displayRequested = false;
+  bool _torrentStartRequested = false;
   bool _provisioningFinished = false;
   bool _disposed = false;
   String? _githubToken;
@@ -137,7 +138,10 @@ class LinuxRuntime extends ChangeNotifier {
           ? 'Pre-baked Linux ready'
           : 'Pre-baked workstation needs unpacking';
       progress = status == RuntimeStatus.ready ? 1 : 0;
-      if (status == RuntimeStatus.ready) await _refreshGuestDns();
+      if (status == RuntimeStatus.ready) {
+        await _refreshGuestDns();
+        await ensureTorrentService();
+      }
     } catch (e) {
       status = RuntimeStatus.failed;
       error = '$e';
@@ -195,6 +199,7 @@ class LinuxRuntime extends ChangeNotifier {
         status = RuntimeStatus.ready;
         progress = 1;
         stage = 'Pre-baked Linux ready';
+        await ensureTorrentService();
       } else {
         // Compatibility path for an older development image without a
         // recognised pre-bake marker.
@@ -436,6 +441,23 @@ class LinuxRuntime extends ChangeNotifier {
       onDone: () => _background.remove(pty),
     );
     return pty;
+  }
+
+  /// Starts qBittorrent-nox. The WebUI is bound to loopback only.
+  Future<bool> ensureTorrentService() async {
+    if (!isReady) return false;
+    if (await _isPortOpen(8080)) return true;
+    if (!_torrentStartRequested) {
+      _torrentStartRequested = true;
+      runDetached(<String>['/bin/bash', '-lc', '/root/.microos/start-torrent.sh']);
+    }
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (DateTime.now().isBefore(deadline)) {
+      if (await _isPortOpen(8080)) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    _appendLog('[microos] qBittorrent WebUI did not open on 127.0.0.1:8080; inspect /tmp/microos-qbittorrent.log');
+    return false;
   }
 
   /// Boots the complete X11/VNC/noVNC chain. A listening HTTP bridge is
