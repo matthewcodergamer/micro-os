@@ -3,109 +3,71 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../models/window_state.dart';
 import '../state/desktop_state.dart';
+import 'mac_icons.dart';
 
-/// A draggable, resizable macOS-style window. On phone-sized screens the
-/// window is pinned by [DesktopState] and the chrome stays out of the way.
+/// Window chrome: unified title bar with traffic lights, rounded corners,
+/// soft shadow and edge/corner resize handles (hidden when maximized).
 class WindowFrame extends StatelessWidget {
   const WindowFrame({
     super.key,
     required this.window,
-    required this.screen,
     required this.desktop,
+    required this.screen,
     required this.child,
   });
 
   final ManagedWindow window;
-  final Size screen;
   final DesktopState desktop;
+  final Size screen;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final focused = desktop.focused?.id == window.id;
-    final compact = window.pinned;
+    final maxed = window.maximized;
 
-    return GestureDetector(
-      onTap: () => desktop.focus(window.id),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        decoration: BoxDecoration(
-          color: MicroColors.windowBody,
-          borderRadius: BorderRadius.circular(compact ? 0 : 12),
-          border: Border.all(
-            color: focused ? const Color(0x44FFFFFF) : const Color(0x22FFFFFF),
-          ),
-          boxShadow: focused
-              ? const [
-                  BoxShadow(
-                    color: Color(0x66000000),
-                    blurRadius: 32,
-                    offset: Offset(0, 16),
-                  ),
-                ]
-              : const [
-                  BoxShadow(
-                    color: Color(0x33000000),
-                    blurRadius: 18,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(compact ? 0 : 12),
-          child: Column(
-            children: [
-              _TitleBar(
-                window: window,
-                focused: focused,
-                compact: compact,
-                onDrag: (delta) => desktop.move(window.id, delta, screen),
-                onClose: () => desktop.close(window.id),
-                onMinimize: () => desktop.minimize(window.id),
-                onMaximize: () => desktop.toggleMaximize(window.id, screen),
+    return Positioned(
+      left: window.rect.left,
+      top: window.rect.top,
+      width: window.rect.width,
+      height: window.rect.height,
+      child: IgnorePointer(
+        ignoring: window.minimized,
+        child: Opacity(
+          opacity: window.minimized ? 0 : 1,
+          child: Listener(
+            onPointerDown: (_) => desktop.focus(window.id),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(maxed ? 0 : 12),
+                boxShadow: maxed
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: focused ? 0.45 : 0.28),
+                          blurRadius: focused ? 28 : 18,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
               ),
-              Expanded(
-                child: Stack(
-                  children: [
-                    Positioned.fill(child: child),
-                    if (!compact) ...[
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        child: ResizeHandle(
-                          alignment: Alignment.topLeft,
-                          onDrag: (delta) => desktop.resizeFrom(window.id, delta, screen, fromLeft: true, fromTop: true),
-                        ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(maxed ? 0 : 12),
+                child: Material(
+                  color: MicroColors.windowBody,
+                  child: Column(
+                    children: [
+                      _TitleBar(
+                        window: window,
+                        desktop: desktop,
+                        screen: screen,
+                        focused: focused,
                       ),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: ResizeHandle(
-                          alignment: Alignment.topRight,
-                          onDrag: (delta) => desktop.resizeFrom(window.id, delta, screen, fromLeft: false, fromTop: true),
-                        ),
-                      ),
-                      Positioned(
-                        left: 0,
-                        bottom: 0,
-                        child: ResizeHandle(
-                          alignment: Alignment.bottomLeft,
-                          onDrag: (delta) => desktop.resizeFrom(window.id, delta, screen, fromLeft: true, fromTop: false),
-                        ),
-                      ),
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: ResizeHandle(
-                          alignment: Alignment.bottomRight,
-                          onDrag: (delta) => desktop.resizeFrom(window.id, delta, screen, fromLeft: false, fromTop: false),
-                        ),
-                      ),
+                      Expanded(child: child),
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -116,151 +78,102 @@ class WindowFrame extends StatelessWidget {
 class _TitleBar extends StatelessWidget {
   const _TitleBar({
     required this.window,
+    required this.desktop,
+    required this.screen,
     required this.focused,
-    required this.compact,
-    required this.onDrag,
-    required this.onClose,
-    required this.onMinimize,
-    required this.onMaximize,
   });
 
   final ManagedWindow window;
+  final DesktopState desktop;
+  final Size screen;
   final bool focused;
-  final bool compact;
-  final ValueChanged<Offset> onDrag;
-  final VoidCallback onClose;
-  final VoidCallback onMinimize;
-  final VoidCallback onMaximize;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: compact ? SystemMouseCursors.basic : SystemMouseCursors.move,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanUpdate: compact ? null : (details) => onDrag(details.delta),
-        onDoubleTap: compact ? null : onMaximize,
-        child: Container(
-          height: compact ? 34 : 36,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: const BoxDecoration(
-            color: MicroColors.windowHeader,
-            border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF))),
-          ),
-          child: Row(
-            children: [
-              _TrafficLight(color: MicroColors.red, onTap: onClose, icon: Icons.close),
-              const SizedBox(width: 8),
-              _TrafficLight(
-                color: MicroColors.amber,
-                onTap: onMinimize,
-                icon: Icons.remove,
-              ),
-              const SizedBox(width: 8),
-              _TrafficLight(
-                color: MicroColors.green,
-                onTap: onMaximize,
-                icon: Icons.fullscreen,
-              ),
-              Expanded(
-                child: Text(
-                  window.title,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: focused ? MicroColors.text : MicroColors.subtle,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
+    return GestureDetector(
+      onDoubleTap: () => desktop.toggleMaximize(window.id, screen),
+      onPanUpdate: window.maximized
+          ? null
+          : (d) => desktop.move(window.id, d.delta, screen),
+      child: Container(
+        height: 38,
+        color: MicroColors.windowHeader,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            _TrafficLights(
+              focused: focused,
+              onClose: () => desktop.close(window.id),
+              onMinimize: () => desktop.minimize(window.id),
+              onZoom: () => desktop.toggleMaximize(window.id, screen),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                window.title,
+                style: TextStyle(
+                  color: focused ? MicroColors.text : MicroColors.subtle,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(width: 68),
-            ],
-          ),
+            ),
+            MacAppIcon(app: window.app, size: 18),
+          ],
         ),
       ),
     );
   }
 }
 
-class _TrafficLight extends StatelessWidget {
-  const _TrafficLight({
-    required this.color,
-    required this.onTap,
-    required this.icon,
+class _TrafficLights extends StatelessWidget {
+  const _TrafficLights({
+    required this.focused,
+    required this.onClose,
+    required this.onMinimize,
+    required this.onZoom,
   });
+
+  final bool focused;
+  final VoidCallback onClose;
+  final VoidCallback onMinimize;
+  final VoidCallback onZoom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Light(color: focused ? MicroColors.red : MicroColors.inactiveLight, onTap: onClose),
+        const SizedBox(width: 8),
+        _Light(color: focused ? MicroColors.amber : MicroColors.inactiveLight, onTap: onMinimize),
+        const SizedBox(width: 8),
+        _Light(color: focused ? MicroColors.green : MicroColors.inactiveLight, onTap: onZoom),
+      ],
+    );
+  }
+}
+
+class _Light extends StatelessWidget {
+  const _Light({required this.color, required this.onTap});
 
   final Color color;
   final VoidCallback onTap;
-  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 13,
-        height: 13,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        child: Icon(icon, size: 9, color: const Color(0x66000000)),
-      ),
-    );
-  }
-}
-
-/// Bottom-right resize grip.
-class ResizeHandle extends StatelessWidget {
-  const ResizeHandle({super.key, required this.onDrag, required this.alignment});
-
-  final ValueChanged<Offset> onDrag;
-  final Alignment alignment;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeDownRight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanUpdate: (details) => onDrag(details.delta),
-        child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CustomPaint(painter: _GripPainter(alignment)),
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black.withValues(alpha: 0.15), width: 0.5),
         ),
       ),
     );
   }
-}
-
-class _GripPainter extends CustomPainter {
-  const _GripPainter(this.alignment);
-
-  final Alignment alignment;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0x55FFFFFF)
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.round;
-
-    final right = alignment.x >= 0;
-    final bottom = alignment.y >= 0;
-    final sx = right ? 1.0 : -1.0;
-    final sy = bottom ? 1.0 : -1.0;
-    final cornerX = right ? size.width : 0.0;
-    final cornerY = bottom ? size.height : 0.0;
-    for (var i = 0; i < 3; i++) {
-      final offset = 5.0 + i * 5;
-      canvas.drawLine(
-        Offset(cornerX - sx * offset, cornerY - sy * 4),
-        Offset(cornerX - sx * 4, cornerY - sy * offset),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
