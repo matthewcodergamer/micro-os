@@ -537,6 +537,7 @@ class _LoginPageState extends State<_LoginPage> {
   late final TextEditingController _name;
   final TextEditingController _password = TextEditingController();
   bool _saving = false;
+  bool _obscurePassword = true;
   String? _message;
 
   @override
@@ -558,11 +559,20 @@ class _LoginPageState extends State<_LoginPage> {
   }
 
   Future<void> _savePassword() async {
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
     try {
-      await widget.settings.setLoginPassword(_password.text.isEmpty ? null : _password.text);
+      await widget.settings.setLoginPassword(
+        _password.text.isEmpty ? null : _password.text,
+      );
       _password.clear();
       if (mounted) setState(() => _message = 'Lock screen password updated.');
+    } catch (error) {
+      if (mounted) {
+        setState(() => _message = 'Could not save the password: $error');
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -592,13 +602,53 @@ class _LoginPageState extends State<_LoginPage> {
           child: OutlinedButton(onPressed: _saveName, child: const Text('Save display name')),
         ),
         const SizedBox(height: 20),
+        Row(
+          children: [
+            Icon(
+              widget.settings.hasPassword
+                  ? Icons.lock_rounded
+                  : Icons.lock_open_rounded,
+              size: 17,
+              color: widget.settings.hasPassword
+                  ? MicroColors.green
+                  : MicroColors.subtle,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              widget.settings.hasPassword
+                  ? 'Password lock is enabled'
+                  : 'Password lock is disabled',
+              style: TextStyle(
+                color: widget.settings.hasPassword
+                    ? MicroColors.green
+                    : MicroColors.subtle,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         TextField(
           controller: _password,
-          obscureText: true,
+          obscureText: _obscurePassword,
+          autocorrect: false,
+          enableSuggestions: false,
           textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Lock screen password (optional)',
-            helperText: 'Local shell lock only — does not encrypt data',
+            helperText: 'Locks the MicroOS shell only; it does not encrypt your files or replace Android device security.',
+            suffixIcon: IconButton(
+              tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+              onPressed: () => setState(
+                () => _obscurePassword = !_obscurePassword,
+              ),
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_rounded
+                    : Icons.visibility_off_rounded,
+              ),
+            ),
           ),
           onSubmitted: (_) => _savePassword(),
         ),
