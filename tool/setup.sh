@@ -293,6 +293,12 @@ fi
 if ! grep -q 'browser.shell.checkDefaultBrowser' "$FIREFOX_PREFS" 2>/dev/null; then
   printf '%s\n' 'user_pref("browser.shell.checkDefaultBrowser", false);' >> "$FIREFOX_PREFS"
 fi
+if ! grep -q 'browser.download.dir' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.download.dir", "/mnt/android/Download");' \
+    'user_pref("browser.download.folderList", 2);' \
+    'user_pref("browser.download.useDownloadDir", true);' \
+    'user_pref("browser.download.manager.showWhenStarting", false);' >> "$FIREFOX_PREFS"
+fi
 chown microos-browser:microos-browser "$FIREFOX_PREFS"
 # Only one engine should own the remote desktop at a time.
 pkill -u microos-browser -f '[c]hromium|[c]hrome' 2>/dev/null || true
