@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../models/window_state.dart';
 import '../state/desktop_state.dart';
+import 'mac_icons.dart';
 
 /// The Dock. Icons are intentionally large (touch targets >= 48 dp) because
 /// this is the primary navigation surface on a phone.
@@ -58,12 +59,7 @@ class Dock extends StatelessWidget {
                     onTap: () { Navigator.pop(sheetContext); onOpen(app); },
                     child: Column(mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Container(width: 62, height: 62,
-                          decoration: BoxDecoration(
-                            color: item.color, borderRadius: BorderRadius.circular(19),
-                            boxShadow: const [BoxShadow(color: Colors.black38,
-                              blurRadius: 12, offset: Offset(0, 5))]),
-                          child: Icon(item.icon, color: Colors.white, size: 30)),
+                        MacAppIcon(app: app, size: 62),
                         const SizedBox(height: 8),
                         Text(app.title, maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: MicroColors.text, fontSize: 11)),
