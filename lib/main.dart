@@ -39,6 +39,9 @@ Future<void> main() async {
 
   await ttsServer.start();
   await settings.load();
+  await SystemChrome.setEnabledSystemUIMode(
+    settings.systemBarsVisible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
+  );
   await runtime.init();
   final githubToken = await auth.readToken();
   final githubLogin = await auth.readLogin();
