@@ -351,7 +351,7 @@ class LinuxRuntime extends ChangeNotifier {
           // counts uncompressed tar bytes actually handed to the extractor.
           await tar.stdin.flush();
           extractedBytes += decoded.length;
-          onProgress(extractedBytes.clamp(0, totalBytes));
+          onProgress(extractedBytes.clamp(0, totalBytes).toInt());
         }
       }
 
