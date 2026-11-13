@@ -1,17 +1,25 @@
 import 'dart:ui';
 
 /// Every application that can be hosted in a desktop window.
-enum AppId { terminal, desktop, browser, files, torrents, aiHub, settings }
+enum AppId { terminal, desktop, browser, files, aiHub, settings }
 
 extension AppIdInfo on AppId {
   String get title => switch (this) {
         AppId.terminal => 'Terminal',
-        AppId.desktop => 'Desktop',
+        AppId.desktop => 'Linux Desktop',
         AppId.browser => 'Browser',
-        AppId.files => 'Files',
-        AppId.torrents => 'Torrents',
+        AppId.files => 'Finder',
         AppId.aiHub => 'AI Hub',
-        AppId.settings => 'Settings',
+        AppId.settings => 'System Settings',
+      };
+
+  String get subtitle => switch (this) {
+        AppId.terminal => 'Linux shell',
+        AppId.desktop => 'X11 desktop session',
+        AppId.browser => 'Web browser',
+        AppId.files => 'Android storage',
+        AppId.aiHub => 'OpenCode agent',
+        AppId.settings => 'Preferences',
       };
 
   /// Sensible default window size on a tablet-sized screen.
@@ -19,16 +27,14 @@ extension AppIdInfo on AppId {
         AppId.terminal => const Size(660, 420),
         AppId.desktop => const Size(760, 540),
         AppId.browser => const Size(820, 580),
-        AppId.files => const Size(600, 460),
-        AppId.torrents => const Size(900, 620),
+        AppId.files => const Size(680, 460),
         AppId.aiHub => const Size(680, 440),
-        AppId.settings => const Size(600, 560),
+        AppId.settings => const Size(700, 520),
       };
 }
 
 /// A single managed window. Mutable on purpose: the window manager updates
-/// geometry and stacking order many times per drag, and rebuilding immutable
-/// copies for every pointer move would be wasteful.
+/// geometry and stacking order many times per drag.
 class ManagedWindow {
   ManagedWindow({
     required this.id,
@@ -50,6 +56,6 @@ class ManagedWindow {
   bool maximized = false;
   Rect? restoreRect;
 
-  /// Legacy compatibility flag. New windows remain floating on phones too.
+  /// True when the window is locked to the usable area (phone portrait).
   bool pinned = false;
 }
