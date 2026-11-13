@@ -72,15 +72,13 @@ class ControlCenterOverlay extends StatelessWidget {
                   _Tile(
                     icon: Icons.wifi_rounded,
                     label: 'Wi-Fi',
-                    value: stats.wifiName ?? 'Connected',
+                    value: stats.connection,
                     active: true,
                   ),
                   _Tile(
                     icon: Icons.battery_full_rounded,
                     label: 'Battery',
-                    value: stats.batteryLevel != null
-                        ? '${stats.batteryLevel}%'
-                        : '—',
+                    value: '${stats.batteryLevel}%',
                     active: true,
                   ),
                 ]),
@@ -89,17 +87,13 @@ class ControlCenterOverlay extends StatelessWidget {
                   _Tile(
                     icon: Icons.memory_rounded,
                     label: 'Memory',
-                    value: stats.memoryUsedMb != null
-                        ? '${stats.memoryUsedMb} MB'
-                        : '—',
+                    value: '${stats.ramUsedMb} MB',
                     active: true,
                   ),
                   _Tile(
                     icon: Icons.storage_rounded,
                     label: 'ZRAM',
-                    value: stats.zramUsedMb != null
-                        ? '${stats.zramUsedMb} MB'
-                        : '—',
+                    value: '${stats.swapUsedMb} MB',
                     active: runtime.isReady,
                   ),
                 ]),
