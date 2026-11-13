@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'package:xterm/xterm.dart';
 
@@ -31,6 +33,8 @@ class TerminalTabsApp extends StatefulWidget {
 class _TerminalTabsAppState extends State<TerminalTabsApp> {
   final List<_Tab> _tabs = [];
   int _active = 0;
+  final Set<int> _activePointers = <int>{};
+  Timer? _selectionMenuTimer;
 
   @override
   void initState() {
@@ -78,8 +82,81 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
     });
   }
 
+  void _onTerminalPointerDown(PointerDownEvent event) {
+    _activePointers.add(event.pointer);
+    _selectionMenuTimer?.cancel();
+    if (_activePointers.length != 1) return;
+
+    final position = event.position;
+    _selectionMenuTimer = Timer(const Duration(milliseconds: 700), () {
+      if (!mounted || _tabs.isEmpty) return;
+      final tab = _tabs[_active];
+      if (tab.controller.selection == null) return;
+      _showTerminalSelectionMenu(position, tab);
+    });
+  }
+
+  void _onTerminalPointerUp(PointerEvent event) {
+    _activePointers.remove(event.pointer);
+    _selectionMenuTimer?.cancel();
+  }
+
+  Future<void> _showTerminalSelectionMenu(Offset globalPosition, _Tab tab) async {
+    final selection = tab.controller.selection;
+    if (selection == null || !mounted) return;
+
+    final screen = MediaQuery.sizeOf(context);
+    final action = await showMenu<_TerminalMenuAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        screen.width - globalPosition.dx,
+        screen.height - globalPosition.dy,
+      ),
+      items: [
+        const PopupMenuItem(
+          value: _TerminalMenuAction.copy,
+          child: Row(
+            children: [
+              Icon(Icons.copy_rounded, size: 18),
+              SizedBox(width: 10),
+              Text('Copy'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: _TerminalMenuAction.paste,
+          child: Row(
+            children: [
+              Icon(Icons.content_paste_rounded, size: 18),
+              SizedBox(width: 10),
+              Text('Paste'),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (!mounted || action == null) return;
+    if (action == _TerminalMenuAction.copy) {
+      final selectedText = tab.terminal.buffer.getText(selection);
+      if (selectedText.isNotEmpty) {
+        await Clipboard.setData(ClipboardData(text: selectedText));
+      }
+      tab.controller.clearSelection();
+    } else if (action == _TerminalMenuAction.paste) {
+      final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = clipboard?.text;
+      if (text != null && text.isNotEmpty) {
+        tab.terminal.textInput(text);
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _selectionMenuTimer?.cancel();
     for (final t in _tabs) {
       t.pty?.kill();
     }
@@ -157,15 +234,21 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                 index: _active,
                 children: [
                   for (final tab in _tabs)
-                    TerminalView(
-                      tab.terminal,
-                      controller: tab.controller,
-                      theme: profile.toXterm(),
-                      textStyle: TerminalStyle(
-                        fontSize: widget.settings.terminalFontSize,
-                        fontFamily: 'JetBrains Mono',
+                    Listener(
+                      behavior: HitTestBehavior.translucent,
+                      onPointerDown: _onTerminalPointerDown,
+                      onPointerUp: _onTerminalPointerUp,
+                      onPointerCancel: _onTerminalPointerUp,
+                      child: TerminalView(
+                        tab.terminal,
+                        controller: tab.controller,
+                        theme: profile.toXterm(),
+                        textStyle: TerminalStyle(
+                          fontSize: widget.settings.terminalFontSize,
+                          fontFamily: 'JetBrains Mono',
+                        ),
+                        autofocus: true,
                       ),
-                      autofocus: true,
                     ),
                 ],
               ),
@@ -176,6 +259,8 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
     );
   }
 }
+
+enum _TerminalMenuAction { copy, paste }
 
 class _Tab {
   _Tab({
