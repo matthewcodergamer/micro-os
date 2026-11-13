@@ -55,6 +55,17 @@ jobs:
         run: |
           bash -n tool/prebake_rootfs.sh
           bash -n tool/setup.sh
+          python3 - <<'PY'
+          import pathlib
+          import re
+          runtime = pathlib.Path("lib/services/linux_runtime.dart").read_text()
+          prebake = pathlib.Path("tool/prebake_rootfs.sh").read_text()
+          runtime_match = re.search(r"_rootfsVersion = '(\\d+)'", runtime)
+          image_match = re.search(r'printf "(\\d+)\\\\\\\\n" > /root/.microos/image-version', prebake)
+          if not runtime_match or not image_match or runtime_match.group(1) != image_match.group(1):
+              raise SystemExit("Runtime/rootfs image versions do not match")
+          print("Runtime/rootfs image version:", runtime_match.group(1))
+          PY
           grep -q 'start-browser.sh' tool/setup.sh
           grep -q 'start-firefox.sh' tool/setup.sh
           grep -q 'microos-browser-control' tool/setup.sh
