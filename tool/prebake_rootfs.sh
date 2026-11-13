@@ -51,6 +51,9 @@ docker run --platform linux/arm64 --name "$NAME" \
     python3 -c "import zipfile, json, pathlib"
 
     echo "==> Installing qBittorrent-nox headless torrent engine"
+    # setup.sh removes APT indexes during its cleanup; refresh them before
+    # installing this additional package in the pre-bake stage.
+    apt-get update -y
     apt-get install -y --no-install-recommends qbittorrent-nox
     command -v qbittorrent-nox
     install -d -m 700 /root/.config/qBittorrent /mnt/android/Download
