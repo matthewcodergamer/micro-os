@@ -231,7 +231,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     }
     final path = _path == '/' ? '/${name.trim()}' : '$_path/${name.trim()}';
     try {
-      await _runGuest('mkdir -- "$1"', <String>[path]);
+      await _runGuest(r'mkdir -- "$1"', <String>[path]);
       await _load();
     } catch (error) {
       _notifyActionError(error);
@@ -289,7 +289,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       widget.onOpenTerminal?.call(<String>[
         '/bin/bash',
         '-lc',
-        'cd -- "$1"; exec bash',
+        r'cd -- "$1"; exec bash',
         'microos-terminal',
         path,
       ]);
@@ -305,7 +305,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       }
       final destination = _path == '/' ? '/${name.trim()}' : '$_path/${name.trim()}';
       try {
-        await _runGuest('if [ -e "$2" ] || [ -L "$2" ]; then echo "A file with that name already exists." >&2; exit 1; fi; mv -- "$1" "$2"', <String>[path, destination]);
+        await _runGuest(r'if [ -e "$2" ] || [ -L "$2" ]; then echo "A file with that name already exists." >&2; exit 1; fi; mv -- "$1" "$2"', <String>[path, destination]);
         await _load();
       } catch (error) {
         _notifyActionError(error);
@@ -328,7 +328,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       );
       if (confirmed == true) {
         try {
-          await _runGuest('mkdir -p /root/.local/share/Trash/files; target="/root/.local/share/Trash/files/$(basename -- "$1")"; if [ -e "$target" ] || [ -L "$target" ]; then target="$target.$(date +%s%N)"; fi; mv -- "$1" "$target"', <String>[path]);
+          await _runGuest(r'mkdir -p /root/.local/share/Trash/files; target="/root/.local/share/Trash/files/$(basename -- "$1")"; if [ -e "$target" ] || [ -L "$target" ]; then target="$target.$(date +%s%N)"; fi; mv -- "$1" "$target"', <String>[path]);
           await _load();
         } catch (error) {
           _notifyActionError(error);
