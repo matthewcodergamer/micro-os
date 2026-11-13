@@ -69,6 +69,8 @@ jobs:
           grep -qxE '(\./)?usr/local/bin/microos-jar' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/.opencode/bin/opencode' /tmp/rootfs-archive.list
           grep -q 'home/microos-browser' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/qbittorrent-nox' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/.microos/start-torrent.sh' /tmp/rootfs-archive.list
           echo "Pre-baked rootfs:"
           ls -lh "$ROOTFS"
           sha256sum "$ROOTFS"
