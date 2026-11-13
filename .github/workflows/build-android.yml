@@ -88,7 +88,7 @@ jobs:
           test -s assets/rootfs/rootfs.tar.size
           test "$(cat assets/rootfs/rootfs.tar.size)" -gt 0
           zstd -t "$ROOTFS"
-          test "$(zstd -dc "$ROOTFS" | wc -c)" = "$(cat assets/rootfs/rootfs.tar.size)"
+          test "$(zstd -dc "$ROOTFS" | wc -c | tr -d '[:space:]')" = "$(cat assets/rootfs/rootfs.tar.size)"
           zstd -dc "$ROOTFS" | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
@@ -164,7 +164,7 @@ jobs:
         run: |
           test -s assets/rootfs/rootfs.tar.zst
           test -s assets/rootfs/rootfs.tar.size
-          test "$(zstd -dc assets/rootfs/rootfs.tar.zst | wc -c)" = "$(cat assets/rootfs/rootfs.tar.size)"
+          test "$(zstd -dc assets/rootfs/rootfs.tar.zst | wc -c | tr -d '[:space:]')" = "$(cat assets/rootfs/rootfs.tar.size)"
           zstd -t assets/rootfs/rootfs.tar.zst
           zstd -dc assets/rootfs/rootfs.tar.zst | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
