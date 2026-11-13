@@ -50,6 +50,32 @@ docker run --platform linux/arm64 --name "$NAME" \
     timeout 30 "$OPENCODE_BIN" --version
     python3 -c "import zipfile, json, pathlib"
 
+    echo "==> Installing qBittorrent-nox headless torrent engine"
+    apt-get install -y --no-install-recommends qbittorrent-nox
+    command -v qbittorrent-nox
+    install -d -m 700 /root/.config/qBittorrent /mnt/android/Download
+    cat > /root/.config/qBittorrent/qBittorrent.conf <<'QBTCONF'
+[Preferences]
+WebUI\Address=127.0.0.1
+WebUI\Port=8080
+WebUI\LocalHostAuth=false
+WebUI\CSRFProtection=false
+Downloads\SavePath=/mnt/android/Download/
+Downloads\TempPath=/mnt/android/Download/.incomplete/
+Downloads\TempPathEnabled=true
+QBTCONF
+    cat > /root/.microos/start-torrent.sh <<'TORRENT'
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p /root/.config/qBittorrent /mnt/android/Download/.incomplete
+if (echo >/dev/tcp/127.0.0.1/8080) >/dev/null 2>&1; then exit 0; fi
+if pgrep -x qbittorrent-nox >/dev/null 2>&1; then exit 0; fi
+nohup setsid qbittorrent-nox --confirm-legal-notice --webui-port=8080 \
+  </dev/null >/tmp/microos-qbittorrent.log 2>&1 &
+echo "[microos] qBittorrent-nox started on 127.0.0.1:8080"
+TORRENT
+    chmod 755 /root/.microos/start-torrent.sh
+
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
     apt-get install -y --no-install-recommends \
@@ -105,7 +131,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     rm -f /tmp/firefox.tar.xz /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "4\\n" > /root/.microos/image-version
+    printf "5\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
@@ -161,5 +187,7 @@ require_archive_path 'usr/local/bin/microos-browse'
 require_archive_path 'usr/local/bin/microos-jar'
 require_archive_path 'root/.opencode/bin/opencode'
 require_archive_path 'home/microos-browser'
+require_archive_path 'usr/bin/qbittorrent-nox'
+require_archive_path 'root/.microos/start-torrent.sh'
 echo "==> All required rootfs paths verified"
 echo "==> Pre-baked ARM64 rootfs (zstd): $(du -h "$OUT" | cut -f1)"
