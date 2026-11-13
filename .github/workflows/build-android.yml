@@ -71,6 +71,8 @@ jobs:
           grep -q 'start-firefox.sh' tool/setup.sh
           grep -q 'microos-browser-control' tool/setup.sh
           grep -q 'bookmark_bar' tool/setup.sh
+          grep -q 'BOOKMARKS_FILE' tool/setup.sh
+          grep -q 'GitHub' tool/setup.sh
           grep -q 'browser.toolbars.bookmarks.visibility' tool/setup.sh
           grep -q -- '--start-maximized' tool/setup.sh
           grep -q 'window-maximize' tool/setup.sh
