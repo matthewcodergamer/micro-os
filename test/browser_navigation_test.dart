@@ -54,7 +54,11 @@ void main() {
     expect(BrowserNavigation.shortcutFor('new-tab'), 'ctrl+t');
     expect(BrowserNavigation.shortcutFor('close-tab'), 'ctrl+w');
     expect(BrowserNavigation.shortcutFor('focus-address'), 'ctrl+l');
+    expect(BrowserNavigation.shortcutFor('bookmarks'), 'ctrl+shift+b');
     expect(BrowserNavigation.shortcutFor('fullscreen'), 'F11');
+    expect(BrowserNavigation.shortcutFor('zoom-in'), 'ctrl+plus');
+    expect(BrowserNavigation.shortcutFor('zoom-out'), 'ctrl+minus');
+    expect(BrowserNavigation.shortcutFor('zoom-reset'), 'ctrl+0');
     expect(BrowserNavigation.shortcutFor('evil; touch /tmp/pwned'), isNull);
   });
 

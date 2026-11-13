@@ -61,6 +61,8 @@ jobs:
           grep -q 'bookmark_bar' tool/setup.sh
           grep -q 'browser.toolbars.bookmarks.visibility' tool/setup.sh
           grep -q -- '--start-maximized' tool/setup.sh
+          grep -q 'window-maximize' tool/setup.sh
+          grep -q 'window-restore' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
           chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh

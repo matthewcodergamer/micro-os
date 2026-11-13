@@ -385,14 +385,24 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           case 'keyboard':
             _showRemoteKeyboard();
             break;
+          case 'back':
+          case 'forward':
+          case 'reload':
           case 'new-tab':
-            widget.runtime.controlBrowser('new-tab');
-            break;
+          case 'close-tab':
+          case 'new-window':
+          case 'focus-address':
           case 'home':
-            widget.runtime.controlBrowser('home');
-            break;
           case 'bookmarks':
-            widget.runtime.controlBrowser('bookmarks');
+          case 'fullscreen':
+          case 'zoom-in':
+          case 'zoom-out':
+          case 'zoom-reset':
+          case 'window-minimize':
+          case 'window-maximize':
+          case 'window-restore':
+          case 'window-close':
+            widget.runtime.controlBrowser(action);
             break;
           case 'slow':
             _setTrackpadSpeed(0.9);
@@ -411,22 +421,34 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             break;
         }
       },
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'right', child: Text('Right-click')),
-        PopupMenuItem(value: 'keyboard', child: Text('Show Linux keyboard')),
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'right', child: Text('Right-click')),
+        const PopupMenuItem(value: 'keyboard', child: Text('Show Linux keyboard')),
         if (widget.launchBrowser) ...[
-          PopupMenuDivider(),
-          PopupMenuItem(value: 'new-tab', child: Text('New browser tab')),
-          PopupMenuItem(value: 'home', child: Text('Browser home')),
-          PopupMenuItem(value: 'bookmarks', child: Text('Toggle bookmarks bar')),
+          const PopupMenuDivider(),
+          const PopupMenuItem(value: 'back', child: Text('Back')),
+          const PopupMenuItem(value: 'forward', child: Text('Forward')),
+          const PopupMenuItem(value: 'reload', child: Text('Reload')),
+          const PopupMenuItem(value: 'new-tab', child: Text('New browser tab')),
+          const PopupMenuItem(value: 'close-tab', child: Text('Close browser tab')),
+          const PopupMenuItem(value: 'new-window', child: Text('New browser window')),
+          const PopupMenuItem(value: 'focus-address', child: Text('Focus address bar')),
+          const PopupMenuItem(value: 'home', child: Text('Browser home')),
+          const PopupMenuItem(value: 'bookmarks', child: Text('Toggle bookmarks bar')),
+          const PopupMenuItem(value: 'fullscreen', child: Text('Toggle full screen')),
+          const PopupMenuDivider(),
+          const PopupMenuItem(value: 'window-minimize', child: Text('Minimize browser window')),
+          const PopupMenuItem(value: 'window-maximize', child: Text('Maximize browser window')),
+          const PopupMenuItem(value: 'window-restore', child: Text('Restore browser window')),
+          const PopupMenuItem(value: 'window-close', child: Text('Close browser window')),
         ],
-        PopupMenuDivider(),
-        PopupMenuItem(value: 'slow', child: Text('Cursor speed: slow')),
-        PopupMenuItem(value: 'normal', child: Text('Cursor speed: normal')),
-        PopupMenuItem(value: 'fast', child: Text('Cursor speed: fast')),
-        PopupMenuDivider(),
-        PopupMenuItem(value: 'reconnect', child: Text('Reconnect desktop')),
-        PopupMenuItem(value: 'restart', child: Text('Restart desktop')),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: 'slow', child: Text('Cursor speed: slow')),
+        const PopupMenuItem(value: 'normal', child: Text('Cursor speed: normal')),
+        const PopupMenuItem(value: 'fast', child: Text('Cursor speed: fast')),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: 'reconnect', child: Text('Reconnect desktop')),
+        const PopupMenuItem(value: 'restart', child: Text('Restart desktop')),
       ],
     );
   }

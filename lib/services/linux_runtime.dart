@@ -615,12 +615,11 @@ class LinuxRuntime extends ChangeNotifier {
   /// Only predefined actions are accepted; arbitrary key strings never reach X.
   Future<void> controlBrowser(String action) async {
     if (!isReady) return;
-    final shortcut = BrowserNavigation.shortcutFor(action);
-    if (shortcut == null) {
+    if (!BrowserNavigation.isSupportedAction(action)) {
       throw ArgumentError.value(action, 'action', 'Unsupported browser action');
     }
     runDetached(
-      <String>['/usr/bin/xdotool', 'key', '--clearmodifiers', shortcut],
+      <String>['/usr/local/bin/microos-browser-control', action],
       extraEnv: const <String, String>{'DISPLAY': ':1'},
     );
   }

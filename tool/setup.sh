@@ -231,15 +231,18 @@ if [ -z "$FIREFOX_BIN" ]; then
 fi
 FIREFOX_PROFILE="$BROWSER_HOME/.mozilla/microos"
 install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.mozilla" "$FIREFOX_PROFILE"
-cat > "$FIREFOX_PROFILE/user.js" <<'FIREFOX_PREFS'
-// Match a normal desktop Firefox window: show its real tabs, address bar,
-// navigation controls and bookmarks toolbar.
-user_pref("browser.toolbars.bookmarks.visibility", "always");
-user_pref("browser.startup.homepage", "about:home");
-user_pref("browser.startup.page", 1);
-user_pref("browser.shell.checkDefaultBrowser", false);
-FIREFOX_PREFS
-chown -R microos-browser:microos-browser "$BROWSER_HOME/.mozilla"
+FIREFOX_PREFS="$FIREFOX_PROFILE/prefs.js"
+if ! grep -q 'browser.toolbars.bookmarks.visibility' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.toolbars.bookmarks.visibility", "always");' >> "$FIREFOX_PREFS"
+fi
+if ! grep -q 'browser.startup.homepage' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.startup.homepage", "about:home");' >> "$FIREFOX_PREFS"
+  printf '%s\n' 'user_pref("browser.startup.page", 1);' >> "$FIREFOX_PREFS"
+fi
+if ! grep -q 'browser.shell.checkDefaultBrowser' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.shell.checkDefaultBrowser", false);' >> "$FIREFOX_PREFS"
+fi
+chown microos-browser:microos-browser "$FIREFOX_PREFS"
 # Only one engine should own the remote desktop at a time.
 pkill -u microos-browser -f '[c]hromium|[c]hrome' 2>/dev/null || true
 sleep 0.4
@@ -274,13 +277,48 @@ cat > /usr/local/bin/microos-browser-control <<'BROWSER'
 #!/usr/bin/env bash
 set -euo pipefail
 export DISPLAY="${DISPLAY:-:1}"
-case "${1:-}" in
-  back)     KEY='alt+Left' ;;
-  forward)  KEY='alt+Right' ;;
-  reload)   KEY='ctrl+r' ;;
-  new-tab)  KEY='ctrl+t' ;;
-  home)     KEY='alt+Home' ;;
-  *) echo "Usage: microos-browser-control {back|forward|reload|new-tab|home}" >&2; exit 2 ;;
+ACTION="${1:-}"
+case "$ACTION" in
+  back)          KEY='alt+Left' ;;
+  forward)       KEY='alt+Right' ;;
+  reload)        KEY='ctrl+r' ;;
+  new-tab)       KEY='ctrl+t' ;;
+  close-tab)     KEY='ctrl+w' ;;
+  new-window)    KEY='ctrl+n' ;;
+  focus-address) KEY='ctrl+l' ;;
+  home)          KEY='alt+Home' ;;
+  bookmarks)     KEY='ctrl+shift+b' ;;
+  fullscreen)    KEY='F11' ;;
+  zoom-in)       KEY='ctrl+plus' ;;
+  zoom-out)      KEY='ctrl+minus' ;;
+  zoom-reset)    KEY='ctrl+0' ;;
+  window-minimize)
+    WINDOW_ID="$(xdotool getactivewindow)"
+    exec xdotool windowminimize "$WINDOW_ID"
+    ;;
+  window-maximize)
+    WINDOW_ID="$(xdotool getactivewindow)"
+    xdotool windowstate --add MAXIMIZED_VERT "$WINDOW_ID"
+    exec xdotool windowstate --add MAXIMIZED_HORZ "$WINDOW_ID"
+    ;;
+  window-restore)
+    WINDOW_ID="$(xdotool search --class 'chromium|firefox' 2>/dev/null | head -n 1 || true)"
+    if [ -z "$WINDOW_ID" ]; then
+      echo "[microos] no browser window is available to restore" >&2
+      exit 1
+    fi
+    xdotool windowmap "$WINDOW_ID" 2>/dev/null || true
+    xdotool windowstate --remove MAXIMIZED_VERT "$WINDOW_ID" 2>/dev/null || true
+    xdotool windowstate --remove MAXIMIZED_HORZ "$WINDOW_ID" 2>/dev/null || true
+    exec xdotool windowactivate --sync "$WINDOW_ID"
+    ;;
+  window-close)
+    KEY='alt+F4'
+    ;;
+  *)
+    echo "Usage: microos-browser-control {back|forward|reload|new-tab|close-tab|new-window|focus-address|home|bookmarks|fullscreen|zoom-in|zoom-out|zoom-reset|window-minimize|window-maximize|window-restore|window-close}" >&2
+    exit 2
+    ;;
 esac
 exec xdotool key --clearmodifiers "$KEY"
 BROWSER
