@@ -86,7 +86,10 @@ class DesktopState extends ChangeNotifier {
 
   /// Floating-window area: below the menu bar, above the Dock.
   Rect _area(Size screen) {
-    final bottom = math.max(topReserve + 160.0, screen.height - bottomReserve);
+    final bottom = math.max(
+      topReserve + 160.0,
+      screen.height - bottomReserve - bottomInset,
+    );
     return Rect.fromLTRB(0, topReserve, screen.width, bottom);
   }
 
@@ -98,7 +101,7 @@ class DesktopState extends ChangeNotifier {
         0,
         topReserve,
         screen.width,
-        screen.height,
+        math.max(topReserve + 160.0, screen.height - bottomInset),
       );
     }
     return _area(screen);
