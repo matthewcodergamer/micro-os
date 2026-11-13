@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app_scope.dart';
@@ -106,6 +107,18 @@ class _DesktopPage extends StatelessWidget {
           title: const Text('Automatically hide and show the Dock', style: TextStyle(color: MicroColors.text)),
           value: settings.dockAutoHide,
           onChanged: (v) => settings.setDockAutoHide(v),
+        ),
+        const Divider(height: 28),
+        SwitchListTile(
+          title: const Text('Show Android system bars', style: TextStyle(color: MicroColors.text)),
+          subtitle: const Text('Temporarily restore the status and navigation bars', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          value: settings.systemBarsVisible,
+          onChanged: (visible) async {
+            await settings.setSystemBarsVisible(visible);
+            await SystemChrome.setEnabledSystemUIMode(
+              visible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
+            );
+          },
         ),
       ],
     );
