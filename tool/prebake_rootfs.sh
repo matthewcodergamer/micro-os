@@ -123,11 +123,9 @@ TORRENT
       kill "$MICROOS_OPENBOX_PID" "$MICROOS_XVFB_PID" 2>/dev/null || true
       exit 1
     fi
-    xdotool windowactivate --sync "$WINDOW_ID"
     /usr/local/bin/microos-browser-control new-tab
     /usr/local/bin/microos-browser-control focus-address
     /usr/local/bin/microos-browser-control bookmarks
-    /usr/local/bin/microos-browser-control window-maximize
     sleep 0.5
     GEOMETRY="$(xdotool getwindowgeometry --shell "$WINDOW_ID")"
     WIDTH="$(printf "%s\n" "$GEOMETRY" | sed -n "s/^WIDTH=//p")"
