@@ -33,15 +33,32 @@ class BrowserNavigation {
 
   /// Quotes one POSIX shell argument without allowing expansion or injection.
   static String shellQuote(String value) =>
-      "'${value.replaceAll("'", r"'\''")}'";
+      "'${value.replaceAll("'", r"'\\''")}'";
 
-  static String? shortcutFor(String action) => switch (action) {
-        'back' => 'alt+Left',
-        'forward' => 'alt+Right',
-        'reload' => 'ctrl+r',
-        'new-tab' => 'ctrl+t',
-        'home' => 'alt+Home',
-        'bookmarks' => 'ctrl+shift+b',
-        _ => null,
-      };
+  static const Map<String, String> _shortcuts = <String, String>{
+    'back': 'alt+Left',
+    'forward': 'alt+Right',
+    'reload': 'ctrl+r',
+    'new-tab': 'ctrl+t',
+    'close-tab': 'ctrl+w',
+    'new-window': 'ctrl+n',
+    'focus-address': 'ctrl+l',
+    'home': 'alt+Home',
+    'fullscreen': 'F11',
+    'zoom-in': 'ctrl+plus',
+    'zoom-out': 'ctrl+minus',
+    'zoom-reset': 'ctrl+0',
+  };
+
+  static const Set<String> _windowActions = <String>{
+    'window-minimize',
+    'window-maximize',
+    'window-restore',
+    'window-close',
+  };
+
+  static bool isSupportedAction(String action) =>
+      _shortcuts.containsKey(action) || _windowActions.contains(action);
+
+  static String? shortcutFor(String action) => _shortcuts[action];
 }
