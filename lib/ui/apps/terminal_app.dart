@@ -76,10 +76,16 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
   }
 
   void _closeTab(int index) {
-    if (_tabs.length <= 1) return;
+    if (index < 0 || index >= _tabs.length) return;
     final tab = _tabs.removeAt(index);
     tab.dispose();
+    if (_tabs.isEmpty) {
+      setState(() => _active = 0);
+      _addTab();
+      return;
+    }
     setState(() {
+      if (_active > index) _active--;
       if (_active >= _tabs.length) _active = _tabs.length - 1;
     });
   }
@@ -271,13 +277,31 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                                 ),
                               ),
                             ),
-                            child: Text(
-                              _tabs[i].title,
-                              style: TextStyle(
-                                color: selected ? MicroColors.text : MicroColors.subtle,
-                                fontSize: 12,
-                                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _tabs[i].title,
+                                  style: TextStyle(
+                                    color: selected ? MicroColors.text : MicroColors.subtle,
+                                    fontSize: 12,
+                                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(20),
+                                  onTap: () => _closeTab(i),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(3),
+                                    child: Icon(
+                                      Icons.close_rounded,
+                                      size: 13,
+                                      color: selected ? MicroColors.text : MicroColors.subtle,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
