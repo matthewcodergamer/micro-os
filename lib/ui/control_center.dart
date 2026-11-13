@@ -1,9 +1,9 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
-import '../models/window_state.dart';
 import '../services/linux_runtime.dart';
 import '../services/system_stats.dart';
 
@@ -36,13 +36,13 @@ class ControlCenterOverlay extends StatelessWidget {
         Positioned(
           top: topPadding + 6,
           right: 12,
-          child: _panel(),
+          child: _panel(context),
         ),
       ],
     );
   }
 
-  Widget _panel() {
+  Widget _panel(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -55,7 +55,7 @@ class ControlCenterOverlay extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
           child: Container(
-            width: 320,
+            width: math.min(320.0, MediaQuery.sizeOf(context).width - 24),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: const Color(0xCC1C1C1E),
