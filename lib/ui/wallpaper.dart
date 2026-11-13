@@ -2,16 +2,24 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// The "Golden Gate" wallpaper – a pure-code painted sunset over the bay.
-/// No asset required.
+/// Big Sur wallpaper from the pinned ThanasOS asset set.
 class Wallpaper extends StatelessWidget {
   const Wallpaper({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const CustomPaint(
-      painter: _GoldenGatePainter(),
-      size: Size.infinite,
+    return Image.asset(
+      'assets/wallpapers/wallpaper-bigsur.jpg',
+      width: double.infinity,
+      height: double.infinity,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.high,
+      // Keep a deterministic local fallback for development environments
+      // where the asset-fetch script has not been run yet.
+      errorBuilder: (context, error, stackTrace) => const CustomPaint(
+        painter: _GoldenGatePainter(),
+        size: Size.infinite,
+      ),
     );
   }
 }
@@ -22,8 +30,6 @@ class _GoldenGatePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-
-    // Deep twilight sky gradient.
     final sky = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
@@ -40,7 +46,6 @@ class _GoldenGatePainter extends CustomPainter {
       ).createShader(rect);
     canvas.drawRect(rect, sky);
 
-    // Soft sun glow near the horizon.
     final sunCenter = Offset(size.width * 0.72, size.height * 0.62);
     final sunGlow = Paint()
       ..shader = RadialGradient(
@@ -51,12 +56,8 @@ class _GoldenGatePainter extends CustomPainter {
         ],
       ).createShader(Rect.fromCircle(center: sunCenter, radius: size.width * 0.35));
     canvas.drawCircle(sunCenter, size.width * 0.35, sunGlow);
+    canvas.drawCircle(sunCenter, size.width * 0.045, Paint()..color = const Color(0xFFFFF0C0));
 
-    // Sun disc.
-    final sun = Paint()..color = const Color(0xFFFFF0C0);
-    canvas.drawCircle(sunCenter, size.width * 0.045, sun);
-
-    // Water / bay reflection band.
     final waterTop = size.height * 0.68;
     final water = Paint()
       ..shader = LinearGradient(
@@ -69,14 +70,12 @@ class _GoldenGatePainter extends CustomPainter {
       ).createShader(Rect.fromLTWH(0, waterTop, size.width, size.height - waterTop));
     canvas.drawRect(Rect.fromLTWH(0, waterTop, size.width, size.height - waterTop), water);
 
-    // Subtle horizontal ripples.
     final ripple = Paint()
       ..color = Colors.white.withValues(alpha: 0.04)
       ..strokeWidth = 1.2;
     for (var i = 0; i < 8; i++) {
       final y = waterTop + 18 + i * 22.0;
-      final path = Path();
-      path.moveTo(0, y);
+      final path = Path()..moveTo(0, y);
       for (var x = 0.0; x < size.width; x += 24) {
         path.quadraticBezierTo(
           x + 12,
@@ -88,7 +87,6 @@ class _GoldenGatePainter extends CustomPainter {
       canvas.drawPath(path, ripple);
     }
 
-    // Soft vignette.
     final vignette = Paint()
       ..shader = RadialGradient(
         center: const Alignment(0.1, -0.2),

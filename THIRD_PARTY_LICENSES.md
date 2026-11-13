@@ -28,8 +28,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Source assets: `finder-icon.png`, `terminal-icon.png`, `safari-icon.png`, and
-`settings-icon.png` from the upstream `src/assets/` directory.
+Source assets: `finder-icon.png`, `terminal-icon.png`, `safari-icon.png`,
+`settings-icon.png`, `wallpaper-bigsur.jpg`, and `wallpaper-tahoe.jpg` from
+the upstream `src/assets/` directory. The two wallpapers are fetched from a
+pinned upstream commit during the Android build and included in the APK.
 
 ## Inter typeface
 
