@@ -89,9 +89,10 @@ TORRENT
     npm install --global playwright
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright install chromium --with-deps
     PLAYWRIGHT_NODE_MODULES="$(npm root -g)"
-    cat > /etc/profile.d/microos-playwright.sh <<PLAYWRIGHT_ENV
+    ln -sfn "$PLAYWRIGHT_NODE_MODULES" /opt/node-global
+    cat > /etc/profile.d/microos-playwright.sh <<'PLAYWRIGHT_ENV'
 export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-export NODE_PATH=$PLAYWRIGHT_NODE_MODULES
+export NODE_PATH=/opt/node-global
 PLAYWRIGHT_ENV
     chmod 0644 /etc/profile.d/microos-playwright.sh
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright NODE_PATH="$PLAYWRIGHT_NODE_MODULES" node <<'PLAYWRIGHT_SMOKE'
@@ -318,6 +319,10 @@ require_archive_path 'usr/bin/xdotool'
 require_archive_path 'root/.microos/start-desktop.sh'
 require_archive_path 'opt/firefox/firefox'
 require_archive_path 'opt/firefox/firefox-bin'
+require_archive_path 'opt/ms-playwright'
+require_archive_path 'opt/node-global'
+require_archive_path 'root/Downloads'
+require_archive_path 'etc/profile.d/microos-playwright.sh'
 require_archive_path 'usr/local/bin/microos-browse'
 require_archive_path 'usr/local/bin/microos-jar'
 require_archive_path 'root/.opencode/bin/opencode'
