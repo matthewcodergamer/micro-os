@@ -89,10 +89,14 @@ class _DesktopScreenState extends State<DesktopScreen> {
         final keyboard = media.viewInsets.bottom;
 
         final top = insets.top + kMenuBarHeight;
+        // Keep the Dock above Android's mandatory system-gesture strip. This
+        // avoids placing interactive controls directly under Home/Back swipes.
+        final gestureBottom = media.systemGestureInsets.bottom;
+        final dockBottom = math.max(insets.bottom, gestureBottom);
         final bottomReserve = settings.dockAutoHide && desktop.focused != null
             ? 0.0
             : kDockReserved;
-        final bottom = math.max(0.0, insets.bottom + bottomReserve);
+        final bottom = math.max(0.0, dockBottom + bottomReserve);
 
         // Sync geometry
         final area = Size(size.width, size.height);
@@ -124,17 +128,19 @@ class _DesktopScreenState extends State<DesktopScreen> {
           fit: StackFit.expand,
           children: [
             // Wallpaper always edge-to-edge
-            const Wallpaper(),
+            const RepaintBoundary(child: Wallpaper()),
 
             if (runtime.isReady && !desktop.locked) ...[
               // Windows
               for (final window in desktop.ordered)
                 if (!window.minimized)
-                  WindowFrame(
-                    window: window,
-                    desktop: desktop,
-                    screen: size,
-                    child: _contentFor(window, scope),
+                  RepaintBoundary(
+                    child: WindowFrame(
+                      window: window,
+                      desktop: desktop,
+                      screen: size,
+                      child: _contentFor(window, scope),
+                    ),
                   ),
 
               // Menu bar
@@ -165,7 +171,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: 0,
+                bottom: dockBottom,
                 child: Dock(
                   visible: !hideDock,
                   onOpen: (app) => desktop.open(app, screen: size),
@@ -175,7 +181,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: 0,
+                  bottom: dockBottom,
                   height: 28,
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
