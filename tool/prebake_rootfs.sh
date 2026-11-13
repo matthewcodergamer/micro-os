@@ -32,7 +32,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     echo "==> Installed local Android read-aloud plugin for OpenCode"
 
     echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar xdotool xprop; do
+    for tool in git gh python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop; do
       command -v "$tool" >/dev/null 2>&1 || {
         echo "Required pre-baked tool is missing: $tool" >&2
         exit 1
@@ -329,6 +329,7 @@ require_archive_path 'root/Downloads'
 require_archive_path 'etc/profile.d/microos-playwright.sh'
 require_archive_path 'usr/local/bin/microos-browse'
 require_archive_path 'usr/local/bin/microos-jar'
+require_archive_path 'usr/local/bin/microos-run'
 require_archive_path 'root/.opencode/bin/opencode'
 require_archive_path 'home/microos-browser'
 require_archive_path 'usr/bin/qbittorrent-nox'
