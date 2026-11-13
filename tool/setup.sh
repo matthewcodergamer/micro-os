@@ -171,7 +171,37 @@ export DISPLAY="${DISPLAY:-:1}"
 BROWSER_HOME=/home/microos-browser
 CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || true)"
 if [ -z "$CHROMIUM_BIN" ]; then echo "[microos] Chromium .deb is not installed" >&2; exit 127; fi
-install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.config/chromium" "$BROWSER_HOME/.cache"
+install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.config/chromium" "$BROWSER_HOME/.config/chromium/Default" "$BROWSER_HOME/.cache"
+CHROMIUM_PREFS="$BROWSER_HOME/.config/chromium/Default/Preferences"
+python3 - "$CHROMIUM_PREFS" <<'CHROMIUM_PREFS'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, encoding="utf-8") as source:
+        preferences = json.load(source)
+except FileNotFoundError:
+    preferences = {}
+if not isinstance(preferences, dict):
+    preferences = {}
+bookmark_bar = preferences.setdefault("bookmark_bar", {})
+browser = preferences.setdefault("browser", {})
+changed = False
+if "show_on_all_tabs" not in bookmark_bar:
+    bookmark_bar["show_on_all_tabs"] = True
+    changed = True
+if "show_home_button" not in browser:
+    browser["show_home_button"] = True
+    changed = True
+if changed or not os.path.exists(path):
+    temporary = path + ".microos-tmp"
+    with open(temporary, "w", encoding="utf-8") as target:
+        json.dump(preferences, target, separators=(",", ":"))
+    os.replace(temporary, path)
+CHROMIUM_PREFS
+chown microos-browser:microos-browser "$CHROMIUM_PREFS"
 # Ensure the shared X11 session has only one browser engine at a time.
 pkill -u microos-browser -f '[f]irefox' 2>/dev/null || true
 sleep 0.4
@@ -183,6 +213,8 @@ exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" X
   --disable-features=Translate,OptimizationHints \
   --js-flags="--max-old-space-size=512" \
   --disable-dev-shm-usage --no-first-run \
+  --disk-cache-size=67108864 --media-cache-size=16777216 \
+  --start-maximized \
   --user-data-dir="$BROWSER_HOME/.config/chromium" "$@"
 BROWSER
 chmod 755 /usr/local/bin/start-browser.sh
@@ -197,14 +229,37 @@ if [ -z "$FIREFOX_BIN" ]; then
   echo "[microos] Firefox is not installed in this rootfs image" >&2
   exit 127
 fi
-install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.mozilla"
+FIREFOX_PROFILE="$BROWSER_HOME/.mozilla/microos"
+install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.mozilla" "$FIREFOX_PROFILE"
+cat > "$FIREFOX_PROFILE/user.js" <<'FIREFOX_PREFS'
+// Match a normal desktop Firefox window: show its real tabs, address bar,
+// navigation controls and bookmarks toolbar.
+user_pref("browser.toolbars.bookmarks.visibility", "always");
+user_pref("browser.startup.homepage", "about:home");
+user_pref("browser.startup.page", 1);
+user_pref("browser.shell.checkDefaultBrowser", false);
+FIREFOX_PREFS
+chown -R microos-browser:microos-browser "$BROWSER_HOME/.mozilla"
 # Only one engine should own the remote desktop at a time.
 pkill -u microos-browser -f '[c]hromium|[c]hrome' 2>/dev/null || true
 sleep 0.4
-# Keep Firefox's normal profile routing so later URL launches reuse this session.
-exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" \
+# Run a regular Firefox window (not kiosk/app mode), then maximize it through
+# Openbox once its real X11 window is available.
+runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" \
   MOZ_ENABLE_WAYLAND=0 MOZ_DISABLE_CONTENT_SANDBOX=1 MOZ_DISABLE_GMP_SANDBOX=1 \
-  "$FIREFOX_BIN" --profile "$BROWSER_HOME/.mozilla/microos" "$@"
+  "$FIREFOX_BIN" --profile "$FIREFOX_PROFILE" --new-window "$@" &
+FIREFOX_PID=$!
+for attempt in $(seq 1 40); do
+  WINDOW_ID="$(xdotool search --onlyvisible --class firefox 2>/dev/null | head -n 1 || true)"
+  if [ -n "$WINDOW_ID" ]; then
+    xdotool windowactivate --sync "$WINDOW_ID" 2>/dev/null || true
+    xdotool key --clearmodifiers alt+F10 2>/dev/null || true
+    break
+  fi
+  kill -0 "$FIREFOX_PID" 2>/dev/null || break
+  sleep 0.2
+done
+wait "$FIREFOX_PID"
 BROWSER
 chmod 755 /usr/local/bin/start-firefox.sh
 
@@ -483,7 +538,7 @@ if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client 
 websockify --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
 WEBSOCKIFY_PID=$!
 if ! wait_for_port 6080 80 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then echo "[microos] ERROR: websockify failed to open port 6080" >&2; cat "$LOG/websockify.log" >&2 || true; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
-if ! pgrep -u microos-browser -f 'chromium|firefox' >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window about:home >"$LOG/chromium.log" 2>&1 & fi
+if ! pgrep -u microos-browser -f 'chromium|firefox' >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window chrome://newtab/ >"$LOG/chromium.log" 2>&1 & fi
 echo "[microos] display :1 ready (Xvfb 1280x720, Openbox, VNC 5900, noVNC 6080)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
 echo "[microos] ERROR: X11/VNC/noVNC process exited; inspect $LOG/*.log" >&2

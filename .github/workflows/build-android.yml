@@ -58,6 +58,9 @@ jobs:
           grep -q 'start-browser.sh' tool/setup.sh
           grep -q 'start-firefox.sh' tool/setup.sh
           grep -q 'microos-browser-control' tool/setup.sh
+          grep -q 'bookmark_bar' tool/setup.sh
+          grep -q 'browser.toolbars.bookmarks.visibility' tool/setup.sh
+          grep -q -- '--start-maximized' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
           chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh

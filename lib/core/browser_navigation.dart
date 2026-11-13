@@ -41,6 +41,7 @@ class BrowserNavigation {
         'reload' => 'ctrl+r',
         'new-tab' => 'ctrl+t',
         'home' => 'alt+Home',
+        'bookmarks' => 'ctrl+shift+b',
         _ => null,
       };
 }

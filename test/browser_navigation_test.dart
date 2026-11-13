@@ -51,6 +51,9 @@ void main() {
     expect(BrowserNavigation.shortcutFor('back'), 'alt+Left');
     expect(BrowserNavigation.shortcutFor('forward'), 'alt+Right');
     expect(BrowserNavigation.shortcutFor('reload'), 'ctrl+r');
+    expect(BrowserNavigation.shortcutFor('new-tab'), 'ctrl+t');
+    expect(BrowserNavigation.shortcutFor('home'), 'alt+Home');
+    expect(BrowserNavigation.shortcutFor('bookmarks'), 'ctrl+shift+b');
     expect(BrowserNavigation.shortcutFor('evil; touch /tmp/pwned'), isNull);
   });
 }

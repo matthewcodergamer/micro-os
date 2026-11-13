@@ -43,14 +43,10 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   bool _trackpadMode = true;
   double _trackpadSpeed = 1.35;
   String _selectedBrowser = 'chromium';
-  late final TextEditingController _addressController;
 
   @override
   void initState() {
     super.initState();
-    _addressController = TextEditingController(
-      text: widget.url ?? 'https://www.google.com',
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
   }
 
@@ -89,7 +85,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     if (widget.launchBrowser) {
       setState(() => _status = 'Launching the browser…');
       await widget.runtime.launchBrowser(
-        url: _addressController.text,
+        url: widget.url ?? 'https://www.google.com',
         browser: _selectedBrowser,
         singleProcess: widget.singleProcess,
       );
@@ -183,14 +179,14 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   @override
   void dispose() {
     _vncRetryTimer?.cancel();
-    _addressController.dispose();
     super.dispose();
   }
 
   Future<void> _launchSelectedBrowser() async {
-    final url = _addressController.text.trim();
-    if (url.isEmpty) return;
-    setState(() => _status = 'Opening $url in ${_selectedBrowser == 'firefox' ? 'Firefox' : 'Chromium'}…');
+    final url = widget.url ?? 'https://www.google.com';
+    if (!mounted) return;
+    setState(() => _status =
+        'Opening $url in ${_selectedBrowser == 'firefox' ? 'Firefox' : 'Chromium'}…');
     await widget.runtime.launchBrowser(
       browser: _selectedBrowser,
       url: url,
@@ -389,6 +385,15 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           case 'keyboard':
             _showRemoteKeyboard();
             break;
+          case 'new-tab':
+            widget.runtime.controlBrowser('new-tab');
+            break;
+          case 'home':
+            widget.runtime.controlBrowser('home');
+            break;
+          case 'bookmarks':
+            widget.runtime.controlBrowser('bookmarks');
+            break;
           case 'slow':
             _setTrackpadSpeed(0.9);
             break;
@@ -409,6 +414,12 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       itemBuilder: (context) => const [
         PopupMenuItem(value: 'right', child: Text('Right-click')),
         PopupMenuItem(value: 'keyboard', child: Text('Show Linux keyboard')),
+        if (widget.launchBrowser) ...[
+          PopupMenuDivider(),
+          PopupMenuItem(value: 'new-tab', child: Text('New browser tab')),
+          PopupMenuItem(value: 'home', child: Text('Browser home')),
+          PopupMenuItem(value: 'bookmarks', child: Text('Toggle bookmarks bar')),
+        ],
         PopupMenuDivider(),
         PopupMenuItem(value: 'slow', child: Text('Cursor speed: slow')),
         PopupMenuItem(value: 'normal', child: Text('Cursor speed: normal')),
@@ -432,159 +443,66 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       color: const Color(0xFF0B0E14),
       child: Column(
         children: [
-          if (widget.launchBrowser)
-            Container(
-              padding: const EdgeInsets.fromLTRB(7, 3, 7, 2),
-              color: const Color(0xFF141822),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.circle, size: 8, color: MicroColors.green),
-                      const SizedBox(width: 5),
-                      DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedBrowser,
-                          isDense: true,
-                          dropdownColor: const Color(0xFF202735),
-                          style: const TextStyle(color: Colors.white, fontSize: 11),
-                          items: const [
-                            DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
-                            DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
-                          ],
-                          onChanged: controller == null ? null : _selectBrowser,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: TextField(
-                          controller: _addressController,
-                          enabled: controller != null,
-                          textInputAction: TextInputAction.go,
-                          keyboardType: TextInputType.url,
-                          onSubmitted: (_) => _launchSelectedBrowser(),
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                          decoration: InputDecoration(
-                            hintText: 'Enter website address',
-                            hintStyle: const TextStyle(color: MicroColors.subtle, fontSize: 11),
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-                            filled: true,
-                            fillColor: const Color(0xFF0B0E14),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Go to address',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: controller == null ? null : _launchSelectedBrowser,
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 17),
-                        color: MicroColors.accent,
-                      ),
-                    ],
+          Container(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            color: const Color(0xFF141822),
+            child: Row(
+              children: [
+                const Icon(Icons.circle, size: 8, color: MicroColors.green),
+                const SizedBox(width: 6),
+                if (widget.launchBrowser) ...[
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedBrowser,
+                      isDense: true,
+                      dropdownColor: const Color(0xFF202735),
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      items: const [
+                        DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
+                        DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
+                      ],
+                      onChanged: controller == null ? null : _selectBrowser,
+                    ),
                   ),
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Back',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: controller == null
-                            ? null
-                            : () => widget.runtime.controlBrowser('back'),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 17),
-                        color: MicroColors.subtle,
-                      ),
-                      IconButton(
-                        tooltip: 'Forward',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: controller == null
-                            ? null
-                            : () => widget.runtime.controlBrowser('forward'),
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 17),
-                        color: MicroColors.subtle,
-                      ),
-                      IconButton(
-                        tooltip: 'Reload page',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: controller == null
-                            ? null
-                            : () => widget.runtime.controlBrowser('reload'),
-                        icon: const Icon(Icons.refresh_rounded, size: 17),
-                        color: MicroColors.subtle,
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: _trackpadMode
-                            ? 'Trackpad cursor enabled'
-                            : 'Direct touch enabled',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: controller == null ? null : _toggleTrackpadMode,
-                        icon: Icon(
-                          _trackpadMode
-                              ? Icons.track_changes_rounded
-                              : Icons.touch_app_rounded,
-                          size: 17,
-                        ),
-                        color: _trackpadMode
-                            ? MicroColors.accent
-                            : MicroColors.subtle,
-                      ),
-                      if (controller != null) _moreControlsButton(),
-                    ],
-                  ),
-                ],
-              ),
-            )
-          else
-            Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              color: const Color(0xFF141822),
-              child: Row(
-                children: [
-                  const Icon(Icons.circle, size: 8, color: MicroColors.green),
                   const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      _status,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
-                    ),
-                  ),
-                  if (controller != null) ...[
-                    IconButton(
-                      tooltip: _trackpadMode
-                          ? 'Trackpad cursor enabled'
-                          : 'Direct touch enabled',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: _toggleTrackpadMode,
-                      icon: Icon(
-                        _trackpadMode
-                            ? Icons.track_changes_rounded
-                            : Icons.touch_app_rounded,
-                        size: 16,
-                      ),
-                      color: _trackpadMode
-                          ? MicroColors.accent
-                          : MicroColors.subtle,
-                    ),
-                    _moreControlsButton(),
-                  ],
-                  IconButton(
-                    tooltip: 'Restart desktop session',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _boot,
-                    icon: const Icon(Icons.restart_alt, size: 16),
-                    color: MicroColors.subtle,
-                  ),
                 ],
-              ),
+                Expanded(
+                  child: Text(
+                    _status,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
+                  ),
+                ),
+                if (controller != null) ...[
+                  IconButton(
+                    tooltip: _trackpadMode
+                        ? 'Trackpad cursor enabled'
+                        : 'Direct touch enabled',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _toggleTrackpadMode,
+                    icon: Icon(
+                      _trackpadMode
+                          ? Icons.track_changes_rounded
+                          : Icons.touch_app_rounded,
+                      size: 16,
+                    ),
+                    color: _trackpadMode
+                        ? MicroColors.accent
+                        : MicroColors.subtle,
+                  ),
+                  _moreControlsButton(),
+                ],
+                IconButton(
+                  tooltip: 'Restart desktop session',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _boot,
+                  icon: const Icon(Icons.restart_alt, size: 16),
+                  color: MicroColors.subtle,
+                ),
+              ],
             ),
+          ),
           Expanded(
             child: controller == null
                 ? Center(
