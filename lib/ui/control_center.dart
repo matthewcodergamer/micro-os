@@ -24,8 +24,10 @@ class ControlCenterOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
+    return ListenableBuilder(
+      listenable: Listenable.merge([runtime, stats]),
+      builder: (context, _) => Stack(
+        children: [
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -38,7 +40,8 @@ class ControlCenterOverlay extends StatelessWidget {
           right: 12,
           child: _panel(context),
         ),
-      ],
+        ],
+      ),
     );
   }
 
