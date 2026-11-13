@@ -41,7 +41,6 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
   }
 
   void _addTab() {
-    final profile = profileById(widget.settings.terminalProfile);
     final terminal = Terminal(maxLines: 10000);
     final controller = TerminalController();
     Pty? pty;
@@ -89,86 +88,91 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.runtime.isReady) {
-      return const Center(
-        child: Text(
-          'Install Linux first to use the Terminal.',
-          style: TextStyle(color: MicroColors.subtle),
-        ),
-      );
-    }
+    return ListenableBuilder(
+      listenable: widget.settings,
+      builder: (context, _) {
+        if (!widget.runtime.isReady) {
+          return const Center(
+            child: Text(
+              'Install Linux first to use the Terminal.',
+              style: TextStyle(color: MicroColors.subtle),
+            ),
+          );
+        }
 
-    final profile = profileById(widget.settings.terminalProfile);
+        final profile = profileById(widget.settings.terminalProfile);
 
-    return Column(
-      children: [
-        // Tab strip
-        Container(
-          height: 36,
-          color: MicroColors.windowHeader,
-          child: Row(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _tabs.length,
-                  itemBuilder: (_, i) {
-                    final selected = i == _active;
-                    return GestureDetector(
-                      onTap: () => setState(() => _active = i),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: selected ? MicroColors.windowBody : Colors.transparent,
-                          border: Border(
-                            bottom: BorderSide(
-                              color: selected ? MicroColors.accent : Colors.transparent,
-                              width: 2,
+        return Column(
+          children: [
+            // Tab strip
+            Container(
+              height: 36,
+              color: MicroColors.windowHeader,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _tabs.length,
+                      itemBuilder: (_, i) {
+                        final selected = i == _active;
+                        return GestureDetector(
+                          onTap: () => setState(() => _active = i),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: selected ? MicroColors.windowBody : Colors.transparent,
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: selected ? MicroColors.accent : Colors.transparent,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              _tabs[i].title,
+                              style: TextStyle(
+                                color: selected ? MicroColors.text : MicroColors.subtle,
+                                fontSize: 12,
+                                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                              ),
                             ),
                           ),
-                        ),
-                        child: Text(
-                          _tabs[i].title,
-                          style: TextStyle(
-                            color: selected ? MicroColors.text : MicroColors.subtle,
-                            fontSize: 12,
-                            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add_rounded, size: 18),
-                color: MicroColors.text,
-                onPressed: _addTab,
-              ),
-            ],
-          ),
-        ),
-        // Terminal body
-        Expanded(
-          child: IndexedStack(
-            index: _active,
-            children: [
-              for (final tab in _tabs)
-                TerminalView(
-                  tab.terminal,
-                  controller: tab.controller,
-                  theme: profile.toXterm(),
-                  textStyle: TerminalStyle(
-                    fontSize: widget.settings.terminalFontSize,
-                    fontFamily: 'JetBrains Mono',
+                        );
+                      },
+                    ),
                   ),
-                  autofocus: true,
-                ),
-            ],
-          ),
-        ),
-      ],
+                  IconButton(
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    color: MicroColors.text,
+                    onPressed: _addTab,
+                  ),
+                ],
+              ),
+            ),
+            // Terminal body
+            Expanded(
+              child: IndexedStack(
+                index: _active,
+                children: [
+                  for (final tab in _tabs)
+                    TerminalView(
+                      tab.terminal,
+                      controller: tab.controller,
+                      theme: profile.toXterm(),
+                      textStyle: TerminalStyle(
+                        fontSize: widget.settings.terminalFontSize,
+                        fontFamily: 'JetBrains Mono',
+                      ),
+                      autofocus: true,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
