@@ -126,15 +126,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
             // Wallpaper always edge-to-edge
             const Wallpaper(),
 
-            // Install overlay when runtime not ready
-            if (!runtime.isReady)
-              const InstallScreen()
-            else if (desktop.locked)
-              LoginScreen(
-                settings: settings,
-                onUnlock: desktop.unlock,
-              )
-            else ...[
+            if (runtime.isReady && !desktop.locked) ...[
               // Windows
               for (final window in desktop.ordered)
                 if (!window.minimized)
@@ -170,8 +162,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
                   onLock: desktop.lock,
                 ),
               ),
-
-              // Dock
               Positioned(
                 left: 0,
                 right: 0,
@@ -181,8 +171,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
                   onOpen: (app) => desktop.open(app, screen: size),
                 ),
               ),
-
-              // Swipe-up to reveal dock when auto-hidden
               if (hideDock)
                 Positioned(
                   left: 0,
@@ -196,8 +184,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     },
                   ),
                 ),
-
-              // Spotlight
               if (_spotlight)
                 _animateOverlay(
                   SpotlightOverlay(
@@ -209,8 +195,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     },
                   ),
                 ),
-
-              // Launchpad
               if (_launchpad)
                 _animateOverlay(
                   LaunchpadOverlay(
@@ -222,8 +206,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     },
                   ),
                 ),
-
-              // Control Center
               if (_control)
                 _animateOverlay(
                   ControlCenterOverlay(
@@ -234,6 +216,30 @@ class _DesktopScreenState extends State<DesktopScreen> {
                   ),
                 ),
             ],
+            // The installer fades away as soon as the rootfs is ready. The
+            // login screen or desktop is already mounted underneath it.
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: runtime.isReady && !desktop.locked,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 650),
+                  reverseDuration: const Duration(milliseconds: 420),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) =>
+                      FadeTransition(opacity: animation, child: child),
+                  child: !runtime.isReady
+                      ? const InstallScreen(key: ValueKey('installer'))
+                      : desktop.locked
+                          ? LoginScreen(
+                              key: const ValueKey('login'),
+                              settings: settings,
+                              onUnlock: desktop.unlock,
+                            )
+                          : const SizedBox.expand(key: ValueKey('desktop-ready')),
+                ),
+              ),
+            ),
           ],
         );
       },
