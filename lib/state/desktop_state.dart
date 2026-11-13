@@ -315,7 +315,9 @@ class DesktopState extends ChangeNotifier {
     notifyListeners();
   }
 
+  @override
   void dispose() {
     windows.clear();
+    super.dispose();
   }
 }
