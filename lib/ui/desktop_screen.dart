@@ -190,27 +190,47 @@ class _DesktopScreenState extends State<DesktopScreen> {
 
               // Spotlight
               if (_spotlight)
-                SpotlightOverlay(
-                  topPadding: top,
-                  onClose: () => setState(() => _spotlight = false),
-                  onOpen: (app) {
-                    setState(() => _spotlight = false);
-                    desktop.open(app, screen: size);
-                  },
+                _animateOverlay(
+                  SpotlightOverlay(
+                    topPadding: top,
+                    onClose: () => setState(() => _spotlight = false),
+                    onOpen: (app) {
+                      setState(() => _spotlight = false);
+                      desktop.open(app, screen: size);
+                    },
+                  ),
                 ),
 
               // Control Center
               if (_control)
-                ControlCenterOverlay(
-                  topPadding: top,
-                  onClose: () => setState(() => _control = false),
-                  runtime: runtime,
-                  stats: stats,
+                _animateOverlay(
+                  ControlCenterOverlay(
+                    topPadding: top,
+                    onClose: () => setState(() => _control = false),
+                    runtime: runtime,
+                    stats: stats,
+                  ),
                 ),
             ],
           ],
         );
       },
+    );
+  }
+
+  Widget _animateOverlay(Widget child) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, -10 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: child,
     );
   }
 
