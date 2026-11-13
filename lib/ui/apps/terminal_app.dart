@@ -1,10 +1,7 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:xterm/xterm.dart';
 
 import '../../core/terminal_profiles.dart';
@@ -49,9 +46,11 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
     if (widget.runtime.isReady) {
       try {
         pty = widget.runtime.startShell(argv: widget.argv);
-        // Decode the byte stream incrementally: a UTF-8 character may be split
-        // across PTY chunks, so decoding each chunk independently corrupts it.
-        pty.output.transform(utf8.decoder).listen(terminal.write);
+        // Decode byte chunks incrementally, retaining partial UTF-8 sequences.
+        pty.output
+            .map<List<int>>((chunk) => chunk)
+            .transform(utf8.decoder)
+            .listen((text) => terminal.write(text));
         terminal.onOutput = (data) => pty?.write(utf8.encode(data));
         terminal.onResize = (w, h, pw, ph) => pty?.resize(h, w);
       } catch (_) {}

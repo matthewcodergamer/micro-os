@@ -40,7 +40,12 @@ flutter:
     - assets/rootfs/
     - assets/proot/
     - assets/fonts/OFL.txt
+    - assets/icons/dock/
   fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf
+          weight: 400
     - family: JetBrains Mono
       fonts:
         - asset: assets/fonts/JetBrainsMono-Regular.ttf

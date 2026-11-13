@@ -62,7 +62,7 @@ ThemeData buildMicroTheme() {
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: Colors.transparent,
-    fontFamily: 'Roboto',
+    fontFamily: 'Inter',
     splashFactory: NoSplash.splashFactory,
     visualDensity: VisualDensity.compact,
     textTheme: const TextTheme(

@@ -178,6 +178,29 @@ class _DockState extends State<Dock> {
   }
 }
 
+Widget _dockAssetIcon(AppId app, double size) {
+  final asset = switch (app) {
+    AppId.files => 'assets/icons/dock/finder-icon.png',
+    AppId.terminal => 'assets/icons/dock/terminal-icon.png',
+    AppId.browser => 'assets/icons/dock/safari-icon.png',
+    AppId.settings => 'assets/icons/dock/settings-icon.png',
+    AppId.desktop || AppId.aiHub => null,
+  };
+  if (asset == null) return MacAppIcon(app: app, size: size);
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(size * 0.22),
+    child: Image.asset(
+      asset,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
+      cacheWidth: (size * 2).round(),
+      cacheHeight: (size * 2).round(),
+    ),
+  );
+}
+
 class _DockItem extends StatelessWidget {
   const _DockItem({
     required this.app,
@@ -201,7 +224,7 @@ class _DockItem extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          MacAppIcon(app: app, size: size),
+          _dockAssetIcon(app, size),
           const SizedBox(height: 4),
           RunningDot(active: running),
         ],
