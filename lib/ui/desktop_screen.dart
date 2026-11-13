@@ -281,8 +281,8 @@ class _WelcomePanel extends StatelessWidget {
                           width: cardWidth,
                           icon: Icons.public_rounded,
                           color: const Color(0xFF7C72F5),
-                          title: 'Firefox',
-                          subtitle: 'Pre-installed desktop browser',
+                          title: 'Chromium',
+                          subtitle: 'Native ARM64 desktop browser',
                           onTap: () => onOpen(AppId.browser),
                         ),
                         _LaunchCard(
