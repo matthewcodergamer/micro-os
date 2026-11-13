@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:zstd_dart/zstd_dart.dart';
 
+import '../core/browser_navigation.dart';
 import 'background_session.dart';
 
 enum RuntimeStatus { checking, missing, installing, ready, failed }
@@ -590,17 +591,9 @@ class LinuxRuntime extends ChangeNotifier {
       _appendLog('[microos] browser launch blocked: the X11/VNC display is not healthy');
       return;
     }
-    final requestedUrl = (url ?? '').trim();
-    final normalizedUrl = requestedUrl.isEmpty
-        ? 'https://www.google.com'
-        : (requestedUrl.contains('://') || requestedUrl.startsWith('about:')
-            ? requestedUrl
-            : 'https://$requestedUrl');
-    final parsedUrl = Uri.tryParse(normalizedUrl);
-    if (parsedUrl == null ||
-        (!const <String>['http', 'https', 'about'].contains(parsedUrl.scheme))) {
-      throw ArgumentError.value(url, 'url', 'Only http, https, or about URLs are supported');
-    }
+    final normalizedUrl = BrowserNavigation.normalizeAddress(
+      url ?? 'https://www.google.com',
+    );
     final launcher = browser == 'firefox'
         ? '/usr/local/bin/start-firefox.sh'
         : '/usr/local/bin/microos-browse';
@@ -616,7 +609,21 @@ class LinuxRuntime extends ChangeNotifier {
     );
   }
 
-  String _shellQuote(String value) => "'${value.replaceAll("'", r"'\''")}'";
+  String _shellQuote(String value) => BrowserNavigation.shellQuote(value);
+
+  /// Send a native X11 keyboard shortcut to the focused Linux browser window.
+  /// Only predefined actions are accepted; arbitrary key strings never reach X.
+  Future<void> controlBrowser(String action) async {
+    if (!isReady) return;
+    final shortcut = BrowserNavigation.shortcutFor(action);
+    if (shortcut == null) {
+      throw ArgumentError.value(action, 'action', 'Unsupported browser action');
+    }
+    runDetached(
+      <String>['/usr/bin/xdotool', 'key', '--clearmodifiers', shortcut],
+      extraEnv: const <String, String>{'DISPLAY': ':1'},
+    );
+  }
 
   /// Attempts to repair interrupted dpkg configuration and broken dependencies.
   /// Output is streamed into the same diagnostic log shown in Settings.
