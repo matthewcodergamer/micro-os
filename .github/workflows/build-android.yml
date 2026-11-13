@@ -50,11 +50,13 @@ jobs:
           docker info >/dev/null
           docker pull --platform linux/arm64 ubuntu:24.04
 
-      # Firefox is pre-installed and smoke-tested in the rootfs before APK packaging.
+      # Native ARM64 Chromium and the X11/noVNC stack are smoke-tested in the rootfs.
       - name: Build the fully provisioned ARM64 rootfs
         run: |
           bash -n tool/prebake_rootfs.sh
           bash -n tool/setup.sh
+          grep -q 'start-browser.sh' tool/setup.sh
+          grep -q 'start-desktop.sh' tool/setup.sh
           chmod +x tool/prebake_rootfs.sh
           ./tool/prebake_rootfs.sh
           ROOTFS="assets/rootfs/rootfs.tar.zst"
