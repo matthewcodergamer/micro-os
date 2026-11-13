@@ -33,7 +33,8 @@ stage() {
   fi
 }
 
-mkdir -p /root/.microos /root/projects /root/.local/bin /root/.config
+mkdir -p /root/.microos /root/projects /root/.local/bin /root/.config /mnt/android/Download
+ln -sfn /mnt/android/Download /root/Downloads
 
 # -----------------------------------------------------------------------------
 # 0. Sanity: are we really inside the guest?
@@ -188,12 +189,19 @@ if not isinstance(preferences, dict):
     preferences = {}
 bookmark_bar = preferences.setdefault("bookmark_bar", {})
 browser = preferences.setdefault("browser", {})
+download = preferences.setdefault("download", {})
 changed = False
 if "show_on_all_tabs" not in bookmark_bar:
     bookmark_bar["show_on_all_tabs"] = True
     changed = True
 if "show_home_button" not in browser:
     browser["show_home_button"] = True
+    changed = True
+if download.get("default_directory") != "/mnt/android/Download":
+    download["default_directory"] = "/mnt/android/Download"
+    changed = True
+if download.get("prompt_for_download", True):
+    download["prompt_for_download"] = False
     changed = True
 if changed or not os.path.exists(path):
     temporary = path + ".microos-tmp"
