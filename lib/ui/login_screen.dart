@@ -127,6 +127,15 @@ class _LoginScreenState extends State<LoginScreen>
             fontWeight: FontWeight.w600,
           ),
         ),
+        const SizedBox(height: 7),
+        Text(
+          'Welcome back',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.66),
+            fontSize: 13,
+            letterSpacing: 0.2,
+          ),
+        ),
         const SizedBox(height: 22),
         if (widget.settings.hasPassword)
           ConstrainedBox(
@@ -206,9 +215,12 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                 ),
                 const SizedBox(height: 14),
-                FilledButton(
-                  onPressed: _tryUnlock,
-                  child: const Text('Unlock MicroOS'),
+                Tooltip(
+                  message: 'Unlock MicroOS',
+                  child: FilledButton(
+                    onPressed: _tryUnlock,
+                    child: const Text('Unlock MicroOS'),
+                  ),
                 ),
               ],
             ),
@@ -225,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           FilledButton(
             onPressed: _tryUnlock,
-            child: const Text('Continue'),
+            child: const Text('Continue to Desktop'),
           ),
         ],
       ],
