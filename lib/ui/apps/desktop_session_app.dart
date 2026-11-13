@@ -315,6 +315,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       'reconnect=1',
       'reconnect_delay=1500',
       'path=websockify',
+      // Moderate quality/compression keeps the stream responsive on mobile CPU.
+      'quality=5',
+      'compression=2',
     ];
     return '$base?${query.join('&')}';
   }

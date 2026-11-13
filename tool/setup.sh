@@ -175,7 +175,6 @@ install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSE
 exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
   --no-sandbox \
   --disable-gpu-sandbox \
-  --single-process \
   --process-per-site \
   --disable-background-networking \
   --disable-features=Translate,OptimizationHints \
@@ -433,7 +432,10 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 MENU
 openbox --display :1 >"$LOG/openbox.log" 2>&1 &
 OPENBOX_PID=$!
-x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost -noxdamage -noshm -repeat -wait 15 -defer 15 >"$LOG/x11vnc.log" 2>&1 &
+# 8 ms polling/defer is a balanced latency setting for the 4 GB mobile target.
+# Avoid -ncache here: noVNC does not benefit reliably from x11vnc's VNC-client
+# framebuffer cache extensions and they can increase memory/artifact risk.
+x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost -noxdamage -noshm -repeat -wait 8 -defer 8 >"$LOG/x11vnc.log" 2>&1 &
 VNC_PID=$!
 if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then echo "[microos] ERROR: x11vnc failed to open port 5900" >&2; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
 if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client is missing" >&2; exit 1; fi
