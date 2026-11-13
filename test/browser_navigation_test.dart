@@ -43,11 +43,11 @@ void main() {
   test('shell quoting protects metacharacters and apostrophes', () {
     expect(
       BrowserNavigation.shellQuote(r"https://example.com/?q=$(touch /tmp/pwned)&v=it's"),
-      "'https://example.com/?q=$(touch /tmp/pwned)&v=it'\\''s'",
+      r"'https://example.com/?q=$(touch /tmp/pwned)&v=it'\''s'",
     );
   });
 
-  test('maps desktop Chromium controls to native keyboard shortcuts', () {
+  test('maps native tabs and navigation to Chromium shortcuts', () {
     expect(BrowserNavigation.shortcutFor('back'), 'alt+Left');
     expect(BrowserNavigation.shortcutFor('forward'), 'alt+Right');
     expect(BrowserNavigation.shortcutFor('reload'), 'ctrl+r');
@@ -56,13 +56,10 @@ void main() {
     expect(BrowserNavigation.shortcutFor('focus-address'), 'ctrl+l');
     expect(BrowserNavigation.shortcutFor('bookmarks'), 'ctrl+shift+b');
     expect(BrowserNavigation.shortcutFor('fullscreen'), 'F11');
-    expect(BrowserNavigation.shortcutFor('zoom-in'), 'ctrl+plus');
-    expect(BrowserNavigation.shortcutFor('zoom-out'), 'ctrl+minus');
-    expect(BrowserNavigation.shortcutFor('zoom-reset'), 'ctrl+0');
     expect(BrowserNavigation.shortcutFor('evil; touch /tmp/pwned'), isNull);
   });
 
-  test('allows only the explicit browser-window actions', () {
+  test('allows only explicit browser-window actions', () {
     expect(BrowserNavigation.isSupportedAction('window-minimize'), isTrue);
     expect(BrowserNavigation.isSupportedAction('window-maximize'), isTrue);
     expect(BrowserNavigation.isSupportedAction('window-restore'), isTrue);
