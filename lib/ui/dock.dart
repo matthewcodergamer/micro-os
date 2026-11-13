@@ -32,6 +32,8 @@ class Dock extends StatelessWidget {
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
     final desktop = scope.desktop;
+    final compact = MediaQuery.sizeOf(context).width < kCompactBreakpoint;
+    final iconSize = compact ? 38.0 : 52.0;
 
     return AnimatedSlide(
       duration: const Duration(milliseconds: 280),
@@ -48,7 +50,10 @@ class Dock extends StatelessWidget {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 8 : 14,
+                    vertical: compact ? 7 : 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0x991C1C1E),
                     borderRadius: BorderRadius.circular(28),
@@ -71,6 +76,7 @@ class Dock extends StatelessWidget {
                         _DockItem(
                           app: app,
                           running: desktop.isRunning(app),
+                          size: iconSize,
                           onTap: () => onOpen(app),
                           onLongPress: desktop.isRunning(app)
                               ? () {
@@ -80,7 +86,7 @@ class Dock extends StatelessWidget {
                                 }
                               : null,
                         ),
-                        if (app != _apps.last) const SizedBox(width: 10),
+                        if (app != _apps.last) SizedBox(width: compact ? 5 : 10),
                       ],
                     ],
                   ),
@@ -98,12 +104,14 @@ class _DockItem extends StatelessWidget {
   const _DockItem({
     required this.app,
     required this.running,
+    required this.size,
     required this.onTap,
     this.onLongPress,
   });
 
   final AppId app;
   final bool running;
+  final double size;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -115,7 +123,7 @@ class _DockItem extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          MacAppIcon(app: app, size: 52),
+          MacAppIcon(app: app, size: size),
           const SizedBox(height: 4),
           RunningDot(active: running),
         ],
