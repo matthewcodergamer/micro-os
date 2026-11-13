@@ -7,8 +7,23 @@ import '../core/theme.dart';
 import '../models/window_state.dart';
 import '../services/linux_runtime.dart';
 
-/// Owns the window list, stacking order and focus. This is the piece that
-/// turns a pile of widgets into something that behaves like a desktop.
+double _clampD(double v, double lo, double hi) {
+  if (hi < lo) return lo;
+  return v < lo ? lo : (v > hi ? hi : v);
+}
+
+/// Owns the window list, stacking order, focus and the lock state. This is
+/// the piece that turns a pile of widgets into something that behaves like a
+/// desktop.
+///
+/// Geometry is expressed in the coordinate space of the interactive layer
+/// (the screen minus left/right cutout insets and minus the on-screen
+/// keyboard). [topReserve] is the menu bar (plus any top cutout) and
+/// [bottomReserve] is the Dock.
+///
+/// Phone-first behaviour (kept from the original): below
+/// [kCompactBreakpoint] apps open maximized as immersive workspaces and the
+/// green traffic light restores the floating desktop window.
 class DesktopState extends ChangeNotifier {
   DesktopState(this.runtime);
 
@@ -19,9 +34,24 @@ class DesktopState extends ChangeNotifier {
   int _sequence = 0;
   int _zCounter = 0;
 
+  /// The shell always starts at the login screen.
+  bool locked = true;
+
+  double topReserve = kMenuBarHeight;
+  double bottomReserve = kDockReserved;
+  double bottomInset = 0;
+  Size _screen = Size.zero;
+
+  Size get screen => _screen;
+  bool get isCompact => _screen.width > 0 && _screen.width < kCompactBreakpoint;
+
   ManagedWindow? get focused {
-    if (windows.isEmpty) return null;
-    return windows.reduce((a, b) => a.zIndex >= b.zIndex ? a : b);
+    ManagedWindow? best;
+    for (final w in windows) {
+      if (w.minimized) continue;
+      if (best == null || w.zIndex > best.zIndex) best = w;
+    }
+    return best;
   }
 
   List<ManagedWindow> get ordered {
@@ -38,79 +68,133 @@ class DesktopState extends ChangeNotifier {
     return null;
   }
 
-  /// Opens [app], or raises the existing window if it is already running.
-  ManagedWindow open(
-    AppId app, {
-    required Size screen,
-    List<String>? args,
-    String? title,
-  }) {
-    final existing = windowFor(app);
-    if (existing != null) {
-      existing.minimized = false;
-      focus(existing.id);
-      return existing;
-    }
-
-    final window = ManagedWindow(
-      id: ++_sequence,
-      app: app,
-      title: title ?? app.title,
-      rect: _initialRect(app, screen),
-      zIndex: ++_zCounter,
-      args: args,
-    )..pinned = false;
-
-    // Phone-first behavior: apps open as immersive workspaces, not tiny
-    // desktop windows. The green control still restores the desktop window.
-    if (screen.width < 720) {
-      window.restoreRect = window.rect;
-      window.rect = Rect.fromLTWH(
-        0,
-        kStatusBarHeight,
-        screen.width,
-        math.max(0.0, screen.height - kStatusBarHeight),
-      );
-      window.maximized = true;
-    }
-
-    windows.add(window);
+  void lock() {
+    if (locked) return;
+    locked = true;
     notifyListeners();
-    return window;
   }
 
-  Rect _initialRect(AppId app, Size screen) {
-    final usableHeight = screen.height - kStatusBarHeight - kDockReserved;
-    final compact = screen.width < 720;
+  void unlock() {
+    if (!locked) return;
+    locked = false;
+    notifyListeners();
+  }
 
+  // ---------------------------------------------------------------- geometry
+
+  bool _compactFor(Size s) => s.width < kCompactBreakpoint;
+
+  /// Floating-window area: below the menu bar, above the Dock.
+  Rect _area(Size screen) {
+    final bottom = math.max(topReserve + 160.0, screen.height - bottomReserve);
+    return Rect.fromLTRB(0, topReserve, screen.width, bottom);
+  }
+
+  /// Where a maximized window sits. On phones the Dock is hidden while a
+  /// window is maximized, so it runs to the bottom edge.
+  Rect _maxRect(Size screen) {
+    if (_compactFor(screen)) {
+      return Rect.fromLTRB(
+        0,
+        topReserve,
+        screen.width,
+        screen.height,
+      );
+    }
+    return _area(screen);
+  }
+
+  void syncToScreen(
+    Size screen, {
+    required double topReserve,
+    required double bottomReserve,
+    required double bottomInset,
+  }) {
+    final changed = _screen != screen ||
+        this.topReserve != topReserve ||
+        this.bottomReserve != bottomReserve ||
+        this.bottomInset != bottomInset;
+    _screen = screen;
+    this.topReserve = topReserve;
+    this.bottomReserve = bottomReserve;
+    this.bottomInset = bottomInset;
+    if (changed) {
+      // Keep maximized windows glued to the usable area when the keyboard or
+      // orientation changes.
+      for (final w in windows) {
+        if (w.maximized) {
+          w.rect = _maxRect(screen);
+        } else if (w.pinned) {
+          w.rect = _maxRect(screen);
+        }
+      }
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------- windows
+
+  ManagedWindow open(
+    AppId app, {
+    List<String>? args,
+    bool newWindow = false,
+  }) {
+    if (!newWindow) {
+      final existing = windowFor(app);
+      if (existing != null) {
+        if (existing.minimized) {
+          existing.minimized = false;
+        }
+        focus(existing.id);
+        return existing;
+      }
+    }
+
+    final id = ++_sequence;
     final size = app.defaultSize;
-    // On phones, use a floating window with a usable title bar and resize grip
-    // instead of pinning every app edge-to-edge. On tablets, keep desktop sizes.
-    final width = math.min(size.width, math.max(280.0, screen.width - (compact ? 24 : 48)));
-    final height = math.min(size.height, math.max(240.0, usableHeight - 24));
-    final offset = compact ? 0.0 : (windows.length % 6) * 26.0;
+    final area = _area(_screen);
+    final origin = Offset(
+      area.left + (area.width - size.width) / 2 + (id % 5) * 24,
+      area.top + (area.height - size.height) / 2 + (id % 5) * 24,
+    );
+    var rect = Rect.fromLTWH(
+      origin.dx,
+      origin.dy,
+      size.width,
+      size.height,
+    );
 
-    var left = compact ? (screen.width - width) / 2 : (screen.width - width) / 2 + offset - 60;
-    var top = kStatusBarHeight + 18 + offset;
+    // Phone portrait: open maximized so the app owns the whole workspace.
+    final maximize = _compactFor(_screen);
+    if (maximize) {
+      rect = _maxRect(_screen);
+    }
 
-    left = left
-        .clamp(8.0, math.max(8.0, screen.width - width - 8))
-        .toDouble();
-    top = top
-        .clamp(
-          kStatusBarHeight + 8,
-          math.max(kStatusBarHeight + 8, screen.height - kDockReserved - height),
-        )
-        .toDouble();
-
-    return Rect.fromLTWH(left, top, width, height);
+    final w = ManagedWindow(
+      id: id,
+      app: app,
+      title: app.title,
+      rect: rect,
+      zIndex: ++_zCounter,
+      args: args,
+    );
+    if (maximize) {
+      w.maximized = true;
+      w.pinned = true;
+    }
+    windows.add(w);
+    notifyListeners();
+    return w;
   }
 
   void focus(int id) {
-    final window = _byId(id);
-    if (window == null) return;
-    if (window.zIndex == _zCounter) return;
-    window.zIndex = ++_zCounter;
+    final w = windows.cast<ManagedWindow?>().firstWhere(
+          (x) => x!.id == id,
+          orElse: () => null,
+        );
+    if (w == null) return;
+    if (w.minimized) w.minimized = false;
+    w.zIndex = ++_zCounter;
     notifyListeners();
   }
 
@@ -120,147 +204,114 @@ class DesktopState extends ChangeNotifier {
   }
 
   void minimize(int id) {
-    final window = _byId(id);
-    if (window == null) return;
-    window.minimized = !window.minimized;
-    if (!window.minimized) window.zIndex = ++_zCounter;
+    final w = windows.cast<ManagedWindow?>().firstWhere(
+          (x) => x!.id == id,
+          orElse: () => null,
+        );
+    if (w == null) return;
+    w.minimized = true;
+    notifyListeners();
+  }
+
+  void setTitle(int id, String title) {
+    final w = windows.cast<ManagedWindow?>().firstWhere(
+          (x) => x!.id == id,
+          orElse: () => null,
+        );
+    if (w == null) return;
+    if (w.title == title) return;
+    w.title = title;
     notifyListeners();
   }
 
   void toggleMaximize(int id, Size screen) {
-    final window = _byId(id);
-    if (window == null) return;
-
-    if (window.maximized) {
-      window.rect = window.restoreRect ?? window.rect;
-      window.restoreRect = null;
-      window.maximized = false;
+    final w = windows.cast<ManagedWindow?>().firstWhere(
+          (x) => x!.id == id,
+          orElse: () => null,
+        );
+    if (w == null) return;
+    if (w.maximized) {
+      w.maximized = false;
+      w.pinned = false;
+      w.rect = w.restoreRect ?? appDefaultRect(w.app, screen);
+      w.restoreRect = null;
     } else {
-      window.restoreRect = window.rect;
-      window.rect = Rect.fromLTWH(
-        0,
-        kStatusBarHeight,
-        screen.width,
-        screen.height - kStatusBarHeight,
-      );
-      window.maximized = true;
+      w.restoreRect = w.rect;
+      w.maximized = true;
+      w.pinned = _compactFor(screen);
+      w.rect = _maxRect(screen);
     }
-    window.zIndex = ++_zCounter;
-    notifyListeners();
+    focus(id);
+  }
+
+  Rect appDefaultRect(AppId app, Size screen) {
+    final size = app.defaultSize;
+    final area = _area(screen);
+    return Rect.fromLTWH(
+      area.left + (area.width - size.width) / 2,
+      area.top + (area.height - size.height) / 2,
+      size.width,
+      size.height,
+    );
   }
 
   void move(int id, Offset delta, Size screen) {
-    final window = _byId(id);
-    if (window == null || window.pinned || window.maximized) return;
-
-    final next = window.rect.shift(delta);
-    final maxLeft = math.max(0.0, screen.width - 120);
-    final maxTop = screen.height - kDockReserved - 40;
-
-    window.rect = Rect.fromLTWH(
-      next.left.clamp(-window.rect.width + 120, maxLeft).toDouble(),
-      next.top.clamp(kStatusBarHeight, maxTop).toDouble(),
-      window.rect.width,
-      window.rect.height,
-    );
-    notifyListeners();
-  }
-
-  void resize(int id, Offset delta, Size screen) {
-    final window = _byId(id);
-    if (window == null || window.pinned || window.maximized) return;
-
-    const minWidth = 280.0;
-    const minHeight = 200.0;
-    final maxWidth = screen.width - window.rect.left;
-    final maxHeight =
-        screen.height - kDockReserved - window.rect.top;
-
-    window.rect = Rect.fromLTWH(
-      window.rect.left,
-      window.rect.top,
-      (window.rect.width + delta.dx)
-          .clamp(math.min(minWidth, maxWidth), math.max(minWidth, maxWidth))
-          .toDouble(),
-      (window.rect.height + delta.dy)
-          .clamp(math.min(minHeight, maxHeight), math.max(minHeight, maxHeight))
-          .toDouble(),
-    );
-    notifyListeners();
-  }
-
-  /// Resize from any corner while keeping the opposite corner anchored.
-  void resizeFrom(
-    int id,
-    Offset delta,
-    Size screen, {
-    required bool fromLeft,
-    required bool fromTop,
-  }) {
-    final window = _byId(id);
-    if (window == null || window.pinned || window.maximized) return;
-    const minWidth = 240.0;
-    const minHeight = 160.0;
-    final old = window.rect;
-    var left = old.left;
-    var top = old.top;
-    var right = old.right;
-    var bottom = old.bottom;
-    if (fromLeft) {
-      left = (old.left + delta.dx).clamp(0.0, right - minWidth).toDouble();
-    } else {
-      right = (old.right + delta.dx).clamp(left + minWidth, screen.width).toDouble();
-    }
-    if (fromTop) {
-      top = (old.top + delta.dy).clamp(kStatusBarHeight, bottom - minHeight).toDouble();
-    } else {
-      bottom = (old.bottom + delta.dy).clamp(top + minHeight, screen.height - kDockReserved).toDouble();
-    }
-    window.rect = Rect.fromLTRB(left, top, right, bottom);
-    notifyListeners();
-  }
-
-  /// Called on rotation / resize so pinned windows keep filling the screen.
-  void syncToScreen(Size screen) {
-    final compact = screen.width < 720;
-    var changed = false;
-    for (final window in windows) {
-      if (window.pinned) {
-        window.pinned = false;
-        changed = true;
-      }
-      if (window.maximized && compact) {
-        final rect = Rect.fromLTWH(
-          0,
-          kStatusBarHeight,
-          screen.width,
-          math.max(0.0, screen.height - kStatusBarHeight),
+    final w = windows.cast<ManagedWindow?>().firstWhere(
+          (x) => x!.id == id,
+          orElse: () => null,
         );
-        if (rect != window.rect) {
-          window.rect = rect;
-          changed = true;
-        }
-        continue;
-      }
-      final maxWidth = math.max(280.0, screen.width - 16);
-      final maxHeight = math.max(240.0, screen.height - kStatusBarHeight - kDockReserved - 8);
-      final width = math.min(window.rect.width, maxWidth);
-      final height = math.min(window.rect.height, maxHeight);
-      final left = compact ? (screen.width - width) / 2 : window.rect.left.clamp(0.0, math.max(0.0, screen.width - width)).toDouble();
-      final top = window.rect.top.clamp(kStatusBarHeight, math.max(kStatusBarHeight, screen.height - kDockReserved - height)).toDouble();
-      final rect = Rect.fromLTWH(left, top, width, height);
-      if (rect != window.rect) {
-        window.rect = rect;
-        changed = true;
-      }
-    }
-    if (changed) notifyListeners();
+    if (w == null || w.maximized) return;
+    final area = _area(screen);
+    var left = w.rect.left + delta.dx;
+    var top = w.rect.top + delta.dy;
+    // Keep a little of the title bar visible.
+    left = _clampD(left, area.left - w.rect.width + 80, area.right - 80);
+    top = _clampD(top, area.top, area.bottom - 40);
+    w.rect = Rect.fromLTWH(left, top, w.rect.width, w.rect.height);
+    notifyListeners();
   }
 
-  ManagedWindow? _byId(int id) {
-    for (final w in windows) {
-      if (w.id == id) return w;
+  void resizeEdges(
+    int id,
+    Size screen, {
+    double? left,
+    double? top,
+    double? right,
+    double? bottom,
+  }) {
+    final w = windows.cast<ManagedWindow?>().firstWhere(
+          (x) => x!.id == id,
+          orElse: () => null,
+        );
+    if (w == null || w.maximized) return;
+    final area = _area(screen);
+    var l = w.rect.left;
+    var t = w.rect.top;
+    var r = w.rect.right;
+    var b = w.rect.bottom;
+    if (left != null) l = left;
+    if (top != null) t = top;
+    if (right != null) r = right;
+    if (bottom != null) b = bottom;
+    // Minimum size.
+    if (r - l < 280) {
+      if (left != null) l = r - 280;
+      else r = l + 280;
     }
-    return null;
+    if (b - t < 180) {
+      if (top != null) t = b - 180;
+      else b = t + 180;
+    }
+    // Keep inside the floating area (roughly).
+    l = _clampD(l, area.left - 40, area.right - 80);
+    t = _clampD(t, area.top, area.bottom - 40);
+    r = _clampD(r, l + 280, area.right + 40);
+    b = _clampD(b, t + 180, area.bottom + 40);
+    w.rect = Rect.fromLTRB(l, t, r, b);
+    notifyListeners();
+  }
+
+  void dispose() {
+    windows.clear();
   }
 }
