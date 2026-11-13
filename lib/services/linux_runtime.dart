@@ -29,7 +29,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '11';
+  static const String _rootfsVersion = '12';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -284,7 +284,20 @@ class LinuxRuntime extends ChangeNotifier {
       });
     }
 
-    await _extractZstdWithSystemTar(archive.path, target.path);
+    final archiveBytes = await archive.length();
+    await _extractZstdWithSystemTar(
+      archive.path,
+      target.path,
+      totalBytes: archiveBytes,
+      onProgress: (extractedBytes) {
+        final fraction = archiveBytes == 0
+            ? 0.0
+            : (extractedBytes / archiveBytes).clamp(0.0, 1.0);
+        progress = 0.08 + (fraction * 0.84);
+        stage = 'Unpacking Linux workstation · ${(fraction * 100).round()}%';
+        _notify();
+      },
+    );
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');
     }
@@ -301,8 +314,10 @@ class LinuxRuntime extends ChangeNotifier {
   /// wholesale into memory or written as a second giant temporary file.
   Future<void> _extractZstdWithSystemTar(
     String archivePath,
-    String destination,
-  ) async {
+    String destination, {
+    required int totalBytes,
+    required ValueChanged<int> onProgress,
+  }) async {
     final tar = await Process.start(
       '/system/bin/tar',
       <String>['-x', '-f', '-', '-C', destination],
@@ -324,6 +339,7 @@ class LinuxRuntime extends ChangeNotifier {
         if (count == 0) break;
 
         final decoded = decoder.feed(Uint8List.sublistView(buffer, 0, count));
+        onProgress(await input.position());
         if (decoded.isNotEmpty) {
           tar.stdin.add(decoded);
           // Flush each chunk to apply back-pressure to the decoder.
@@ -335,6 +351,7 @@ class LinuxRuntime extends ChangeNotifier {
       if (!decoder.isFrameComplete) {
         throw StateError('The zstd rootfs archive ended before its frame completed');
       }
+      onProgress(totalBytes);
 
       await tar.stdin.close();
       final exitCode = await tar.exitCode;
@@ -416,8 +433,6 @@ class LinuxRuntime extends ChangeNotifier {
       // Android shared storage, so the guest sees the phone's real files.
       // Binds are only added when the path exists: a missing bind aborts proot.
       if (shared.existsSync()) ...<String>['-b', '/storage/emulated/0:/mnt/android'],
-      if (downloads.existsSync())
-        ...<String>['-b', '/storage/emulated/0/Download:/root/Downloads'],
       '-b',
       '${base.path}/tmp:/tmp',
       '-w',
