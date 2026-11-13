@@ -9,9 +9,14 @@ import 'apps/files_app.dart';
 import 'apps/settings_app.dart';
 import 'apps/torrents_app.dart';
 import 'apps/terminal_app.dart';
+import 'control_center.dart';
 import 'dock.dart';
+import 'login_screen.dart';
+import 'mac_icons.dart';
+import 'spotlight.dart';
 import 'install_screen.dart';
 import 'status_bar.dart';
+import 'wallpaper.dart';
 import 'window_frame.dart';
 
 /// The desktop: wallpaper, window layer, menu bar, Dock.
@@ -24,6 +29,8 @@ class DesktopScreen extends StatefulWidget {
 
 class _DesktopScreenState extends State<DesktopScreen> {
   Size _size = Size.zero;
+  bool _spotlightOpen = false;
+  bool _controlCenterOpen = false;
 
   @override
   Widget build(BuildContext context) {
@@ -48,10 +55,23 @@ class _DesktopScreenState extends State<DesktopScreen> {
           return AnimatedBuilder(
             animation: scope.desktop,
             builder: (context, _) {
+              if (scope.desktop.locked) {
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const Wallpaper(),
+                    LoginScreen(
+                      settings: scope.settings,
+                      onUnlock: scope.desktop.unlock,
+                    ),
+                  ],
+                );
+              }
+
               final fullScreen = compact && scope.desktop.focused?.maximized == true;
               return Stack(
                 children: [
-                  const Positioned.fill(child: _Wallpaper()),
+                  const Positioned.fill(child: Wallpaper()),
                   for (final window in scope.desktop.ordered)
                     if (!window.minimized)
                       Positioned(
@@ -79,6 +99,15 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     child: StatusBar(
                       desktop: scope.desktop,
                       stats: scope.stats,
+                      compact: compact,
+                      onSpotlight: () => setState(() {
+                        _spotlightOpen = true;
+                        _controlCenterOpen = false;
+                      }),
+                      onControlCenter: () => setState(() {
+                        _controlCenterOpen = true;
+                        _spotlightOpen = false;
+                      }),
                     ),
                   ),
                   if (!keyboardOpen && !fullScreen)
@@ -93,6 +122,26 @@ class _DesktopScreenState extends State<DesktopScreen> {
                           onOpen: (app) =>
                               scope.desktop.open(app, screen: size),
                         ),
+                      ),
+                    ),
+                  if (_spotlightOpen)
+                    Positioned.fill(
+                      child: SpotlightOverlay(
+                        topPadding: kMenuBarHeight,
+                        onClose: () => setState(() => _spotlightOpen = false),
+                        onOpen: (app) {
+                          setState(() => _spotlightOpen = false);
+                          scope.desktop.open(app, screen: size);
+                        },
+                      ),
+                    ),
+                  if (_controlCenterOpen)
+                    Positioned.fill(
+                      child: ControlCenterOverlay(
+                        topPadding: kMenuBarHeight,
+                        onClose: () => setState(() => _controlCenterOpen = false),
+                        runtime: scope.runtime,
+                        stats: scope.stats,
                       ),
                     ),
                   if (!scope.runtime.isReady)
