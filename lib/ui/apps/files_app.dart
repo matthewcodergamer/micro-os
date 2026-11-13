@@ -270,7 +270,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline_rounded, color: MicroColors.red),
-              title: const Text('Delete'),
+              title: const Text('Move to Trash'),
               onTap: () => Navigator.pop(context, 'delete'),
             ),
           ],
@@ -305,7 +305,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       }
       final destination = _path == '/' ? '/${name.trim()}' : '$_path/${name.trim()}';
       try {
-        await _runGuest('mv -- "$1" "$2"', <String>[path, destination]);
+        await _runGuest('if [ -e "$2" ] || [ -L "$2" ]; then echo "A file with that name already exists." >&2; exit 1; fi; mv -- "$1" "$2"', <String>[path, destination]);
         await _load();
       } catch (error) {
         _notifyActionError(error);
@@ -316,19 +316,19 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
         builder: (context) => AlertDialog(
           backgroundColor: MicroColors.panelSolid,
           title: const Text('Delete this item?', style: TextStyle(color: MicroColors.text)),
-          content: Text('“${entry.name}” will be permanently deleted from Linux.', style: const TextStyle(color: MicroColors.subtle)),
+          content: Text('“${entry.name}” will be moved to the Linux Trash. You can restore it from the Trash folder.', style: const TextStyle(color: MicroColors.subtle)),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete', style: TextStyle(color: MicroColors.red)),
+              child: const Text('Move to Trash', style: TextStyle(color: MicroColors.red)),
             ),
           ],
         ),
       );
       if (confirmed == true) {
         try {
-          await _runGuest('rm -rf -- "$1"', <String>[path]);
+          await _runGuest('mkdir -p /root/.local/share/Trash/files; target="/root/.local/share/Trash/files/$(basename -- "$1")"; if [ -e "$target" ] || [ -L "$target" ]; then target="$target.$(date +%s%N)"; fi; mv -- "$1" "$target"', <String>[path]);
           await _load();
         } catch (error) {
           _notifyActionError(error);
