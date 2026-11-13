@@ -7,6 +7,7 @@ import 'apps/ai_hub_app.dart';
 import 'apps/desktop_session_app.dart';
 import 'apps/files_app.dart';
 import 'apps/settings_app.dart';
+import 'apps/torrents_app.dart';
 import 'apps/terminal_app.dart';
 import 'dock.dart';
 import 'install_screen.dart';
@@ -119,6 +120,8 @@ class _DesktopScreenState extends State<DesktopScreen> {
         );
       case AppId.files:
         return FilesApp(runtime: scope.runtime);
+      case AppId.torrents:
+        return TorrentsApp(runtime: scope.runtime);
       case AppId.aiHub:
         return AiHubApp(runtime: scope.runtime, settings: scope.settings);
       case AppId.settings:
@@ -281,6 +284,14 @@ class _WelcomePanel extends StatelessWidget {
                           title: 'Firefox',
                           subtitle: 'Pre-installed desktop browser',
                           onTap: () => onOpen(AppId.browser),
+                        ),
+                        _LaunchCard(
+                          width: cardWidth,
+                          icon: Icons.downloading_rounded,
+                          color: const Color(0xFF36B7A5),
+                          title: 'Torrents',
+                          subtitle: 'Manage downloads and magnet links',
+                          onTap: () => onOpen(AppId.torrents),
                         ),
                         _LaunchCard(
                           width: cardWidth,
