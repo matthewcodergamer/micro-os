@@ -1,11 +1,12 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app_scope.dart';
+import '../../core/terminal_profiles.dart';
 import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
+
+enum _Page { desktop, speech, github, huggingface, linux, terminal, browser, login, about }
 
 class SettingsApp extends StatefulWidget {
   const SettingsApp({super.key, required this.runtime});
@@ -17,613 +18,282 @@ class SettingsApp extends StatefulWidget {
 }
 
 class _SettingsAppState extends State<SettingsApp> {
-  final TextEditingController _token = TextEditingController();
-  final TextEditingController _hfToken = TextEditingController();
-
-  bool _busy = false;
-  bool _hfBusy = false;
-  bool _repairing = false;
-  String? _message;
-  bool _messageIsError = false;
-  String? _login;
-  String? _hfAccount;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _restore());
-  }
-
-  Future<void> _restore() async {
-    final scope = AppScope.of(context);
-    final login = await scope.auth.readLogin();
-    final hfToken = await scope.auth.readHuggingFaceToken();
-    if (!mounted) return;
-    setState(() {
-      _login = login;
-      _hfAccount = hfToken == null ? null : 'Token saved';
-    });
-  }
-
-  @override
-  void dispose() {
-    _token.dispose();
-    _hfToken.dispose();
-    super.dispose();
-  }
-
-  void _notify(String message, {bool isError = false}) {
-    setState(() {
-      _message = message;
-      _messageIsError = isError;
-    });
-  }
-
-  Future<void> _saveToken() async {
-    final scope = AppScope.of(context);
-    final token = _token.text.trim();
-
-    if (token.isEmpty) {
-      _notify('Paste a GitHub Personal Access Token first.', isError: true);
-      return;
-    }
-
-    setState(() => _busy = true);
-    try {
-      final identity = await scope.auth.verify(token);
-      if (identity == null) {
-        _notify(
-          'GitHub rejected that token. It needs the “repo” scope (classic) or '
-          'Contents: read/write (fine-grained).',
-          isError: true,
-        );
-        return;
-      }
-
-      await scope.auth.saveToken(token, identity.login);
-      widget.runtime.setGithubToken(token);
-      if (widget.runtime.isReady) {
-        await widget.runtime.applyGitCredentials(token, identity.login);
-      }
-      if (!mounted) return;
-      setState(() => _login = identity.login);
-      _notify(
-        widget.runtime.isReady
-            ? 'Connected as ${identity.login}. git push will not prompt.'
-            : 'Token saved for ${identity.login}. It will be supplied securely to '
-                'Linux tools when the guest starts.',
-      );
-    } catch (e) {
-      _notify('Could not store the token: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _saveHuggingFaceToken() async {
-    final scope = AppScope.of(context);
-    final token = _hfToken.text.trim();
-    if (token.isEmpty) {
-      _notify('Paste a Hugging Face access token first.', isError: true);
-      return;
-    }
-    setState(() => _hfBusy = true);
-    try {
-      final account = await scope.auth.verifyHuggingFace(token);
-      if (account == null) {
-        _notify('Hugging Face rejected that token. Check its validity and permissions.', isError: true);
-        return;
-      }
-      await scope.auth.saveHuggingFaceToken(token);
-      widget.runtime.setHuggingFaceToken(token);
-      if (!mounted) return;
-      setState(() => _hfAccount = account);
-      _notify('Hugging Face connected as $account. OpenCode can use HF_TOKEN.');
-    } finally {
-      if (mounted) setState(() => _hfBusy = false);
-    }
-  }
-
-  Future<void> _clearHuggingFaceToken() async {
-    final scope = AppScope.of(context);
-    await scope.auth.clearHuggingFaceToken();
-    widget.runtime.setHuggingFaceToken(null);
-    if (!mounted) return;
-    _hfToken.clear();
-    setState(() => _hfAccount = null);
-    _notify('Hugging Face token removed.');
-  }
-
-  Future<void> _clearToken() async {
-    final scope = AppScope.of(context);
-    await scope.auth.clear();
-    await widget.runtime.clearGitCredentials();
-    if (!mounted) return;
-    _token.clear();
-    setState(() => _login = null);
-    _notify('GitHub credentials removed.');
-  }
-
-  Future<void> _requestStorage() async {
-    final status = await Permission.manageExternalStorage.request();
-    if (!mounted) return;
-    _notify(
-      status.isGranted
-          ? 'All-files access granted. /storage/emulated/0 is mounted at /mnt/android.'
-          : 'Permission denied. Enable “All files access” in Android app settings.',
-      isError: !status.isGranted,
-    );
-  }
-
-  Future<void> _install() async {
-    final scope = AppScope.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: MicroColors.panelSolid,
-        title: const Text('Unpack Linux workstation?'),
-        content: const Text(
-          'The APK already contains Ubuntu, Firefox, OpenCode and the developer tools. '
-          'This expands the bundled image into private app storage; it does not '
-          'download packages. Keep MicroOS open while it finishes.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Unpack'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    await widget.runtime.install();
-    if (!mounted) return;
-    if (widget.runtime.isReady) {
-      final token = await scope.auth.readToken();
-      final login = await scope.auth.readLogin();
-      if (token != null && login != null) {
-        await widget.runtime.applyGitCredentials(token, login);
-      }
-      await scope.settings.markInstalled();
-    }
-  }
+  _Page _page = _Page.desktop;
 
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
+    final settings = scope.settings;
+    final auth = scope.auth;
+    final runtime = widget.runtime;
+    final wide = MediaQuery.sizeOf(context).width > 600;
 
-    return Container(
-      color: MicroColors.panelSolid,
-      child: AnimatedBuilder(
-        animation: Listenable.merge([widget.runtime, scope.settings]),
-        builder: (context, _) {
-          return ListView(
-            padding: const EdgeInsets.all(14),
-            children: [
-              _Section(
-                title: 'Speech',
-                subtitle: scope.settings.autoReadOpenCode
-                    ? 'Automatically reads completed OpenCode replies'
-                    : 'Manual read-aloud only',
-                children: [
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Read OpenCode replies aloud',
-                      style: TextStyle(color: MicroColors.text, fontSize: 12)),
-                    subtitle: const Text(
-                      'Uses the Android text-to-speech voice selected in your phone settings. Speech is processed on-device by the installed TTS engine.',
-                      style: TextStyle(color: MicroColors.subtle, fontSize: 10)),
-                    value: scope.settings.autoReadOpenCode,
-                    onChanged: scope.settings.setAutoReadOpenCode,
-                  ),
-                  const Text(
-                    'DeepSeek’s proprietary Mira voice is not an available public TTS engine here. You can change the Android system voice in Settings → Accessibility → Text-to-speech output.',
-                    style: TextStyle(color: MicroColors.subtle, fontSize: 10, height: 1.4)),
-                ],
-              ),
-              _Section(
-                title: 'GitHub',
-                subtitle: _login == null
-                    ? 'Not connected'
-                    : 'Connected as $_login',
-                children: [
-                  const Text(
-                    'Paste a Personal Access Token. It is kept in Android encrypted storage '
-                    'and supplied to Git/OpenCode at launch; the PAT is not saved '
-                    'in a plaintext guest credential file.',
-                    style: TextStyle(color: MicroColors.subtle, fontSize: 11),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _token,
-                    obscureText: true,
-                    style: const TextStyle(fontSize: 12, color: MicroColors.text),
-                    decoration: const InputDecoration(
-                      hintText: 'ghp_…',
-                      labelText: 'Personal Access Token',
-                      labelStyle: TextStyle(fontSize: 11),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      FilledButton(
-                        onPressed: _busy ? null : _saveToken,
-                        child: _busy
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Save & apply'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: _busy ? null : _clearToken,
-                        child: const Text('Clear'),
-                      ),
-                    ],
-                  ),
-                  if (_message != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _message!,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: _messageIsError
-                            ? MicroColors.red
-                            : MicroColors.green,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              _Section(
-                title: 'Hugging Face',
-                subtitle: _hfAccount == null ? 'Not connected' : 'Connected · $_hfAccount',
-                children: [
-                  const Text(
-                    'Stored using Android encrypted storage. OpenCode and Python tools receive HF_TOKEN when Linux processes start.',
-                    style: TextStyle(color: MicroColors.subtle, fontSize: 11),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _hfToken,
-                    obscureText: true,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    style: const TextStyle(fontSize: 12, color: MicroColors.text),
-                    decoration: const InputDecoration(
-                      hintText: 'hf_…',
-                      labelText: 'Hugging Face access token',
-                      labelStyle: TextStyle(fontSize: 11),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      FilledButton(
-                        onPressed: _hfBusy ? null : _saveHuggingFaceToken,
-                        child: _hfBusy
-                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Text('Verify & save'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: _hfBusy ? null : _clearHuggingFaceToken,
-                        child: const Text('Clear'),
-                      ),
-                    ],
-                  ),
-                  const Text(
-                    'Use a read-only token unless a project genuinely needs write access. Never paste tokens into project files or commit them.',
-                    style: TextStyle(color: MicroColors.amber, fontSize: 10, height: 1.45),
-                  ),
-                ],
-              ),
-              _Section(
-                title: 'How to get a GitHub Token',
-                subtitle: 'Connect MicroOS to your GitHub account',
-                children: [
-                  const Text(
-                    '1. Open github.com and sign in.\n'
-                    '2. Go to Settings → Developer settings → Personal access tokens.\n'
-                    '3. Choose Fine-grained tokens → Generate new token.\n'
-                    '4. Give it a name (for example, MicroOS) and an expiration date.\n'
-                    '5. Select the repositories MicroOS should access.\n'
-                    '6. Under Repository permissions, set Contents to Read and write.\n'
-                    '7. Generate the token, copy it immediately, then paste it in the GitHub section above and tap Save & apply.',
-                    style: TextStyle(color: MicroColors.text, fontSize: 11, height: 1.55),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Keep this token private. Anyone who has it may be able to access the repositories you selected. If it is exposed, revoke it in GitHub settings and create a new one.',
-                    style: TextStyle(color: MicroColors.amber, fontSize: 10, height: 1.45),
-                  ),
-                ],
-              ),
-              _Section(
-                title: 'Linux runtime',
-                subtitle: widget.runtime.stage,
-                children: [
-                  Row(
-                    children: [
-                      _Pill(
-                        label: widget.runtime.status.name.toUpperCase(),
-                        color: switch (widget.runtime.status) {
-                          RuntimeStatus.ready => MicroColors.green,
-                          RuntimeStatus.installing => MicroColors.amber,
-                          RuntimeStatus.failed => MicroColors.red,
-                          _ => MicroColors.subtle,
-                        },
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${(widget.runtime.progress * 100).round()}%',
-                        style: const TextStyle(
-                          color: MicroColors.subtle,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: widget.runtime.progress == 0
-                          ? null
-                          : widget.runtime.progress,
-                      minHeight: 5,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (widget.runtime.error != null)
-                    Text(
-                      widget.runtime.error!,
-                      style: const TextStyle(
-                        color: MicroColors.red,
-                        fontSize: 11,
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      FilledButton.tonal(
-                        onPressed: widget.runtime.isBusy ? null : _install,
-                        child: Text(
-                          widget.runtime.isReady ? 'Reinstall workstation' : 'Unpack workstation',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: _requestStorage,
-                        child: const Text('Storage access'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      onPressed: (!widget.runtime.isReady || widget.runtime.isBusy || _repairing)
-                          ? null
-                          : () async {
-                              setState(() => _repairing = true);
-                              final code = await widget.runtime.repairPackages();
-                              if (!mounted) return;
-                              setState(() => _repairing = false);
-                              _notify(
-                                code == 0
-                                    ? 'Package repair completed.'
-                                    : 'Package repair exited with code $code. Check the log for details.',
-                                isError: code != 0,
-                              );
-                            },
-                      icon: _repairing
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.build_outlined, size: 16),
-                      label: Text(_repairing ? 'Repairing packages…' : 'Repair Linux packages'),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _LogView(runtime: widget.runtime),
-                ],
-              ),
-              _Section(
-                title: 'Terminal',
-                subtitle: 'Text size and navigation',
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text('Font size', style: TextStyle(color: MicroColors.text, fontSize: 12)),
-                      ),
-                      Text('${scope.settings.terminalFontSize.round()} px',
-                          style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
-                    ],
-                  ),
-                  Slider(
-                    value: scope.settings.terminalFontSize,
-                    min: 10,
-                    max: 18,
-                    divisions: 8,
-                    label: '${scope.settings.terminalFontSize.round()} px',
-                    onChanged: scope.settings.setTerminalFontSize,
-                  ),
-                  const Text(
-                    'Swipe to scroll terminal history. PgUp and PgDn send page-navigation keys to full-screen terminal apps.',
-                    style: TextStyle(color: MicroColors.subtle, fontSize: 10, height: 1.45),
-                  ),
-                ],
-              ),
-              _Section(
-                title: 'OpenCode appearance',
-                subtitle: 'Forced light theme',
-                children: [
-                  const Text(
-                    'OpenCode always launches with the GitHub Light theme, independently of the MicroOS desktop theme.',
-                    style: TextStyle(color: MicroColors.subtle, fontSize: 11, height: 1.5),
-                  ),
-                ],
-              ),
-              _Section(
-                title: 'Browser',
-                subtitle: 'Memory profile for low-RAM phones',
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
+    return Row(
+      children: [
+        if (wide)
+          Container(
+            width: 220,
+            color: MicroColors.sidebar,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              children: [
+                for (final p in _Page.values)
+                  ListTile(
                     dense: true,
-                    value: scope.settings.singleProcessBrowser,
-                    onChanged: (value) =>
-                        scope.settings.setSingleProcessBrowser(value),
-                    title: const Text(
-                      'Compatibility mode (--single-process)',
-                      style: TextStyle(fontSize: 12, color: MicroColors.text),
+                    selected: _page == p,
+                    selectedTileColor: MicroColors.accent.withValues(alpha: 0.2),
+                    title: Text(
+                      _title(p),
+                      style: TextStyle(
+                        color: _page == p ? MicroColors.accent : MicroColors.text,
+                        fontSize: 14,
+                      ),
                     ),
-                    subtitle: const Text(
-                      'Lower memory, but Chromium may crash on heavy pages. '
-                      'Off by default because upstream deprecated the flag.',
-                      style: TextStyle(fontSize: 10, color: MicroColors.subtle),
-                    ),
+                    onTap: () => setState(() => _page = p),
                   ),
-                  const Text(
-                    'Always applied: --no-sandbox --disable-gpu-sandbox '
-                    '--disable-dev-shm-usage --process-per-site '
-                    '--renderer-process-limit=1 --disable-background-networking '
-                    '--js-flags=--max-old-space-size=512',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: MicroColors.subtle,
-                      fontFamily: 'monospace',
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-              const Padding(
-                padding: EdgeInsets.only(top: 6, bottom: 20),
-                child: Text(
-                  'MicroOS 0.1.0 · Android arm64 · Ubuntu 24.04 guest via proot',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0x66FFFFFF), fontSize: 10),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  const _Section({
-    required this.title,
-    required this.children,
-    this.subtitle,
-  });
-
-  final String title;
-  final String? subtitle;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0x0DFFFFFF),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0x14FFFFFF)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: MicroColors.text,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+              ],
             ),
           ),
-          if (subtitle != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 2, bottom: 8),
-              child: Text(
-                subtitle!,
-                style: const TextStyle(color: MicroColors.subtle, fontSize: 10),
-              ),
-            )
-          else
-            const SizedBox(height: 8),
-          ...children,
-        ],
-      ),
+        Expanded(
+          child: ListenableBuilder(
+            listenable: Listenable.merge([settings, runtime]),
+            builder: (context, _) {
+              return switch (_page) {
+                _Page.desktop => _DesktopPage(settings: settings),
+                _Page.speech => _SpeechPage(settings: settings),
+                _Page.github => _GitHubPage(auth: auth, runtime: runtime),
+                _Page.huggingface => _HuggingFacePage(auth: auth, runtime: runtime),
+                _Page.linux => _LinuxPage(runtime: runtime, settings: settings),
+                _Page.terminal => _TerminalPage(settings: settings),
+                _Page.browser => _BrowserPage(settings: settings),
+                _Page.login => _LoginPage(settings: settings),
+                _Page.about => const _AboutPage(),
+              };
+            },
+          ),
+        ),
+      ],
     );
   }
+
+  String _title(_Page p) => switch (p) {
+        _Page.desktop => 'Desktop & Dock',
+        _Page.speech => 'Speech',
+        _Page.github => 'GitHub',
+        _Page.huggingface => 'Hugging Face',
+        _Page.linux => 'Linux',
+        _Page.terminal => 'Terminal',
+        _Page.browser => 'Browser',
+        _Page.login => 'Users & Login',
+        _Page.about => 'About',
+      };
 }
 
-class _Pill extends StatelessWidget {
-  const _Pill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
+class _DesktopPage extends StatelessWidget {
+  const _DesktopPage({required this.settings});
+  final dynamic settings;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700),
-      ),
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text('Desktop & Dock', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 20),
+        SwitchListTile(
+          title: const Text('Automatically hide and show the Dock', style: TextStyle(color: MicroColors.text)),
+          value: settings.dockAutoHide,
+          onChanged: (v) => settings.setDockAutoHide(v),
+        ),
+      ],
     );
   }
 }
 
-class _LogView extends StatelessWidget {
-  const _LogView({required this.runtime});
+class _SpeechPage extends StatelessWidget {
+  const _SpeechPage({required this.settings});
+  final dynamic settings;
 
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text('Speech', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 20),
+        SwitchListTile(
+          title: const Text('Auto-read OpenCode output', style: TextStyle(color: MicroColors.text)),
+          value: settings.autoReadOpenCode,
+          onChanged: (v) => settings.setAutoReadOpenCode(v),
+        ),
+      ],
+    );
+  }
+}
+
+class _GitHubPage extends StatelessWidget {
+  const _GitHubPage({required this.auth, required this.runtime});
+  final dynamic auth;
   final LinuxRuntime runtime;
 
   @override
   Widget build(BuildContext context) {
-    final lines = runtime.logLines;
-    final tail = lines.sublist(math.max(0, lines.length - 12));
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text('GitHub', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        const Text('Personal Access Token is stored securely and used for git + OpenCode.', style: TextStyle(color: MicroColors.subtle)),
+      ],
+    );
+  }
+}
 
-    return Container(
-      height: 132,
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B0E14),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0x14FFFFFF)),
-      ),
-      child: SingleChildScrollView(
-        reverse: true,
-        child: Text(
-          tail.isEmpty ? 'No output yet.' : tail.join('\n'),
-          style: const TextStyle(
-            color: Color(0xFF9FB0C7),
-            fontSize: 9,
-            fontFamily: 'monospace',
-            height: 1.45,
-          ),
+class _HuggingFacePage extends StatelessWidget {
+  const _HuggingFacePage({required this.auth, required this.runtime});
+  final dynamic auth;
+  final LinuxRuntime runtime;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text('Hugging Face', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+}
+
+class _LinuxPage extends StatelessWidget {
+  const _LinuxPage({required this.runtime, required this.settings});
+  final LinuxRuntime runtime;
+  final dynamic settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text('Linux', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        Text('Status: ${runtime.status.name}', style: const TextStyle(color: MicroColors.subtle)),
+        if (runtime.isBusy) ...[
+          const SizedBox(height: 12),
+          LinearProgressIndicator(value: runtime.progress == 0 ? null : runtime.progress),
+          Text(runtime.stage, style: const TextStyle(color: MicroColors.subtle, fontSize: 13)),
+        ],
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: runtime.isBusy ? null : () => runtime.install(),
+          child: Text(runtime.isReady ? 'Reinstall Workstation' : 'Install Workstation'),
         ),
-      ),
+      ],
+    );
+  }
+}
+
+class _TerminalPage extends StatelessWidget {
+  const _TerminalPage({required this.settings});
+  final dynamic settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text('Terminal', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 20),
+        Text('Font size: ${settings.terminalFontSize.round()}', style: const TextStyle(color: MicroColors.text)),
+        Slider(
+          value: settings.terminalFontSize,
+          min: 10,
+          max: 18,
+          divisions: 8,
+          onChanged: (v) => settings.setTerminalFontSize(v),
+        ),
+        const SizedBox(height: 16),
+        const Text('Colour profile', style: TextStyle(color: MicroColors.text)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final p in kTerminalProfiles)
+              ChoiceChip(
+                label: Text(p.name),
+                selected: settings.terminalProfile == p.id,
+                onSelected: (_) => settings.setTerminalProfile(p.id),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BrowserPage extends StatelessWidget {
+  const _BrowserPage({required this.settings});
+  final dynamic settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text('Browser', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        SwitchListTile(
+          title: const Text('Single-process mode', style: TextStyle(color: MicroColors.text)),
+          subtitle: const Text('More stable on low-memory devices', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          value: settings.singleProcessBrowser,
+          onChanged: (v) => settings.setSingleProcessBrowser(v),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginPage extends StatelessWidget {
+  const _LoginPage({required this.settings});
+  final dynamic settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text('Users & Login', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        TextField(
+          decoration: const InputDecoration(labelText: 'Display name'),
+          controller: TextEditingController(text: settings.userName),
+          onSubmitted: (v) => settings.setUserName(v),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          decoration: const InputDecoration(
+            labelText: 'Lock screen password (optional)',
+            helperText: 'Local shell lock only — does not encrypt data',
+          ),
+          obscureText: true,
+          onSubmitted: (v) => settings.setLoginPassword(v.isEmpty ? null : v),
+        ),
+      ],
+    );
+  }
+}
+
+class _AboutPage extends StatelessWidget {
+  const _AboutPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ListView(
+      padding: EdgeInsets.all(24),
+      children: [
+        Text('About MicroOS', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        SizedBox(height: 12),
+        Text('Golden Gate UI · macOS 27 style window manager for a mobile Linux workstation.', style: TextStyle(color: MicroColors.subtle)),
+      ],
     );
   }
 }
