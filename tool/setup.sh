@@ -234,10 +234,18 @@ fi
 # Ensure the shared X11 session has only one browser engine at a time.
 pkill -u microos-browser -f '[f]irefox' 2>/dev/null || true
 sleep 0.4
-CHROMIUM_EXTRA_ARGS=()
+CHROMIUM_EXTRA_ARGS=(
+  --ignore-gpu-blocklist
+  --canvas-oop-rasterization
+)
 if [ "${MICROOS_DISABLE_GPU:-0}" = "1" ]; then
   # Used only by the CI Xvfb window test. Phone launches keep acceleration enabled.
   CHROMIUM_EXTRA_ARGS+=(--disable-gpu)
+fi
+if [ "${MICROOS_HARDWARE_GPU_ONLY:-0}" = "1" ]; then
+  # Opt-in only: disabling SwiftShader/software fallback can blank rendering on
+  # devices where PRoot cannot expose a usable host GPU. Enable after device test.
+  CHROMIUM_EXTRA_ARGS+=(--disable-software-rasterizer)
 fi
 exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
   "${CHROMIUM_EXTRA_ARGS[@]}" \
@@ -607,10 +615,13 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 MENU
 openbox --display :1 >"$LOG/openbox.log" 2>&1 &
 OPENBOX_PID=$!
-# 8 ms polling/defer is a balanced latency setting for the 4 GB mobile target.
-# Avoid -ncache here: noVNC does not benefit reliably from x11vnc's VNC-client
-# framebuffer cache extensions and they can increase memory/artifact risk.
-x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost -noxdamage -noshm -repeat -wait 8 -defer 8 >"$LOG/x11vnc.log" 2>&1 &
+# Keep the RFB listener loopback-only: websockify is the only exposed bridge.
+# Use low defer/wait for interactive latency and the LAN profile because the
+# VNC client and server are on the same device (Starlink does not carry VNC).
+# ncache is bounded to 10 framebuffer rows and is verified in the X11 smoke test.
+x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost \
+  -noxdamage -noshm -repeat -ncache 10 -ncache_cr \
+  -wait 1 -defer 1 -speeds 6,5000,1 >"$LOG/x11vnc.log" 2>&1 &
 VNC_PID=$!
 if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then echo "[microos] ERROR: x11vnc failed to open port 5900" >&2; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
 if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client is missing" >&2; exit 1; fi
