@@ -94,6 +94,56 @@ TORRENT
     runuser -u microos-browser -- env HOME=/home/microos-browser timeout 90 "$CHROMIUM_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --dump-dom "data:text/html,<title>MicroOS Chromium smoke test</title><h1>Chromium is ready</h1>" > /tmp/microos-chromium-smoke.html
     grep -q "Chromium is ready" /tmp/microos-chromium-smoke.html
     echo "==> Chromium ARM64 startup and DOM rendering test passed"
+
+    # Exercise the actual Linux desktop browser window, not only headless DOM
+    # rendering. This runs the same launcher used by the Android PRoot guest.
+    echo "==> Testing native Chromium X11 window, tabs and mobile control helper"
+    Xvfb :99 -screen 0 1280x800x24 -nolisten tcp -ac >/tmp/microos-xvfb.log 2>&1 &
+    MICROOS_XVFB_PID=$!
+    export DISPLAY=:99
+    for attempt in $(seq 1 40); do
+      if xset -display :99 q >/dev/null 2>&1; then break; fi
+      sleep 0.25
+    done
+    xset -display :99 q >/dev/null
+    openbox --display :99 >/tmp/microos-openbox.log 2>&1 &
+    MICROOS_OPENBOX_PID=$!
+    sleep 0.5
+    MICROOS_DISABLE_GPU=1 timeout 45 /usr/local/bin/start-browser.sh about:blank >/tmp/microos-chromium-x11.log 2>&1 &
+    MICROOS_BROWSER_PID=$!
+    WINDOW_ID=""
+    for attempt in $(seq 1 100); do
+      WINDOW_ID="$(xdotool search --onlyvisible --class "chromium|Chromium" 2>/dev/null | tail -n 1 || true)"
+      if [ -n "$WINDOW_ID" ]; then break; fi
+      if ! kill -0 "$MICROOS_BROWSER_PID" 2>/dev/null; then break; fi
+      sleep 0.25
+    done
+    if [ -z "$WINDOW_ID" ]; then
+      cat /tmp/microos-chromium-x11.log >&2 || true
+      kill "$MICROOS_OPENBOX_PID" "$MICROOS_XVFB_PID" 2>/dev/null || true
+      exit 1
+    fi
+    xdotool windowactivate --sync "$WINDOW_ID"
+    /usr/local/bin/microos-browser-control new-tab
+    /usr/local/bin/microos-browser-control focus-address
+    /usr/local/bin/microos-browser-control bookmarks
+    /usr/local/bin/microos-browser-control window-maximize
+    sleep 0.5
+    GEOMETRY="$(xdotool getwindowgeometry --shell "$WINDOW_ID")"
+    WIDTH="$(printf "%s\n" "$GEOMETRY" | sed -n "s/^WIDTH=//p")"
+    HEIGHT="$(printf "%s\n" "$GEOMETRY" | sed -n "s/^HEIGHT=//p")"
+    if [ "${WIDTH:-0}" -lt 1000 ] || [ "${HEIGHT:-0}" -lt 600 ]; then
+      echo "Chromium X11 window did not maximize: $GEOMETRY" >&2
+      cat /tmp/microos-chromium-x11.log >&2 || true
+      kill -9 "$MICROOS_BROWSER_PID" "$MICROOS_OPENBOX_PID" "$MICROOS_XVFB_PID" 2>/dev/null || true
+      exit 1
+    fi
+    echo "==> Native Chromium window verified: ${WIDTH}x${HEIGHT}"
+    /usr/local/bin/microos-browser-control window-close || true
+    kill "$MICROOS_OPENBOX_PID" "$MICROOS_XVFB_PID" 2>/dev/null || true
+    pkill -u microos-browser -f "[c]hromium" 2>/dev/null || true
+    wait "$MICROOS_BROWSER_PID" 2>/dev/null || true
+
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
     apt-get install -y --no-install-recommends \
