@@ -239,12 +239,14 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
       app.title.toLowerCase().contains(query) ||
       app.subtitle.toLowerCase().contains(query)
     ).toList(growable: false);
-    return Positioned.fill(
-      child: Material(
-        color: const Color(0xD9101014),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: SafeArea(
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Material(
+            color: const Color(0xD9101014),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: SafeArea(
             child: Column(
               children: [
                 Padding(
@@ -342,7 +344,7 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
