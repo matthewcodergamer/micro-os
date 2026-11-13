@@ -15,7 +15,6 @@ import 'control_center.dart';
 import 'dock.dart';
 import 'install_screen.dart';
 import 'login_screen.dart';
-import 'mac_icons.dart';
 import 'spotlight.dart';
 import 'status_bar.dart';
 import 'wallpaper.dart';
@@ -107,8 +106,8 @@ class _DesktopScreenState extends State<DesktopScreen> {
             if (mounted) {
               desktop.syncToScreen(
                 area,
-                top: top,
-                bottom: bottom,
+                topReserve: top,
+                bottomReserve: bottom,
                 bottomInset: keyboard,
               );
             }
