@@ -17,6 +17,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kTerminalProfile = 'terminal.profile';
   static const _kAutoReadOpenCode = 'tts.auto_read_opencode';
   static const _kDockAutoHide = 'dock.auto_hide';
+  static const _kSystemBarsVisible = 'system.bars_visible';
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
 
@@ -35,6 +36,7 @@ class SettingsStore extends ChangeNotifier {
   bool loginPasswordMigrationPending = false;
   bool autoReadOpenCode = false;
   bool dockAutoHide = true;
+  bool systemBarsVisible = false;
 
   bool get hasPassword =>
       loginPasswordStorageUnavailable ||
@@ -52,6 +54,7 @@ class SettingsStore extends ChangeNotifier {
     userName = prefs.getString(_kUserName) ?? 'MicroOS User';
     autoReadOpenCode = prefs.getBool(_kAutoReadOpenCode) ?? false;
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
+    systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
 
     // Migrate older installations that kept the password in plain preferences.
     final legacyPassword = prefs.getString(_kLoginPassword);
@@ -136,6 +139,13 @@ class SettingsStore extends ChangeNotifier {
     loginPasswordStorageUnavailable = false;
     loginPasswordMigrationPending = false;
     notifyListeners();
+  }
+
+  Future<void> setSystemBarsVisible(bool value) async {
+    systemBarsVisible = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kSystemBarsVisible, value);
   }
 
   Future<void> setDockAutoHide(bool value) async {
