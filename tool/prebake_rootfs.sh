@@ -79,6 +79,35 @@ echo "[microos] qBittorrent-nox started on 127.0.0.1:8080"
 TORRENT
     chmod 755 /root/.microos/start-torrent.sh
 
+    echo "==> Preparing the unified phone Downloads directory"
+    install -d -m 0775 /mnt/android/Download
+    ln -sfn /mnt/android/Download /root/Downloads
+    test -L /root/Downloads
+    test "$(readlink /root/Downloads)" = /mnt/android/Download
+
+    echo "==> Installing Playwright and its headless Chromium runtime"
+    npm install --global playwright
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright install chromium --with-deps
+    PLAYWRIGHT_NODE_MODULES="$(npm root -g)"
+    cat > /etc/profile.d/microos-playwright.sh <<PLAYWRIGHT_ENV
+export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+export NODE_PATH=$PLAYWRIGHT_NODE_MODULES
+PLAYWRIGHT_ENV
+    chmod 0644 /etc/profile.d/microos-playwright.sh
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright NODE_PATH="$PLAYWRIGHT_NODE_MODULES" node <<'PLAYWRIGHT_SMOKE'
+const { chromium } = require('playwright');
+(async () => {
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const page = await browser.newPage();
+  await page.setContent('<title>MicroOS Playwright</title><h1>Headless automation ready</h1>');
+  if (!(await page.title()).includes('Playwright')) throw new Error('Playwright page title mismatch');
+  await page.screenshot({ path: '/tmp/microos-playwright-smoke.png' });
+  await browser.close();
+})().catch(error => { console.error(error); process.exit(1); });
+PLAYWRIGHT_SMOKE
+    test -s /tmp/microos-playwright-smoke.png
+    rm -f /tmp/microos-playwright-smoke.png
+
     echo "==> Installing native ARM64 Chromium from the Xtradeb .deb PPA (no Snap)"
     apt-get update -y
     apt-get install -y --no-install-recommends software-properties-common ca-certificates
@@ -231,7 +260,7 @@ TORRENT
     rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "11\\n" > /root/.microos/image-version
+    printf "12\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
