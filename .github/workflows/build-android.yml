@@ -88,7 +88,13 @@ jobs:
           test -s assets/rootfs/rootfs.tar.size
           test "$(cat assets/rootfs/rootfs.tar.size)" -gt 0
           zstd -t "$ROOTFS"
-          test "$(zstd -dc "$ROOTFS" | wc -c | tr -d '[:space:]')" = "$(cat assets/rootfs/rootfs.tar.size)"
+          ACTUAL_ROOTFS_BYTES="$(zstd -dc "$ROOTFS" | wc -c | tr -d '[:space:]')"
+          EXPECTED_ROOTFS_BYTES="$(tr -d '[:space:]' < assets/rootfs/rootfs.tar.size)"
+          echo "Rootfs expanded bytes: actual=$ACTUAL_ROOTFS_BYTES manifest=$EXPECTED_ROOTFS_BYTES"
+          if [ "$ACTUAL_ROOTFS_BYTES" != "$EXPECTED_ROOTFS_BYTES" ]; then
+            echo "ERROR: rootfs size manifest does not match the compressed archive" >&2
+            exit 1
+          fi
           zstd -dc "$ROOTFS" | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
