@@ -203,3 +203,146 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
     );
   }
 }
+
+
+/// Launchpad-style app grid for the complete MicroOS app registry.
+class LaunchpadOverlay extends StatefulWidget {
+  const LaunchpadOverlay({
+    super.key,
+    required this.topPadding,
+    required this.onClose,
+    required this.onOpen,
+  });
+
+  final double topPadding;
+  final VoidCallback onClose;
+  final ValueChanged<AppId> onOpen;
+
+  @override
+  State<LaunchpadOverlay> createState() => _LaunchpadOverlayState();
+}
+
+class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
+  final TextEditingController _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _search.text.trim().toLowerCase();
+    final apps = AppId.values.where((app) =>
+      query.isEmpty ||
+      app.title.toLowerCase().contains(query) ||
+      app.subtitle.toLowerCase().contains(query)
+    ).toList(growable: false);
+    return Positioned.fill(
+      child: Material(
+        color: const Color(0xD9101014),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(18, widget.topPadding > 0 ? 14 : 20, 18, 10),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Launchpad',
+                          style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close Launchpad',
+                        onPressed: widget.onClose,
+                        icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: TextField(
+                      controller: _search,
+                      onChanged: (_) => setState(() {}),
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: 'Search apps',
+                        hintStyle: const TextStyle(color: Colors.white54),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.white70),
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.12),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final columns = width < 380 ? 3 : width < 620 ? 4 : 6;
+                      return GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 8,
+                          childAspectRatio: 0.82,
+                        ),
+                        itemCount: apps.length,
+                        itemBuilder: (context, index) {
+                          final app = apps[index];
+                          return Semantics(
+                            button: true,
+                            label: app.title,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(18),
+                              onTap: () => widget.onOpen(app),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 7),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    MacAppIcon(app: app, size: 58),
+                                    const SizedBox(height: 9),
+                                    Text(
+                                      app.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
