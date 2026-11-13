@@ -26,7 +26,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '6';
+  static const String _rootfsVersion = '7';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -101,7 +101,8 @@ class LinuxRuntime extends ChangeNotifier {
         'LD_LIBRARY_PATH': p.join(base.path, 'proot'),
         'HOME': '/root',
         'TERM': 'xterm-256color',
-        'LANG': 'C.UTF-8',
+        'LANG': 'en_US.UTF-8',
+        'LC_ALL': 'en_US.UTF-8',
         'DISPLAY': ':1',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
             '/root/.opencode/bin:/root/.local/bin',

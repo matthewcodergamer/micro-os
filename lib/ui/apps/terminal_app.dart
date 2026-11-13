@@ -49,9 +49,9 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
     if (widget.runtime.isReady) {
       try {
         pty = widget.runtime.startShell(argv: widget.argv);
-        pty.output.cast<List<int>>().listen((data) {
-          terminal.write(String.fromCharCodes(data));
-        });
+        // Decode the byte stream incrementally: a UTF-8 character may be split
+        // across PTY chunks, so decoding each chunk independently corrupts it.
+        pty.output.transform(utf8.decoder).listen(terminal.write);
         terminal.onOutput = (data) => pty?.write(utf8.encode(data));
         terminal.onResize = (w, h, pw, ph) => pty?.resize(h, w);
       } catch (_) {}

@@ -17,7 +17,8 @@ mkdir -p /tmp
 chmod 1777 /tmp
 export DEBIAN_FRONTEND=noninteractive
 export HOME=/root
-export LANG=C.UTF-8
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 export PATH="/root/.opencode/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 log()  { printf '[microos] %s\n' "$*"; }
@@ -78,13 +79,19 @@ APT_OPTS=(-y --no-install-recommends -o Dpkg::Options::="--force-confold")
 # -----------------------------------------------------------------------------
 stage 63 "Installing core toolchain"
 apt-get install "${APT_OPTS[@]}" \
-  ca-certificates curl wget gnupg apt-utils \
+  ca-certificates curl wget gnupg apt-utils locales \
   git git-lfs openssh-client \
   build-essential pkg-config make cmake openjdk-21-jdk-headless \
   python3 python3-pip python3-venv python3-dev \
   unzip zip xz-utils tar less nano vim-tiny \
   procps file jq tmux sudo \
   || warn "some core packages failed to install"
+
+# Generate the UTF-8 locale explicitly; merely exporting LANG does not create it.
+if [ -f /etc/locale.gen ]; then
+  sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+  locale-gen en_US.UTF-8 || warn "could not generate en_US.UTF-8 locale"
+fi
 
 # -----------------------------------------------------------------------------
 # 3. Node.js + Rust + GitHub CLI
@@ -361,7 +368,8 @@ chmod 755 /usr/local/bin/microos-jar
 stage 94 "Finalising shell"
 cat > /etc/profile.d/microos.sh <<'EOF'
 export PATH="/root/.opencode/bin:/root/.local/bin:$PATH"
-export LANG=C.UTF-8
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 export TERM=xterm-256color
 export DISPLAY=:1
 [ -d /mnt/android ] && export MICROOS_STORAGE=/mnt/android

@@ -149,7 +149,7 @@ TORRENT
     rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "6\\n" > /root/.microos/image-version
+    printf "7\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
