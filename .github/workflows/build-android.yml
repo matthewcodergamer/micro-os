@@ -65,6 +65,10 @@ jobs:
           zstd -dc "$ROOTFS" | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/chromium' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/lib/chromium/chromium' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/start-browser.sh' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/.microos/start-desktop.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
