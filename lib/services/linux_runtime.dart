@@ -188,14 +188,14 @@ class LinuxRuntime extends ChangeNotifier {
     _provisioningFinished = false;
     error = null;
     logLines.clear();
-    progress = 0.01;
+    progress = 0.0;
     stage = 'Preparing storage';
     _notify();
 
     try {
       await _extractProot();
 
-      progress = 0.08;
+      progress = 0.0;
       stage = 'Unpacking pre-baked Ubuntu workstation';
       _notify();
       await _extractRootfs();
@@ -203,8 +203,8 @@ class LinuxRuntime extends ChangeNotifier {
       if (_hasCurrentImage) {
         // The APK already contains Firefox, OpenCode and the complete toolchain.
         // Do not run apt or download packages on the phone during first launch.
-        progress = 0.95;
-        stage = 'Finalising pre-baked workstation';
+        progress = 1.0;
+        stage = 'Finishing up…';
         _notify();
         await _refreshGuestDns();
         status = RuntimeStatus.ready;
@@ -298,7 +298,7 @@ class LinuxRuntime extends ChangeNotifier {
         final fraction = archiveBytes == 0
             ? 0.0
             : (extractedBytes / archiveBytes).clamp(0.0, 1.0).toDouble();
-        progress = 0.08 + (fraction * 0.84);
+        progress = fraction;
         stage = 'Unpacking Linux workstation · ${(fraction * 100).round()}%';
         _notify();
       },
