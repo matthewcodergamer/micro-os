@@ -202,6 +202,35 @@ if changed or not os.path.exists(path):
     os.replace(temporary, path)
 CHROMIUM_PREFS
 chown microos-browser:microos-browser "$CHROMIUM_PREFS"
+
+# Seed a useful native Chromium bookmarks bar once. Never replace a user's
+# existing Bookmarks database after their first browser launch.
+BOOKMARKS_FILE="$BROWSER_HOME/.config/chromium/Default/Bookmarks"
+if [ ! -s "$BOOKMARKS_FILE" ]; then
+  cat > "$BOOKMARKS_FILE" <<'BOOKMARKS'
+{
+  "checksum": "",
+  "roots": {
+    "bookmark_bar": {
+      "children": [
+        {"date_added":"13370000000000000","id":"4","name":"Google","type":"url","url":"https://www.google.com/"},
+        {"date_added":"13370000000000000","id":"5","name":"YouTube","type":"url","url":"https://www.youtube.com/"},
+        {"date_added":"13370000000000000","id":"6","name":"GitHub","type":"url","url":"https://github.com/"}
+      ],
+      "date_modified": "0",
+      "id": "1",
+      "name": "Bookmarks bar",
+      "type": "folder"
+    },
+    "other": {"children":[],"date_modified":"0","id":"2","name":"Other bookmarks","type":"folder"},
+    "synced": {"children":[],"date_modified":"0","id":"3","name":"Mobile bookmarks","type":"folder"}
+  },
+  "version": 1
+}
+BOOKMARKS
+  chown microos-browser:microos-browser "$BOOKMARKS_FILE"
+fi
+
 # Ensure the shared X11 session has only one browser engine at a time.
 pkill -u microos-browser -f '[f]irefox' 2>/dev/null || true
 sleep 0.4
@@ -292,35 +321,40 @@ case "$ACTION" in
   zoom-in)       KEY='ctrl+plus' ;;
   zoom-out)      KEY='ctrl+minus' ;;
   zoom-reset)    KEY='ctrl+0' ;;
+  window-minimize|window-maximize|window-restore|window-close) KEY='' ;;
+  *) echo "Unsupported browser action: $ACTION" >&2; exit 2 ;;
+esac
+
+# Find the actual Chromium/Firefox X11 window, not the Flutter WebView window.
+WINDOW_ID="$(xdotool search --class 'chromium|Chromium|chrome|Chrome|firefox|Firefox|Navigator' 2>/dev/null | tail -n 1 || true)"
+if [ -z "$WINDOW_ID" ]; then
+  echo "[microos] no Chromium/Firefox window is available" >&2
+  exit 1
+fi
+
+case "$ACTION" in
   window-minimize)
-    WINDOW_ID="$(xdotool getactivewindow)"
     exec xdotool windowminimize "$WINDOW_ID"
     ;;
   window-maximize)
-    WINDOW_ID="$(xdotool getactivewindow)"
+    xdotool windowactivate --sync "$WINDOW_ID"
     xdotool windowstate --add MAXIMIZED_VERT "$WINDOW_ID"
     exec xdotool windowstate --add MAXIMIZED_HORZ "$WINDOW_ID"
     ;;
   window-restore)
-    WINDOW_ID="$(xdotool search --class 'chromium|firefox' 2>/dev/null | head -n 1 || true)"
-    if [ -z "$WINDOW_ID" ]; then
-      echo "[microos] no browser window is available to restore" >&2
-      exit 1
-    fi
     xdotool windowmap "$WINDOW_ID" 2>/dev/null || true
     xdotool windowstate --remove MAXIMIZED_VERT "$WINDOW_ID" 2>/dev/null || true
     xdotool windowstate --remove MAXIMIZED_HORZ "$WINDOW_ID" 2>/dev/null || true
     exec xdotool windowactivate --sync "$WINDOW_ID"
     ;;
   window-close)
-    KEY='alt+F4'
+    exec xdotool windowclose "$WINDOW_ID"
     ;;
   *)
-    echo "Usage: microos-browser-control {back|forward|reload|new-tab|close-tab|new-window|focus-address|home|bookmarks|fullscreen|zoom-in|zoom-out|zoom-reset|window-minimize|window-maximize|window-restore|window-close}" >&2
-    exit 2
+    xdotool windowactivate --sync "$WINDOW_ID"
+    exec xdotool key --clearmodifiers "$KEY"
     ;;
 esac
-exec xdotool key --clearmodifiers "$KEY"
 BROWSER
 chmod 755 /usr/local/bin/microos-browser-control
 # 6. ZRAM
