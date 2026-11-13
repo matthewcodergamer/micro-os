@@ -1,3 +1,388 @@
+# MicroOS — Master Engineering Task List
+
+**Repository:** [matthewcodergamer/micro-os](https://github.com/matthewcodergamer/micro-os)  
+**Primary branch:** `main`  
+**Target device:** Samsung Galaxy A07 · Android 16 · 4 GB RAM · ARM64
+
+## Mission
+
+Improve MicroOS into a stable, mobile-friendly Linux desktop experience running on Android.
+
+Work directly in the existing repository. Inspect the implementation before changing it, preserve working features, fix the critical memory problem first, and deliver a verified Android APK through GitHub Actions.
+
+Do not stop after writing a plan. Implement, test, and document the work.
+
+---
+
+## 1. Project overview
+
+MicroOS is a Flutter-based Android desktop environment with a macOS-inspired Golden Gate interface.
+
+Its architecture includes:
+
+- Flutter: desktop interface, windows, Dock, settings and terminal UI.
+- PRoot: Ubuntu 24.04 ARM64 Linux userspace.
+- X11/Openbox: Linux graphical desktop.
+- VNC/noVNC: remote desktop display inside MicroOS.
+- OpenCode: AI coding agent running inside the Linux environment.
+- PTY/xterm: interactive Linux terminal.
+- TTS bridge: Android text-to-speech integration for OpenCode.
+- GitHub Actions: Linux root filesystem preparation and Android APK builds.
+
+This is a Linux userspace running through PRoot, not a separate Linux kernel.
+
+## 2. Priority 1 — Fix the terminal memory crash
+
+**This is the first task.**
+
+### Problem
+
+Pasting large blocks of text into the MicroOS terminal can freeze the application or cause it to crash. Investigate the actual source of memory pressure rather than assuming one component is responsible.
+
+### Inspect
+
+- `lib/ui/apps/terminal_app.dart`
+- `lib/services/linux_runtime.dart` (PTY input and terminal output handling)
+
+### Required implementation
+
+1. Chunk large pastes into approximately 500-character blocks.
+2. Preserve Unicode correctly; never split a UTF-8 sequence or UTF-16 surrogate pair.
+3. Deliver chunks through a queue with a small configurable delay.
+4. Add PTY backpressure so input is not flooded faster than it can be consumed.
+5. Keep Flutter responsive during large pastes.
+6. Limit terminal scrollback to no more than 1,000 lines.
+7. Bound output queues, temporary strings and other buffers.
+8. Handle cancelled pastes, disconnected PTYs and failed writes safely.
+
+Do not corrupt newlines, shell commands, Unicode characters or pasted code.
+
+### Tests
+
+Test ordinary commands, large blocks, multiline commands, Unicode and emoji, long code snippets, pastes during terminal output, and pastes after reconnecting to a terminal session.
+
+**Success:** Large pastes no longer freeze MicroOS, and normal terminal interaction remains responsive.
+
+## 3. Priority 2 — Android background execution
+
+### Problem
+
+OpenCode and the Linux environment should continue working when the user switches to YouTube or another Android application. Inspect process ownership and lifecycle; keeping a Flutter screen alive does not automatically keep the Linux workload alive.
+
+### Required implementation
+
+Implement a native Android foreground service with:
+
+- A persistent notification showing that MicroOS has an active session.
+- A deliberate way to stop the session and a way to return to MicroOS.
+- Correct Android permissions and foreground-service configuration for the actual target SDK.
+- Flutter communication through a MethodChannel or equivalent.
+- Safe service startup, shutdown and reconnection.
+
+Inspect `tool/bootstrap_android.sh` and the generated Android project. Ensure generated Android changes survive future bootstrap runs.
+
+### Process supervision
+
+Supervise PRoot, OpenCode, active terminal processes, X11/Openbox, x11vnc, websockify and installed browsers.
+
+Implement:
+
+- Process state tracking and unexpected-exit detection.
+- Bounded restart attempts with backoff.
+- Useful diagnostic logs and exit status.
+- Session-state persistence and UI reconnection.
+- Duplicate-process prevention.
+
+Ordinary app switching, activity recreation and screen transitions must not deliberately terminate active Linux sessions.
+
+Use a wake lock only when genuinely needed. Avoid unnecessary battery drain.
+
+**Android limitation:** A foreground service improves background reliability but cannot guarantee that Android will never terminate an application. Force-stop, exceptional memory pressure and manufacturer restrictions can still interrupt it. Implement recovery and session persistence; do not promise zero crashes.
+
+### Required device test
+
+On the actual Samsung Galaxy A07:
+
+1. Start MicroOS, Linux and OpenCode.
+2. Begin a task that produces continuing output.
+3. Press Home, open YouTube and play a video.
+4. Leave MicroOS in the background for at least 10 minutes.
+5. Return and verify that the session is still active or recovers correctly.
+6. Repeat with the screen locked and Battery Saver enabled.
+
+Record what was physically tested. Never claim a device test passed unless it was actually performed.
+
+## 4. Priority 3 — VNC virtual trackpad
+
+Inspect `lib/ui/apps/desktop_session_app.dart`. Finish the existing implementation without discarding working code.
+
+### Trackpad mode
+
+- One-finger drag moves a visible remote cursor.
+- Tap performs a left-click.
+- Long-press performs a right-click.
+- Two-finger movement produces scrolling.
+- Cursor coordinates remain correct after resizing and reconnecting.
+- Touch cancellation releases all active mouse buttons.
+
+### Direct-touch mode
+
+Provide an alternative mode where tapping and dragging map directly to remote desktop coordinates.
+
+### Validation
+
+Test the actual noVNC desktop: left-click, right-click/context menus, cursor movement, two-finger scrolling, mouse down/up pairing, stuck-button prevention, reconnection and orientation changes.
+
+JavaScript compilation alone does not prove remote input works.
+
+## 5. Terminal touch controls
+
+Inspect `lib/ui/apps/terminal_app.dart` and finish the existing long-press selection and clipboard implementation.
+
+Required:
+
+- Long-press text selection.
+- Copy selected text to Android clipboard.
+- Paste clipboard contents into the PTY.
+- Two-finger vertical scrolling through terminal history.
+- Correct handling of multiple simultaneous pointers.
+- No accidental shell input during scrolling.
+- Preserve UTF-8 output handling.
+
+Test selection and clipboard behavior with long commands, file paths, multiline text and Unicode.
+
+## 6. Linux desktop and browser reliability
+
+Inspect:
+
+- `lib/services/linux_runtime.dart`
+- `tool/setup.sh`
+- `tool/prebake_rootfs.sh`
+
+Verify the complete desktop startup sequence:
+
+1. Xvfb/X11 display `:1`.
+2. Openbox.
+3. x11vnc on port `5900`.
+4. websockify/noVNC on port `6080`.
+5. Browser attached to the correct display.
+
+A listening port alone does not prove that the desktop works.
+
+### Browser requirements
+
+Verify which browsers are actually installed. Test browser launch, display inside noVNC, HTTPS loading, closing and reopening, duplicate-process prevention, and useful failure logs.
+
+Do not assume Chromium or Firefox is installed merely because a launch script exists. Inspect the root filesystem and packaging method.
+
+### OpenCode TTS
+
+Inspect:
+
+- `lib/services/opencode_tts_server.dart`
+- `tool/opencode-tts-plugin.js`
+
+Verify the bridge at `127.0.0.1:17842`. Test the `/speak` endpoint from inside PRoot and confirm actual connectivity rather than assuming Android and PRoot share loopback networking.
+
+Preserve the existing UTF-8 terminal improvements.
+
+## 7. Preserve and optimize the interface
+
+MicroOS should retain its macOS-inspired appearance.
+
+Inspect:
+
+- `lib/core/theme.dart`
+- `lib/ui/dock.dart`
+- `lib/ui/wallpaper.dart`
+- `lib/ui/window_frame.dart`
+
+Preserve Inter typography, existing Dock artwork, Big Sur/Tahoe wallpaper integration, Dock magnification and touch interaction, window management, animations and visual styling.
+
+### Performance requirements
+
+For the 4 GB Android target:
+
+- Keep Dock repaint isolation using `RepaintBoundary`.
+- Keep backdrop blur sigma at or below 15.
+- Avoid rebuilding the entire desktop during Dock animation.
+- Decode wallpapers at appropriate screen dimensions.
+- Avoid unnecessarily loading full-resolution images.
+- Keep image and terminal buffers bounded.
+- Avoid duplicate Linux desktops and unnecessary browser processes.
+- Avoid unnecessary background timers and animations.
+
+Inspect `tool/optimize_dock_icons.py`. Verify Dock icons are optimized to approximately 128 × 128 while preserving transparency and aspect ratio.
+
+Do not remove visual features simply to make performance measurements look better.
+
+## 8. GitHub Actions — Larger build runners
+
+Inspect `.github/workflows/build-android.yml`.
+
+The project needs reliable ARM64 rootfs preparation and Android APK packaging.
+
+### Runner selection
+
+Inspect the actual GitHub runner options available to this repository.
+
+- Use a suitable native ARM64 runner for Linux rootfs preparation.
+- Use a sufficiently large x64 runner for Flutter and Android packaging.
+- Target at least 16 GB RAM when available.
+- Use a 60 GB runner only if the account actually has access to one.
+
+Do not assume `ubuntu-latest` automatically means 16 GB RAM. Do not invent runner labels or select unavailable machines.
+
+Inspect the existing configuration: `MICROOS_ARM_RUNNER` and `MICROOS_MIN_RAM_GIB`. Retain compatible defaults if larger runners are unavailable.
+
+### Build reliability
+
+Improve disk-space checks, memory checks, dependency caching, rootfs archive validation, artifact transfer, APK packaging and failure diagnostics.
+
+Preserve all required Linux packages and ARM64 libraries.
+
+Print available RAM, available disk space, APK file size and APK SHA-256 checksum.
+
+The APK may be large because it includes the Linux environment. Do not silently remove required components to reduce its size.
+
+Before pushing, inspect active Actions runs. Avoid unintentionally cancelling a useful build through workflow concurrency.
+
+## 9. Execution sequence
+
+### Phase A — Audit
+
+- Pull the latest `main`.
+- Inspect recent commits and the working tree.
+- Inspect terminal paste and output handling.
+- Inspect Android lifecycle and process ownership.
+- Inspect the VNC input bridge.
+- Inspect Linux startup and browser packaging.
+- Inspect the current GitHub Actions workflow.
+
+Preserve uncommitted user changes.
+
+### Phase B — Critical memory fix
+
+- Implement chunked paste.
+- Add PTY backpressure.
+- Bound scrollback to 1,000 lines.
+- Bound output buffers.
+- Add tests for large pastes and Unicode.
+
+### Phase C — Background service
+
+- Implement the native Android foreground service.
+- Integrate it with Flutter and LinuxRuntime.
+- Add process supervision and recovery.
+- Test ordinary app switching and reconnection.
+
+### Phase D — Touch controls
+
+- Finish VNC trackpad.
+- Finish direct-touch mode.
+- Implement terminal two-finger scrolling.
+- Validate clipboard and selection.
+
+### Phase E — Linux reliability
+
+- Validate X11/VNC/noVNC.
+- Validate browser launch.
+- Validate OpenCode.
+- Validate TTS.
+- Fix startup races and duplicate processes.
+
+### Phase F — Performance
+
+- Verify wallpaper decoding.
+- Verify Dock rendering.
+- Verify icon optimization.
+- Measure memory and CPU where possible.
+
+### Phase G — Build and delivery
+
+Run:
+
+```bash
+flutter pub get
+dart format --output=none --set-exit-if-changed lib
+flutter analyze
+flutter test
+bash -n tool/setup.sh
+bash -n tool/prebake_rootfs.sh
+bash -n tool/bootstrap_android.sh
+```
+
+Fix errors introduced by the changes. Do not suppress errors just to obtain a green build.
+
+Review the final diff, commit the work, push to `main`, and monitor the resulting GitHub Actions run.
+
+If a build fails:
+
+1. Retrieve the failing job logs.
+2. Identify the actual failure.
+3. Fix the problem.
+4. Commit and rebuild.
+5. Continue until the build succeeds or a genuine external blocker is identified.
+
+## 10. Definition of done
+
+- [ ] Large terminal pastes no longer freeze MicroOS.
+- [ ] Unicode and multiline pastes remain correct.
+- [ ] Terminal scrollback is limited to 1,000 lines.
+- [ ] Terminal output buffers are bounded.
+- [ ] Android foreground service is implemented.
+- [ ] Active Linux/OpenCode sessions survive ordinary app switching or recover correctly.
+- [ ] Process supervision and reconnection work.
+- [ ] VNC cursor and trackpad gestures work.
+- [ ] Right-click and two-finger scrolling work.
+- [ ] Terminal selection, copy and paste work.
+- [ ] Linux desktop and noVNC start reliably.
+- [ ] Installed browser launches inside the guest.
+- [ ] OpenCode TTS bridge works from PRoot.
+- [ ] Existing interface artwork and performance optimizations are preserved.
+- [ ] `flutter analyze` passes.
+- [ ] Tests pass.
+- [ ] GitHub Actions completes successfully.
+- [ ] Final ARM64 APK is verified.
+
+## 11. Final report
+
+When finished, provide:
+
+1. Summary of implemented changes.
+2. Files changed.
+3. Terminal memory fix and test results.
+4. Background-service implementation and device-test results.
+5. Trackpad and terminal gesture test results.
+6. Linux desktop and browser test results.
+7. `flutter analyze` and test results.
+8. Final commit SHA.
+9. GitHub Actions run link and status.
+10. Verified APK download link, file size and SHA-256.
+
+Clearly distinguish automated tests from physical-device tests.
+
+---
+
+## FINAL DIRECTIVE TO OPENCODE
+
+Read this README completely before beginning.
+
+Pull the latest `main`, inspect the existing project, and execute the tasks in priority order.
+
+Fix the terminal memory and large-paste crash first. Then implement Android background execution, process recovery, touch controls and the remaining reliability improvements.
+
+Do not merely produce a plan or recommendations. Make the changes, run the tests, push the code, monitor GitHub Actions and deliver the verified ARM64 APK.
+
+Do not claim a feature works unless you have evidence. Do not stop while actionable build failures remain.
+
+
+---
+
+# Existing project documentation
+
+> The following project reference is retained from the previous README so setup instructions and current alpha limitations are not lost while the engineering task list becomes the primary README.
+
 # MicroOS
 
 **MicroOS is an early alpha.** It is experimental software under active development. Expect bugs, incomplete features, performance issues, and possible data loss. It has not yet been validated across Android devices. Install and test at your own risk; back up important files first.
