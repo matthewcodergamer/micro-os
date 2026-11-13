@@ -29,7 +29,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '9';
+  static const String _rootfsVersion = '10';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -574,9 +574,9 @@ class LinuxRuntime extends ChangeNotifier {
 
   /// Launches the desktop browser inside the guest.
   ///
-  /// The heavy flags are applied inside `/usr/local/bin/microos-browse`, which
-  /// picks Chromium when the distro ships a real .deb and falls back to Falkon
-  /// (QtWebEngine, same Blink engine) when it does not.
+  /// Launches the native Linux browser as a normal X11 desktop window.
+  /// Chromium/Firefox own their tabs, address bars, bookmarks and window chrome;
+  /// Flutter only provides compact touch controls around the VNC desktop.
   Future<void> launchBrowser({
     String? url,
     String browser = 'chromium',
