@@ -95,14 +95,14 @@ export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 export NODE_PATH=/opt/node-global
 PLAYWRIGHT_ENV
     chmod 0644 /etc/profile.d/microos-playwright.sh
-    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright NODE_PATH="$PLAYWRIGHT_NODE_MODULES" node <<'PLAYWRIGHT_SMOKE'
-const { chromium } = require('playwright');
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright NODE_PATH="$PLAYWRIGHT_NODE_MODULES" node <<PLAYWRIGHT_SMOKE
+const { chromium } = require("playwright");
 (async () => {
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   const page = await browser.newPage();
-  await page.setContent('<title>MicroOS Playwright</title><h1>Headless automation ready</h1>');
-  if (!(await page.title()).includes('Playwright')) throw new Error('Playwright page title mismatch');
-  await page.screenshot({ path: '/tmp/microos-playwright-smoke.png' });
+  await page.setContent("<title>MicroOS Playwright</title><h1>Headless automation ready</h1>");
+  if (!(await page.title()).includes("Playwright")) throw new Error("Playwright page title mismatch");
+  await page.screenshot({ path: "/tmp/microos-playwright-smoke.png" });
   await browser.close();
 })().catch(error => { console.error(error); process.exit(1); });
 PLAYWRIGHT_SMOKE
