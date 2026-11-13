@@ -168,6 +168,159 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
+  String _entryPath(_FileEntry entry) =>
+      _path == '/' ? '/${entry.name}' : '$_path/${entry.name}';
+
+  Future<void> _runGuest(String script, List<String> args) async {
+    final pty = widget.runtime.startShell(
+      argv: <String>['/bin/bash', '-lc', script, 'microos-finder', ...args],
+    );
+    final output = BytesBuilder(copy: false);
+    final subscription = pty.output.listen(output.add);
+    try {
+      final code = await pty.exitCode.timeout(const Duration(seconds: 15));
+      final message = utf8.decode(output.takeBytes(), allowMalformed: true).trim();
+      if (code != 0) throw StateError(message.isEmpty ? 'Linux file operation failed.' : message);
+    } finally {
+      await subscription.cancel();
+      pty.kill();
+    }
+  }
+
+  Future<String?> _askName(String title, String initial) async {
+    final controller = TextEditingController(text: initial);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: MicroColors.panelSolid,
+        title: Text(title, style: const TextStyle(color: MicroColors.text)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: MicroColors.text),
+          decoration: const InputDecoration(hintText: 'Name'),
+          onSubmitted: (text) => Navigator.pop(context, text),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    return value;
+  }
+
+  bool _validName(String value) =>
+      value.trim().isNotEmpty && !value.contains('/') && value != '.' && value != '..';
+
+  void _notifyActionError(Object error) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+
+  Future<void> _createFolder() async {
+    final name = await _askName('New Folder', '');
+    if (name == null) return;
+    if (!_validName(name)) {
+      _notifyActionError('Enter a valid folder name.');
+      return;
+    }
+    final path = _path == '/' ? '/${name.trim()}' : '$_path/${name.trim()}';
+    try {
+      await _runGuest('mkdir -- "$1"', <String>[path]);
+      await _load();
+    } catch (error) {
+      _notifyActionError(error);
+    }
+  }
+
+  Future<void> _showEntryActions(_FileEntry entry) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: MicroColors.panelSolid,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(entry.isDirectory ? Icons.folder_open_rounded : Icons.info_outline_rounded),
+              title: Text(entry.isDirectory ? 'Open' : 'Get Info'),
+              onTap: () => Navigator.pop(context, 'open'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: const Text('Copy Path'),
+              onTap: () => Navigator.pop(context, 'copy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline_rounded),
+              title: const Text('Rename'),
+              onTap: () => Navigator.pop(context, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: MicroColors.red),
+              title: const Text('Delete'),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    final path = _entryPath(entry);
+    if (action == 'open') {
+      if (entry.isDirectory) {
+        _navigate(path);
+      } else {
+        _showFileDetails(entry);
+      }
+    } else if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: path));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Path copied')));
+    } else if (action == 'rename') {
+      final name = await _askName('Rename', entry.name);
+      if (name == null) return;
+      if (!_validName(name)) {
+        _notifyActionError('Enter a valid name.');
+        return;
+      }
+      final destination = _path == '/' ? '/${name.trim()}' : '$_path/${name.trim()}';
+      try {
+        await _runGuest('mv -- "$1" "$2"', <String>[path, destination]);
+        await _load();
+      } catch (error) {
+        _notifyActionError(error);
+      }
+    } else if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: MicroColors.panelSolid,
+          title: const Text('Delete this item?', style: TextStyle(color: MicroColors.text)),
+          content: Text('“${entry.name}” will be permanently deleted from Linux.', style: const TextStyle(color: MicroColors.subtle)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete', style: TextStyle(color: MicroColors.red)),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        try {
+          await _runGuest('rm -rf -- "$1"', <String>[path]);
+          await _load();
+        } catch (error) {
+          _notifyActionError(error);
+        }
+      }
+    }
+  }
+
   void _showFileDetails(_FileEntry entry) {
     showDialog<void>(
       context: context,
@@ -207,6 +360,12 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                   style: const TextStyle(color: MicroColors.subtle, fontSize: 12),
                   overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              IconButton(
+                tooltip: 'New folder',
+                icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+                color: MicroColors.text,
+                onPressed: _loading ? null : _createFolder,
               ),
               IconButton(
                 tooltip: 'Refresh',
@@ -330,7 +489,8 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       ),
       title: Text(entry.name, style: const TextStyle(color: MicroColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(folder ? 'Folder' : _formatSize(entry.size), style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
-      onTap: folder ? () => _navigate(_path == '/' ? '/${entry.name}' : '$_path/${entry.name}') : () => _showFileDetails(entry),
+      onTap: folder ? () => _navigate(_entryPath(entry)) : () => _showFileDetails(entry),
+      onLongPress: () => _showEntryActions(entry),
     );
   }
 
@@ -338,7 +498,8 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     final folder = entry.isDirectory;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: folder ? () => _navigate(_path == '/' ? '/${entry.name}' : '$_path/${entry.name}') : () => _showFileDetails(entry),
+      onTap: folder ? () => _navigate(_entryPath(entry)) : () => _showFileDetails(entry),
+      onLongPress: () => _showEntryActions(entry),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
