@@ -23,6 +23,8 @@ class _FilesAppState extends State<FilesApp> {
   List<_FileEntry> _entries = const [];
   bool _loading = true;
   bool _listView = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _search = '';
   String? _error;
   int _request = 0;
 
@@ -37,6 +39,12 @@ class _FilesAppState extends State<FilesApp> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -147,6 +155,12 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     _load();
   }
 
+  List<_FileEntry> get _visibleEntries {
+    final query = _search.trim().toLowerCase();
+    if (query.isEmpty) return _entries;
+    return _entries.where((entry) => entry.name.toLowerCase().contains(query)).toList(growable: false);
+  }
+
   String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -209,6 +223,33 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _search = value),
+            style: const TextStyle(color: MicroColors.text, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Search this folder',
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
+              suffixIcon: _search.isEmpty ? null : IconButton(
+                tooltip: 'Clear search',
+                icon: const Icon(Icons.close_rounded, size: 16),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _search = '');
+                },
+              ),
+              isDense: true,
+              filled: true,
+              fillColor: MicroColors.sidebar,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
         SizedBox(
           height: 42,
           child: ListView(
@@ -251,14 +292,17 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                         ),
                       ),
                     )
-                  : _entries.isEmpty
-                      ? const Center(
-                          child: Text('This folder is empty', style: TextStyle(color: MicroColors.subtle)),
+                  : _visibleEntries.isEmpty
+                      ? Center(
+                          child: Text(
+                            _entries.isEmpty ? 'This folder is empty' : 'No matching files',
+                            style: const TextStyle(color: MicroColors.subtle),
+                          ),
                         )
                       : _listView
                           ? ListView.builder(
-                              itemCount: _entries.length,
-                              itemBuilder: (_, i) => _listTile(_entries[i]),
+                              itemCount: _visibleEntries.length,
+                              itemBuilder: (_, i) => _listTile(_visibleEntries[i]),
                             )
                           : GridView.builder(
                               padding: const EdgeInsets.all(14),
@@ -268,8 +312,8 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                                 crossAxisSpacing: 10,
                                 mainAxisSpacing: 10,
                               ),
-                              itemCount: _entries.length,
-                              itemBuilder: (_, i) => _gridItem(_entries[i]),
+                              itemCount: _visibleEntries.length,
+                              itemBuilder: (_, i) => _gridItem(_visibleEntries[i]),
                             ),
         ),
       ],
