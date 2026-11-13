@@ -1,170 +1,143 @@
-import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../app_scope.dart';
+import '../core/format.dart';
 import '../core/theme.dart';
-import '../services/system_stats.dart';
+import '../models/window_state.dart';
 import '../state/desktop_state.dart';
 
-/// macOS menu bar: active app on the left, live system readouts on the right.
-class StatusBar extends StatelessWidget {
-  const StatusBar({super.key, required this.desktop, required this.stats, required this.compact, required this.onSpotlight, required this.onControlCenter});
+/// The macOS-style menu bar (Apple menu, app menus, status items, clock).
+class StatusBar extends StatefulWidget {
+  const StatusBar({
+    super.key,
+    required this.height,
+    required this.onSpotlight,
+    required this.onControlCenter,
+    required this.onLock,
+  });
 
-  final DesktopState desktop;
-  final SystemStats stats;
-  final bool compact;
+  final double height;
   final VoidCallback onSpotlight;
   final VoidCallback onControlCenter;
+  final VoidCallback onLock;
+
+  @override
+  State<StatusBar> createState() => _StatusBarState();
+}
+
+class _StatusBarState extends State<StatusBar> {
+  late DateTime _now;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          height: kStatusBarHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: const BoxDecoration(
-            color: Color(0xB30B0D13),
-            border: Border(bottom: BorderSide(color: Color(0x1AFFFFFF))),
+    final scope = AppScope.of(context);
+    final desktop = scope.desktop;
+    final focused = desktop.focused;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        height: widget.height,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xCC1C1C1E),
+          border: Border(
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
           ),
-          child: AnimatedBuilder(
-            animation: stats,
-            builder: (context, _) {
-              final focused = desktop.focused;
-              return Row(
-                children: [
-                  const Icon(Icons.laptop_mac, size: 15, color: MicroColors.text),
-                  const SizedBox(width: 8),
-                  Text(
-                    focused?.title ?? 'MicroOS',
-                    style: const TextStyle(
-                      color: MicroColors.text,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (!compact)
-                    _Stat(
-                      icon: Icons.memory,
-                      label: stats.ramTotalMb == 0
-                          ? '--'
-                          : '${stats.ramUsedMb}/${stats.ramTotalMb} MB',
-                    ),
-                  if (!compact && stats.swapTotalMb > 0)
-                    _Stat(
-                      icon: Icons.compress,
-                      label: 'zram ${stats.swapUsedMb} MB',
-                      color: MicroColors.amber,
-                    ),
-                  _Stat(
-                    icon: stats.connection == 'wifi'
-                        ? Icons.wifi
-                        : stats.connection == 'mobile'
-                            ? Icons.signal_cellular_alt
-                            : Icons.wifi_off,
-                    label: stats.connection,
-                  ),
-                  _Stat(
-                    icon: stats.charging ? Icons.battery_charging_full : Icons.battery_5_bar,
-                    label: '${stats.batteryLevel}%',
-                    color: stats.batteryLevel <= 15 ? MicroColors.red : null,
-                    onTap: () => showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        backgroundColor: MicroColors.panelSolid,
-                        title: const Text('Battery'),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${stats.batteryLevel}% remaining',
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            Text(stats.charging ? 'Charging or fully charged' : 'Discharging'),
-                            const SizedBox(height: 10),
-                            const Text('Android does not expose battery health or cycle count through the current app interface. This panel shows the live charge level and charging state.',
-                              style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
-                          ],
-                        ),
-                        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Spotlight',
-                    onPressed: onSpotlight,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-                    icon: const Icon(Icons.search_rounded, color: MicroColors.text, size: 18),
-                  ),
-                  IconButton(
-                    tooltip: 'Control Center',
-                    onPressed: onControlCenter,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-                    icon: const Icon(Icons.tune_rounded, color: MicroColors.text, size: 17),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _clock(stats.now),
-                    style: const TextStyle(
-                      color: MicroColors.text,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+        ),
+        child: Row(
+          children: [
+            // Apple menu
+            _MenuButton(
+              label: '',
+              items: [
+                PopupMenuItem(
+                  onTap: () {},
+                  child: const Text('About MicroOS'),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  onTap: widget.onLock,
+                  child: const Text('Lock Screen'),
+                ),
+              ],
+            ),
+            const SizedBox(width: 6),
+            // Focused app name
+            Text(
+              focused?.title ?? 'Finder',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            // Status items
+            IconButton(
+              icon: const Icon(Icons.search_rounded, size: 18, color: Colors.white),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+              onPressed: widget.onSpotlight,
+              tooltip: 'Spotlight',
+            ),
+            IconButton(
+              icon: const Icon(Icons.toggle_on_rounded, size: 20, color: Colors.white),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+              onPressed: widget.onControlCenter,
+              tooltip: 'Control Center',
+            ),
+            const SizedBox(width: 4),
+            Text(
+              menuBarDate(_now, compact: true),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ],
         ),
       ),
     );
   }
-
-  String _clock(DateTime time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.icon, required this.label, this.color, this.onTap});
+class _MenuButton extends StatelessWidget {
+  const _MenuButton({required this.label, required this.items});
 
-  final IconData icon;
   final String label;
-  final Color? color;
-  final VoidCallback? onTap;
+  final List<PopupMenuEntry<void>> items;
 
   @override
   Widget build(BuildContext context) {
-    final tint = color ?? MicroColors.text;
-    return Padding(
-      padding: const EdgeInsets.only(left: 14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            children: [
-          Icon(icon, size: 13, color: tint),
-          const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: tint,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+    return PopupMenuButton<void>(
+      padding: EdgeInsets.zero,
+      offset: const Offset(0, 28),
+      itemBuilder: (_) => items,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ),
