@@ -179,6 +179,11 @@ jobs:
           chmod +x tool/fetch_thanasos_wallpapers.sh
           ./tool/fetch_thanasos_wallpapers.sh
 
+      - name: Downsample Dock icons for mobile
+        run: |
+          python3 -m pip install --quiet --user Pillow
+          python3 tool/optimize_dock_icons.py
+
       - name: Dependencies
         run: flutter pub get
 

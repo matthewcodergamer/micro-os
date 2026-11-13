@@ -8,12 +8,20 @@ class Wallpaper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final dpr = media.devicePixelRatio;
+    // Decode near the physical display resolution, capped for mobile RAM.
+    final decodeWidth = (media.size.width * dpr).round().clamp(1, 1440).toInt();
+    final decodeHeight = (media.size.height * dpr).round().clamp(1, 3200).toInt();
     return Image.asset(
       'assets/wallpapers/wallpaper-bigsur.jpg',
       width: double.infinity,
       height: double.infinity,
       fit: BoxFit.cover,
-      filterQuality: FilterQuality.high,
+      cacheWidth: decodeWidth,
+      cacheHeight: decodeHeight,
+      filterQuality: FilterQuality.medium,
+      gaplessPlayback: true,
       // Keep a deterministic local fallback for development environments
       // where the asset-fetch script has not been run yet.
       errorBuilder: (context, error, stackTrace) => const CustomPaint(
