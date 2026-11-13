@@ -119,16 +119,15 @@ TORRENT
     done
     xset -display :99 q >/dev/null
     # DISPLAY is already :99; Openbox has no --display command-line option.
+    # Create the log before launch so diagnostics remain available even if
+    # Openbox exits before writing anything. Some builds may fork/replace the
+    # launcher process, so the EWMH handshake—not the original PID—is the
+    # authoritative readiness check.
+    : > /tmp/microos-openbox.log
     openbox --sm-disable >/tmp/microos-openbox.log 2>&1 &
     MICROOS_OPENBOX_PID=$!
-    # Wait for Openbox's EWMH handshake instead of assuming its PID means
-    # the window manager is ready to accept maximize and focus requests.
     WM_READY=0
     for attempt in $(seq 1 40); do
-      if [ -z "${MICROOS_OPENBOX_PID:-}" ] || ! kill -0 "$MICROOS_OPENBOX_PID" 2>/dev/null; then
-        cat /tmp/microos-openbox.log >&2 || true
-        exit 1
-      fi
       if xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "window id"; then
         WM_READY=1
         break
