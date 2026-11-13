@@ -7,6 +7,7 @@ import 'package:flutter_pty/flutter_pty.dart';
 import 'package:xterm/xterm.dart';
 
 import '../../core/terminal_profiles.dart';
+import '../../core/terminal_paste.dart';
 import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
 import '../../services/settings_store.dart';
@@ -43,7 +44,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
   }
 
   void _addTab() {
-    final terminal = Terminal(maxLines: 10000);
+    final terminal = Terminal(maxLines: 1000);
     final controller = TerminalController();
     Pty? pty;
 
@@ -76,7 +77,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
   void _closeTab(int index) {
     if (_tabs.length <= 1) return;
     final tab = _tabs.removeAt(index);
-    tab.pty?.kill();
+    tab.dispose();
     setState(() {
       if (_active >= _tabs.length) _active = _tabs.length - 1;
     });
@@ -149,16 +150,57 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
       final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
       final text = clipboard?.text;
       if (text != null && text.isNotEmpty) {
-        tab.terminal.textInput(text);
+        await _enqueuePaste(tab, text);
       }
     }
+  }
+
+
+  // Clipboard text is kept in a bounded per-tab queue and delivered in small
+  // Unicode-safe pieces. Pty.write is synchronous in flutter_pty, so pacing
+  // gives the PTY/event loop time to drain between writes instead of flooding it.
+  static const int _maxQueuedPasteCodeUnits = 2 * 1024 * 1024;
+  static const Duration _pasteChunkDelay = Duration(milliseconds: 4);
+
+  Future<void> _enqueuePaste(_Tab tab, String text) async {
+    if (tab.disposed || tab.pty == null) return;
+    if (tab.pendingPasteCodeUnits + text.length > _maxQueuedPasteCodeUnits) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Paste queue is full. Wait for the current paste to finish.')),
+        );
+      }
+      return;
+    }
+
+    tab.pendingPasteCodeUnits += text.length;
+    final paste = tab.pasteQueue.then((_) async {
+      try {
+        for (final chunk in splitTerminalPaste(text)) {
+          if (!mounted || tab.disposed || tab.pty == null) break;
+          tab.terminal.textInput(chunk);
+          await Future<void>.delayed(_pasteChunkDelay);
+        }
+      } catch (error) {
+        if (mounted && !tab.disposed) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Paste stopped: $error')),
+          );
+        }
+      } finally {
+        tab.pendingPasteCodeUnits =
+            (tab.pendingPasteCodeUnits - text.length).clamp(0, _maxQueuedPasteCodeUnits);
+      }
+    });
+    tab.pasteQueue = paste;
+    await paste;
   }
 
   @override
   void dispose() {
     _selectionMenuTimer?.cancel();
     for (final t in _tabs) {
-      t.pty?.kill();
+      t.dispose();
     }
     super.dispose();
   }
@@ -274,4 +316,18 @@ class _Tab {
   final TerminalController controller;
   final Pty? pty;
   String title;
+  Future<void> pasteQueue = Future<void>.value();
+  int pendingPasteCodeUnits = 0;
+  bool disposed = false;
+
+  void dispose() {
+    if (disposed) return;
+    disposed = true;
+    pendingPasteCodeUnits = 0;
+    try {
+      pty?.kill();
+    } catch (_) {
+      // The PTY may already have exited.
+    }
+  }
 }
