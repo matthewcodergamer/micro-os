@@ -31,6 +31,18 @@ docker run --platform linux/arm64 --name "$NAME" \
     install -m 0644 /tmp/microos-tts-plugin.js /root/.config/opencode/plugins/microos-tts.js
     echo "==> Installed local Android read-aloud plugin for OpenCode"
 
+    echo "==> Installing Hugging Face CLI in an isolated Python environment"
+    python3 -m venv /opt/huggingface-cli
+    /opt/huggingface-cli/bin/pip install --no-cache-dir --upgrade "huggingface_hub[cli]"
+    ln -sfn /opt/huggingface-cli/bin/hf /usr/local/bin/hf
+    if [ -x /opt/huggingface-cli/bin/huggingface-cli ]; then
+      ln -sfn /opt/huggingface-cli/bin/huggingface-cli /usr/local/bin/huggingface-cli
+    fi
+    hf --help >/dev/null
+    command -v hf
+    # Credentials are supplied to guest processes via HF_TOKEN from Android
+    # secure storage. Do not persist access tokens in the rootfs or shell files.
+
     echo "==> Verifying the pre-baked developer workstation"
     for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop; do
       command -v "$tool" >/dev/null 2>&1 || {
@@ -78,18 +90,6 @@ nohup setsid qbittorrent-nox --confirm-legal-notice --webui-port=8080 \
 echo "[microos] qBittorrent-nox started on 127.0.0.1:8080"
 TORRENT
     chmod 755 /root/.microos/start-torrent.sh
-
-    echo "==> Installing Hugging Face CLI in an isolated Python environment"
-    python3 -m venv /opt/huggingface-cli
-    /opt/huggingface-cli/bin/pip install --no-cache-dir --upgrade "huggingface_hub[cli]"
-    ln -sfn /opt/huggingface-cli/bin/hf /usr/local/bin/hf
-    if [ -x /opt/huggingface-cli/bin/huggingface-cli ]; then
-      ln -sfn /opt/huggingface-cli/bin/huggingface-cli /usr/local/bin/huggingface-cli
-    fi
-    hf --help >/dev/null
-    command -v hf
-    # Credentials are supplied to guest processes via HF_TOKEN from Android
-    # secure storage. Do not persist access tokens in the rootfs or shell files.
 
     echo "==> Preparing the unified phone Downloads directory"
     install -d -m 0775 /mnt/android/Download
