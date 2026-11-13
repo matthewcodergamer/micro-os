@@ -11,9 +11,10 @@ import '../../services/linux_runtime.dart';
 
 /// Finder-style browser for the real Linux guest filesystem and Android bind mounts.
 class FilesApp extends StatefulWidget {
-  const FilesApp({super.key, required this.runtime});
+  const FilesApp({super.key, required this.runtime, this.onOpenTerminal});
 
   final LinuxRuntime runtime;
+  final ValueChanged<List<String>>? onOpenTerminal;
 
   @override
   State<FilesApp> createState() => _FilesAppState();
@@ -251,6 +252,12 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
               title: Text(entry.isDirectory ? 'Open' : 'Get Info'),
               onTap: () => Navigator.pop(context, 'open'),
             ),
+            if (entry.isDirectory && widget.onOpenTerminal != null)
+              ListTile(
+                leading: const Icon(Icons.terminal_rounded),
+                title: const Text('Open in Terminal'),
+                onTap: () => Navigator.pop(context, 'terminal'),
+              ),
             ListTile(
               leading: const Icon(Icons.copy_rounded),
               title: const Text('Copy Path'),
@@ -278,6 +285,14 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       } else {
         _showFileDetails(entry);
       }
+    } else if (action == 'terminal') {
+      widget.onOpenTerminal?.call(<String>[
+        '/bin/bash',
+        '-lc',
+        'cd -- "$1"; exec bash',
+        'microos-terminal',
+        path,
+      ]);
     } else if (action == 'copy') {
       await Clipboard.setData(ClipboardData(text: path));
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Path copied')));
