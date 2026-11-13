@@ -98,6 +98,18 @@ TORRENT
     # Exercise the actual Linux desktop browser window, not only headless DOM
     # rendering. This runs the same launcher used by the Android PRoot guest.
     echo "==> Testing native Chromium X11 window, tabs and mobile control helper"
+    # Initialize every PID before starting background processes so strict
+    # nounset mode can safely handle early startup failures.
+    MICROOS_XVFB_PID=""
+    MICROOS_OPENBOX_PID=""
+    MICROOS_BROWSER_PID=""
+    cleanup_x11_smoke() {
+      [ -z "$MICROOS_BROWSER_PID" ] || kill "$MICROOS_BROWSER_PID" 2>/dev/null || true
+      [ -z "$MICROOS_OPENBOX_PID" ] || kill "$MICROOS_OPENBOX_PID" 2>/dev/null || true
+      [ -z "$MICROOS_XVFB_PID" ] || kill "$MICROOS_XVFB_PID" 2>/dev/null || true
+      pkill -u microos-browser -f '[c]hromium' 2>/dev/null || true
+    }
+    trap cleanup_x11_smoke EXIT
     Xvfb :99 -screen 0 1280x800x24 -nolisten tcp -ac >/tmp/microos-xvfb.log 2>&1 &
     MICROOS_XVFB_PID=$!
     export DISPLAY=:99
@@ -139,7 +151,8 @@ TORRENT
     done
     if [ -z "$WINDOW_ID" ]; then
       cat /tmp/microos-chromium-x11.log >&2 || true
-      kill "$MICROOS_OPENBOX_PID" "$MICROOS_XVFB_PID" 2>/dev/null || true
+      echo "Chromium X11 window did not appear within 25 seconds" >&2
+      cat /tmp/microos-xvfb.log /tmp/microos-openbox.log >&2 || true
       exit 1
     fi
     /usr/local/bin/microos-browser-control new-tab
@@ -157,9 +170,10 @@ TORRENT
     fi
     echo "==> Native Chromium window verified: ${WIDTH}x${HEIGHT}"
     /usr/local/bin/microos-browser-control window-close || true
-    kill "$MICROOS_OPENBOX_PID" "$MICROOS_XVFB_PID" 2>/dev/null || true
-    pkill -u microos-browser -f "[c]hromium" 2>/dev/null || true
     wait "$MICROOS_BROWSER_PID" 2>/dev/null || true
+    MICROOS_BROWSER_PID=""
+    cleanup_x11_smoke
+    trap - EXIT
 
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
