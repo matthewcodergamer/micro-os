@@ -207,7 +207,7 @@ chmod 755 /usr/local/bin/start-firefox.sh
 # Selecting Chromium closes Firefox first; Chromium reuses its persistent profile.
 cat > /usr/local/bin/microos-browse <<'BROWSER'
 #!/usr/bin/env bash
-pkill -u microos-browser -f '/opt/firefox/firefox' 2>/dev/null || true
+pkill -u microos-browser -f 'firefox' 2>/dev/null || true
 exec /usr/local/bin/start-browser.sh "$@"
 BROWSER
 chmod 755 /usr/local/bin/microos-browse
