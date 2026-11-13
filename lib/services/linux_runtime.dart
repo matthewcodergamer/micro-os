@@ -28,7 +28,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '7';
+  static const String _rootfsVersion = '8';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -603,7 +603,7 @@ class LinuxRuntime extends ChangeNotifier {
     }
     final launcher = browser == 'firefox'
         ? '/usr/local/bin/start-firefox.sh'
-        : '/usr/local/bin/start-browser.sh';
+        : '/usr/local/bin/microos-browse';
     runDetached(
       <String>[
         '/bin/bash',
