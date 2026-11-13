@@ -135,13 +135,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
 
         _vncRetryCount++;
         if (_vncRetryCount >= 15) {
-          timer.cancel();
-          if (mounted) {
-            setState(() {
-              _failed = true;
-              _status = 'VNC did not connect within 15 seconds. Tap Try again.';
-            });
-          }
+          _vncRetryCount = 0;
+          if (mounted) setState(() => _status = 'Still waiting for the display… reconnecting');
+          await controller.reload();
           return;
         }
 
@@ -157,13 +153,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       } catch (_) {
         _vncRetryCount++;
         if (_vncRetryCount >= 15) {
-          timer.cancel();
-          if (mounted) {
-            setState(() {
-              _failed = true;
-              _status = 'VNC did not connect within 15 seconds. Tap Try again.';
-            });
-          }
+          _vncRetryCount = 0;
+          if (mounted) setState(() => _status = 'Still waiting for the display… reconnecting');
+          await controller.reload();
         } else if (_vncRetryCount % 3 == 0) {
           await controller.reload();
         }
