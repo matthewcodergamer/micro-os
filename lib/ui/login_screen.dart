@@ -62,6 +62,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final name = widget.settings.userName;
+    final screen = MediaQuery.sizeOf(context);
+    final shortScreen = screen.height < 620;
+    final clockSize = math.min(84.0, math.min(screen.width * 0.22, screen.height * 0.15));
+    final avatarSize = shortScreen ? 68.0 : 88.0;
 
     return Material(
       color: Colors.transparent,
@@ -73,12 +77,12 @@ class _LoginScreenState extends State<LoginScreen> {
           SafeArea(
             child: Column(
               children: [
-                const Spacer(flex: 2),
+                Spacer(flex: shortScreen ? 1 : 2),
                 Text(
                   lockTime(now),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 84,
+                    fontSize: clockSize,
                     fontWeight: FontWeight.w200,
                     letterSpacing: -1.5,
                     height: 1.0,
@@ -93,11 +97,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-                const Spacer(flex: 3),
+                Spacer(flex: shortScreen ? 1 : 3),
                 // Avatar
                 Container(
-                  width: 88,
-                  height: 88,
+                  width: avatarSize,
+                  height: avatarSize,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(
@@ -113,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.person_rounded, color: Colors.white, size: 48),
+                  child: Icon(Icons.person_rounded, color: Colors.white, size: avatarSize * 0.55),
                 ),
                 const SizedBox(height: 14),
                 Text(
@@ -191,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: widget.onUnlock,
                     child: const Text('Continue'),
                   ),
-                const Spacer(flex: 2),
+                Spacer(flex: shortScreen ? 1 : 2),
                 Text(
                   'MicroOS · Golden Gate',
                   style: TextStyle(
