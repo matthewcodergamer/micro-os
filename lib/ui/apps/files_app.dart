@@ -8,6 +8,7 @@ import 'package:flutter_pty/flutter_pty.dart';
 
 import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
+import '../mac_icons.dart';
 
 /// Finder-style browser for the real Linux guest filesystem and Android bind mounts.
 class FilesApp extends StatefulWidget {
@@ -30,11 +31,11 @@ class _FilesAppState extends State<FilesApp> {
   String? _error;
   int _request = 0;
 
-  static const _locations = <({String label, String path, IconData icon})>[
-    (label: 'Home', path: '/root', icon: Icons.home_rounded),
-    (label: 'Downloads', path: '/root/Downloads', icon: Icons.download_rounded),
-    (label: 'Phone', path: '/mnt/android', icon: Icons.phone_android_rounded),
-    (label: 'Linux root', path: '/', icon: Icons.computer_rounded),
+  static const _locations = <({String label, String path, String kind})>[
+    (label: 'Home', path: '/root', kind: 'home'),
+    (label: 'Downloads', path: '/root/Downloads', kind: 'downloads'),
+    (label: 'Phone', path: '/mnt/android', kind: 'phone'),
+    (label: 'Linux root', path: '/', kind: 'drive'),
   ];
 
   @override
@@ -435,7 +436,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: ActionChip(
-                    avatar: Icon(location.icon, size: 15),
+                    avatar: FinderItemIcon(kind: location.kind, size: 18),
                     label: Text(location.label),
                     onPressed: () => _navigate(location.path),
                     visualDensity: VisualDensity.compact,
@@ -499,9 +500,9 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     final folder = entry.isDirectory;
     return ListTile(
       dense: true,
-      leading: Icon(
-        folder ? Icons.folder_rounded : entry.isLink ? Icons.link_rounded : Icons.insert_drive_file_rounded,
-        color: folder ? MicroColors.accent : MicroColors.subtle,
+      leading: FinderItemIcon(
+        kind: folder ? 'folder' : entry.isLink ? 'link' : 'file',
+        size: 28,
       ),
       title: Text(entry.name, style: const TextStyle(color: MicroColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(folder ? 'Folder' : _formatSize(entry.size), style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
@@ -519,10 +520,9 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            folder ? Icons.folder_rounded : entry.isLink ? Icons.link_rounded : Icons.insert_drive_file_rounded,
+          FinderItemIcon(
+            kind: folder ? 'folder' : entry.isLink ? 'link' : 'file',
             size: 44,
-            color: folder ? MicroColors.accent : MicroColors.subtle,
           ),
           const SizedBox(height: 6),
           Text(

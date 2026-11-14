@@ -156,11 +156,16 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
                       color: Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.none,
                     ),
                   ),
                   Text(
                     app.subtitle,
-                    style: const TextStyle(color: Colors.white60, fontSize: 12),
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ],
               ),

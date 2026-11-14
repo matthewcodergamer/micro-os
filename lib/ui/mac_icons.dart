@@ -195,6 +195,49 @@ class MacAppIcon extends StatelessWidget {
   }
 }
 
+/// Native-looking Finder glyphs shared by sidebar locations and file rows.
+class FinderItemIcon extends StatelessWidget {
+  const FinderItemIcon({super.key, required this.kind, this.size = 22});
+
+  final String kind;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, colors) = switch (kind) {
+      'home' => (Icons.home_rounded, const [Color(0xFF64D2FF), Color(0xFF0A84FF)]),
+      'downloads' => (Icons.download_rounded, const [Color(0xFF64D2FF), Color(0xFF0A84FF)]),
+      'phone' => (Icons.phone_iphone_rounded, const [Color(0xFF8E8E93), Color(0xFF48484A)]),
+      'drive' => (Icons.storage_rounded, const [Color(0xFF8E8E93), Color(0xFF48484A)]),
+      'folder' => (Icons.folder_rounded, const [Color(0xFF64D2FF), Color(0xFF0A84FF)]),
+      'link' => (Icons.link_rounded, const [Color(0xFFAEAEB2), Color(0xFF636366)]),
+      _ => (Icons.insert_drive_file_rounded, const [Color(0xFFAEAEB2), Color(0xFF636366)]),
+    };
+    return SizedBox(
+      width: size,
+      height: size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: colors,
+          ),
+          borderRadius: BorderRadius.circular(size * 0.22),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: size * 0.12,
+              offset: Offset(0, size * 0.05),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: Colors.white, size: size * 0.72),
+      ),
+    );
+  }
+}
+
 /// Small running indicator dot under a dock icon.
 class RunningDot extends StatelessWidget {
   const RunningDot({super.key, this.active = true});
