@@ -44,14 +44,14 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'wrong-password');
-    await tester.tap(find.byTooltip('Unlock MicroOS'));
+    await tester.tap(find.byTooltip('Unlock Misty OS'));
     await tester.pump();
 
     expect(find.text('Incorrect password. Try again.'), findsOneWidget);
     expect(unlocked, isFalse);
 
     await tester.enterText(find.byType(TextField), 'microos-test-password');
-    await tester.tap(find.byTooltip('Unlock MicroOS'));
+    await tester.tap(find.byTooltip('Unlock Misty OS'));
     await tester.pump();
 
     expect(unlocked, isTrue);

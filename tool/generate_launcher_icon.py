@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Generate the MicroOS launcher artwork before flutter_launcher_icons runs."""
+"""Generate Misty OS's sky-blue cloud launcher icon and adaptive layers."""
 from pathlib import Path
-import math
 from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1] / "assets" / "icon"
@@ -10,88 +9,75 @@ SIZE = 1024
 
 
 def make_background():
-    image = Image.new("RGBA", (SIZE, SIZE))
+    image = Image.new("RGB", (SIZE, SIZE))
     pixels = image.load()
-    start, middle, end = (10, 16, 34), (39, 49, 112), (13, 25, 48)
+    top, bottom = (190, 218, 249), (103, 157, 222)
     for y in range(SIZE):
+        t = y / (SIZE - 1)
+        # A gentle blue sky gradient, with a slightly deeper blue toward the base.
+        row = tuple(int(top[i] * (1 - t) + bottom[i] * t) for i in range(3))
         for x in range(SIZE):
-            t = max(0.0, min(1.0, (x * 0.62 + y * 0.78) / (SIZE * 1.4)))
-            if t < 0.58:
-                q, a, b = t / 0.58, start, middle
-            else:
-                q, a, b = (t - 0.58) / 0.42, middle, end
-            color = tuple(int(a[i] + (b[i] - a[i]) * q) for i in range(3))
-            dx, dy = (x - 770) / 700, (y - 220) / 700
-            bloom = max(0.0, 1.0 - math.sqrt(dx * dx + dy * dy)) * 0.16
-            color = (
-                min(255, int(color[0] + 20 * bloom)),
-                min(255, int(color[1] + 85 * bloom)),
-                min(255, int(color[2] + 110 * bloom)),
-            )
-            pixels[x, y] = (*color, 255)
-    return image
+            pixels[x, y] = row
+
+    mist = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(mist)
+    draw.ellipse((-180, 610, 520, 1110), fill=(255, 224, 224, 115))
+    draw.ellipse((520, -170, 1120, 350), fill=(255, 255, 255, 85))
+    draw.ellipse((80, 80, 560, 350), fill=(255, 255, 255, 52))
+    mist = mist.filter(ImageFilter.GaussianBlur(100))
+    return Image.alpha_composite(image.convert("RGBA"), mist)
 
 
-def make_foreground():
-    """Transparent adaptive foreground: a luminous M inside a microchip."""
-    layer = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    glow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    gd.rounded_rectangle((210, 205, 814, 819), radius=150,
-                         outline=(0, 190, 255, 245), width=34)
-    for i in range(6):
-        x = 330 + i * 72
-        gd.line((x, 132, x, 210), fill=(30, 205, 255, 220), width=18)
-        gd.line((x, 814, x, 892), fill=(30, 205, 255, 220), width=18)
-        y = 330 + i * 72
-        gd.line((132, y, 210, y), fill=(30, 205, 255, 220), width=18)
-        gd.line((814, y, 892, y), fill=(30, 205, 255, 220), width=18)
-    layer = Image.alpha_composite(layer, glow.filter(ImageFilter.GaussianBlur(38)))
-
-    draw = ImageDraw.Draw(layer)
-    draw.rounded_rectangle((210, 205, 814, 819), radius=150,
-                           outline=(75, 220, 255, 255), width=24)
-    draw.rounded_rectangle((252, 247, 772, 777), radius=116,
-                           outline=(30, 132, 255, 230), width=12)
-
-    # The custom M is drawn as one continuous, rounded neon stroke.
-    m = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    md = ImageDraw.Draw(m)
-    points = [(340, 680), (340, 365), (512, 555), (684, 365), (684, 680)]
-    md.line(points, fill=(60, 205, 255, 255), width=78, joint="curve")
-    for x, y in (points[0], points[-1]):
-        md.ellipse((x - 39, y - 39, x + 39, y + 39),
-                   fill=(60, 205, 255, 255))
-    layer = Image.alpha_composite(layer, m.filter(ImageFilter.GaussianBlur(34)))
-    layer = Image.alpha_composite(layer, m)
-    highlight = ImageDraw.Draw(layer)
-    highlight.line([(370, 646), (370, 415), (512, 570),
-                    (654, 415), (654, 646)],
-                   fill=(218, 249, 255, 255), width=12, joint="curve")
-    return layer
+def make_cloud_mask():
+    mask = Image.new("L", (SIZE, SIZE), 0)
+    d = ImageDraw.Draw(mask)
+    # Main cloud body and its three rounded upper lobes.
+    d.rounded_rectangle((170, 500, 850, 820), radius=160, fill=255)
+    d.ellipse((190, 410, 520, 745), fill=255)
+    d.ellipse((330, 300, 660, 650), fill=255)
+    d.ellipse((500, 320, 810, 650), fill=255)
+    # The crescent-shaped bite and its floating circular highlight.
+    d.ellipse((630, 340, 900, 610), fill=0)
+    d.ellipse((685, 395, 785, 495), fill=255)
+    return mask.filter(ImageFilter.GaussianBlur(1.0))
 
 
 def main():
     background = make_background()
-    foreground = make_foreground()
-    glow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).rounded_rectangle(
-        (168, 220, 856, 810), radius=112, fill=(43, 163, 255, 115)
-    )
-    glow = glow.filter(ImageFilter.GaussianBlur(70))
-    full = Image.alpha_composite(Image.alpha_composite(background, glow), foreground)
-    full.convert("RGB").save(ROOT / "microos_icon.png", optimize=True)
-    foreground.save(ROOT / "microos_foreground.png", optimize=True)
+    mask = make_cloud_mask()
 
-    mono = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(mono)
-    draw.rounded_rectangle((220, 220, 804, 804), radius=142,
-                           outline=(255, 255, 255, 255), width=24)
-    draw.line([(350, 680), (350, 390), (512, 560),
-               (674, 390), (674, 680)],
-              fill=(255, 255, 255, 255), width=58, joint="curve")
-    mono.save(ROOT / "microos_monochrome.png", optimize=True)
-    print(f"Generated MicroOS launcher assets in {ROOT}")
+    # Soft, cool shadow gives the white cloud the same floating/glossy character
+    # as the supplied reference icon without baking a black border into the layer.
+    shadow = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    shadow_mask = Image.new("L", (SIZE, SIZE), 0)
+    shadow_mask.paste(mask, (0, 14))
+    shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(30))
+    shadow_layer = Image.new("RGBA", (SIZE, SIZE), (49, 105, 176, 0))
+    shadow_layer.putalpha(shadow_mask.point(lambda p: int(p * 0.30)))
+    foreground = Image.alpha_composite(shadow, shadow_layer)
+
+    cloud = Image.new("RGBA", (SIZE, SIZE), (250, 252, 255, 0))
+    cloud.putalpha(mask)
+    foreground = Image.alpha_composite(foreground, cloud)
+
+    # A faint lower highlight adds a polished, glassy finish while retaining a
+    # clean white silhouette at launcher sizes.
+    highlight = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    hd = ImageDraw.Draw(highlight)
+    hd.arc((205, 465, 830, 840), start=12, end=168,
+           fill=(255, 255, 255, 100), width=9)
+    highlight.putalpha(Image.composite(highlight.getchannel("A"), Image.new("L", (SIZE, SIZE), 0), mask))
+    foreground = Image.alpha_composite(foreground, highlight)
+
+    full = Image.alpha_composite(background, foreground)
+    full.convert("RGB").save(ROOT / "misty_icon.png", optimize=True)
+    background.convert("RGB").save(ROOT / "misty_background.png", optimize=True)
+    foreground.save(ROOT / "misty_foreground.png", optimize=True)
+
+    monochrome = Image.new("RGBA", (SIZE, SIZE), (255, 255, 255, 0))
+    monochrome.putalpha(mask)
+    monochrome.save(ROOT / "misty_monochrome.png", optimize=True)
+    print(f"Generated Misty OS launcher assets in {ROOT}")
 
 
 if __name__ == "__main__":

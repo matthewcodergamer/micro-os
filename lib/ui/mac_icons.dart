@@ -20,6 +20,28 @@ class MacAppIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Use the approved Dock artwork everywhere this icon is shown.
+    final asset = switch (app) {
+      AppId.files => 'assets/icons/dock/finder-icon.png',
+      AppId.terminal => 'assets/icons/dock/terminal-icon.png',
+      AppId.browser => 'assets/icons/dock/safari-icon.png',
+      AppId.settings => 'assets/icons/dock/settings-icon.png',
+      _ => null,
+    };
+    if (asset != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.22),
+        child: Image.asset(
+          asset,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          cacheWidth: (size * 2).round(),
+          cacheHeight: (size * 2).round(),
+        ),
+      );
+    }
     final shape = _squircle(size);
     return SizedBox(
       width: size,

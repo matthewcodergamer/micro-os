@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen>
   void _tryUnlock() {
     if (widget.settings.loginPasswordStorageUnavailable) {
       setState(() => _error =
-          'Secure password storage is unavailable. Restart MicroOS and try again.');
+          'Secure password storage is unavailable. Restart Misty OS and try again.');
       _shake.forward(from: 0);
       return;
     }
@@ -216,10 +216,10 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
                 const SizedBox(height: 14),
                 Tooltip(
-                  message: 'Unlock MicroOS',
+                  message: 'Unlock Misty OS',
                   child: FilledButton(
                     onPressed: _tryUnlock,
-                    child: const Text('Unlock MicroOS'),
+                    child: const Text('Unlock Misty OS'),
                   ),
                 ),
               ],
@@ -306,7 +306,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                     const Spacer(flex: 2),
                     Text(
-                      'MicroOS  ·  Golden Gate',
+                      'Misty OS  ·  Lightweight. Cloud-Native. Powerful.',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.45),
                         fontSize: 12,

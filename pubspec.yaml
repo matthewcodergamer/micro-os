@@ -1,5 +1,5 @@
 name: micro_os
-description: "MicroOS - a native mobile Linux workstation with a macOS-style window manager."
+description: "Misty OS - a lightweight, cloud-native Linux workstation for mobile hardware."
 publish_to: "none"
 version: 0.1.0+1
 
