@@ -219,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen>
                   message: 'Unlock Misty OS',
                   child: FilledButton(
                     onPressed: _tryUnlock,
-                    child: const Text('Unlock MicroOS'),
+                    child: const Text('Unlock Misty OS'),
                   ),
                 ),
               ],
