@@ -202,6 +202,7 @@ class _Tile extends StatelessWidget {
               color: active ? Colors.white : Colors.white54,
               fontSize: 12,
               fontWeight: FontWeight.w600,
+              decoration: TextDecoration.none,
             ),
           ),
           const SizedBox(height: 2),
@@ -210,6 +211,7 @@ class _Tile extends StatelessWidget {
             style: TextStyle(
               color: active ? Colors.white70 : Colors.white38,
               fontSize: 11,
+              decoration: TextDecoration.none,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
