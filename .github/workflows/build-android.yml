@@ -163,7 +163,7 @@ jobs:
       - name: Download native-built ARM64 rootfs
         uses: actions/download-artifact@v4
         with:
-          name: MicroOS-rootfs-arm64
+          name: MistyOS-rootfs-arm64
           path: assets/rootfs
 
       - name: Verify transferred rootfs
