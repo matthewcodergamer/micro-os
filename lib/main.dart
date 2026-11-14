@@ -111,7 +111,7 @@ class _MicroOSAppState extends State<MicroOSApp> {
       auth: widget.auth,
       settings: widget.settings,
       child: MaterialApp(
-        title: 'MicroOS',
+        title: 'Misty OS',
         debugShowCheckedModeBanner: false,
         theme: buildMicroTheme(),
         builder: (context, child) {
