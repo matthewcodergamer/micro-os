@@ -121,7 +121,7 @@ jobs:
       - name: Upload pre-baked ARM64 rootfs
         uses: actions/upload-artifact@v4
         with:
-          name: MicroOS-rootfs-arm64
+          name: MistyOS-rootfs-arm64
           path: |
             assets/rootfs/rootfs.tar.zst
             assets/rootfs/rootfs.tar.size
@@ -286,13 +286,13 @@ jobs:
         run: |
           mkdir -p out
           cp build/app/outputs/flutter-apk/app-release.apk \
-             "out/MicroOS-${GITHUB_RUN_NUMBER}-arm64.apk"
+             "out/MistyOS-${GITHUB_RUN_NUMBER}-arm64.apk"
           ls -lh out
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MicroOS-apk
+          name: MistyOS-apk
           path: out/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -302,9 +302,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
-          name: MicroOS APK build ${{ github.run_number }}
+          name: Misty OS APK build ${{ github.run_number }}
           body: |
-            MicroOS ${{ github.sha }}
+            Misty OS ${{ github.sha }}
             Debug-signed release APK for arm64-v8a (sideload only).
             Includes the pre-baked Ubuntu 24.04 ARM64 rootfs and proot runtime.
           files: out/*.apk
