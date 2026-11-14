@@ -65,7 +65,7 @@ class InstallScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 24),
                         const Text(
-                          'MicroOS',
+                          'Misty OS',
                           style: TextStyle(
                             fontFamily: 'Inter',
                             color: Colors.white,
@@ -176,7 +176,7 @@ class InstallScreen extends StatelessWidget {
                             width: double.infinity,
                             child: FilledButton(
                               onPressed: failed ? runtime.reinstall : runtime.install,
-                              child: Text(failed ? 'Retry' : 'Install MicroOS'),
+                              child: Text(failed ? 'Retry' : 'Install Misty OS'),
                             ),
                           ),
                         ],
