@@ -56,10 +56,21 @@ class _DockState extends State<Dock> {
   Widget build(BuildContext context) {
     final desktop = AppScope.of(context).desktop;
     final screen = MediaQuery.sizeOf(context);
+    final landscape = screen.width > screen.height;
     final compact = screen.width < kCompactBreakpoint;
     final smallerDimension = math.min(screen.width, screen.height);
-    final iconSize = compact ? 38.0 : 52.0;
-    final maxScale = smallerDimension < 480 ? 1.4 : 1.6;
+    // Landscape has very little vertical room; keep the Dock visually
+    // secondary while preserving comfortable touch targets in portrait.
+    final iconSize = landscape
+        ? (screen.height < 420 ? 30.0 : 36.0)
+        : compact
+            ? (screen.width < 390 ? 30.0 : 36.0)
+            : 52.0;
+    final maxScale = landscape
+        ? 1.28
+        : smallerDimension < 480
+            ? 1.4
+            : 1.6;
     final effectWidth = smallerDimension < 480
         ? smallerDimension * 0.4
         : smallerDimension < 768
@@ -67,8 +78,8 @@ class _DockState extends State<Dock> {
             : smallerDimension < 1024
                 ? smallerDimension * 0.3
                 : 300.0;
-    final horizontalPadding = compact ? 8.0 : 14.0;
-    final spacing = compact ? 5.0 : 10.0;
+    final horizontalPadding = landscape || compact ? 8.0 : 14.0;
+    final spacing = landscape ? 4.0 : compact ? 5.0 : 10.0;
 
     final scales = List<double>.generate(Dock._apps.length, (index) {
       final pointer = _pointerX;
@@ -92,7 +103,7 @@ class _DockState extends State<Dock> {
         opacity: widget.visible ? 1 : 0,
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: EdgeInsets.only(bottom: landscape ? 4 : 8),
             child: MouseRegion(
               onHover: (event) => _trackPointer(
                 event.localPosition.dx - horizontalPadding,
@@ -117,7 +128,7 @@ class _DockState extends State<Dock> {
                     child: Container(
                       padding: EdgeInsets.symmetric(
                         horizontal: horizontalPadding,
-                        vertical: compact ? 7 : 10,
+                        vertical: landscape ? 4 : compact ? 6 : 10,
                       ),
                       decoration: BoxDecoration(
                         color: const Color(0x991C1C1E),
@@ -149,7 +160,7 @@ class _DockState extends State<Dock> {
                               final scale = scales[index];
                               return SizedBox(
                                 width: iconSize * scale,
-                                height: iconSize * 1.42,
+                                height: iconSize * 1.32,
                                 child: Align(
                                   alignment: Alignment.bottomCenter,
                                   child: Transform.scale(
