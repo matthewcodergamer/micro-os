@@ -687,13 +687,13 @@ class _LoginPageState extends State<_LoginPage> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'This password protects the MicroOS lock screen only. It does not encrypt Linux files or replace your Android device lock.',
+          'This password protects the Misty OS lock screen only. It does not encrypt Linux files or replace your Android device lock.',
           style: TextStyle(color: MicroColors.subtle, fontSize: 12, height: 1.4),
         ),
         if (settings.loginPasswordStorageUnavailable) ...[
           const SizedBox(height: 8),
           const Text(
-            'Secure password storage is unavailable. MicroOS will keep the lock closed rather than bypass it.',
+            'Secure password storage is unavailable. Misty OS will keep the lock closed rather than bypass it.',
             style: TextStyle(color: MicroColors.red, fontSize: 12),
           ),
         ],
@@ -739,9 +739,9 @@ class _AboutPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('About MicroOS', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text('About Misty OS', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
         SizedBox(height: 12),
-        Text('Golden Gate UI · macOS 27 style window manager for a mobile Linux workstation.', style: TextStyle(color: MicroColors.subtle)),
+        Text('Misty OS is a lightweight, cloud-native Linux workstation designed to run seamlessly on mobile hardware.', style: TextStyle(color: MicroColors.subtle)),
       ],
     );
   }
