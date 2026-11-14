@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Generates the Android platform folder with the current Flutter SDK and applies
-# the MicroOS-specific settings that the default template does not have.
+# the Misty OS-specific settings that the default template does not have.
 #
 # Generating (rather than committing) android/ keeps the Gradle/AGP/Kotlin
 # template in sync with whatever Flutter version builds the APK.
@@ -15,7 +15,7 @@ flutter create \
   --platforms=android \
   --org com.matthewcodergamer \
   --project-name micro_os \
-  --description "MicroOS - native mobile Linux workstation" \
+  --description "Misty OS - lightweight cloud-native Linux workstation" \
   . >/dev/null
 
 rm -f test/widget_test.dart
@@ -138,7 +138,7 @@ class MicroOSSessionService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "MicroOS Linux session",
+                "Misty OS Linux session",
                 NotificationManager.IMPORTANCE_LOW
             )
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
@@ -244,7 +244,7 @@ if "android.intent.action.TTS_SERVICE" not in xml:
         1,
     )
 
-xml = xml.replace('android:label="micro_os"', 'android:label="MicroOS"')
+xml = xml.replace('android:label="micro_os"', 'android:label="Misty OS"')
 
 if "usesCleartextTraffic" not in xml:
     xml = xml.replace(
