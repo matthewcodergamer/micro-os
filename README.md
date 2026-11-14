@@ -1,12 +1,17 @@
-# MicroOS — Master Engineering Task List
+# Misty OS — Master Engineering Task List
 
 **Repository:** [matthewcodergamer/micro-os](https://github.com/matthewcodergamer/micro-os)  
 **Primary branch:** `main`  
+
+## Why Misty OS?
+
+Misty OS is lightweight, highly optimized for mobile, and leverages the cloud so you can code anywhere. It is designed as a mobile-friendly Linux workstation with a calm, airy interface.
+
 **Target device:** Samsung Galaxy A07 · Android 16 · 4 GB RAM · ARM64
 
 ## Mission
 
-Improve MicroOS into a stable, mobile-friendly Linux desktop experience running on Android.
+Improve Misty OS into a stable, mobile-friendly Linux desktop experience running on Android.
 
 Work directly in the existing repository. Inspect the implementation before changing it, preserve working features, fix the critical memory problem first, and deliver a verified Android APK through GitHub Actions.
 
