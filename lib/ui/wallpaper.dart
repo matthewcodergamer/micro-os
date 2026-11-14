@@ -11,15 +11,20 @@ class Wallpaper extends StatelessWidget {
     final media = MediaQuery.of(context);
     final dpr = media.devicePixelRatio;
     // Decode near the physical display resolution, capped for mobile RAM.
-    final decodeWidth = (media.size.width * dpr).round().clamp(1, 1440).toInt();
-    final decodeHeight = (media.size.height * dpr).round().clamp(1, 3200).toInt();
+    // Decode by the longest display edge only. Supplying both cacheWidth and
+    // cacheHeight can force a non-matching source aspect ratio during decode.
+    // BoxFit.cover then crops the original image naturally in either orientation.
+    final decodeWidth =
+        (math.max(media.size.width, media.size.height) * dpr)
+            .round()
+            .clamp(1, 1440)
+            .toInt();
     return Image.asset(
       'assets/wallpapers/wallpaper-bigsur.png',
       width: double.infinity,
       height: double.infinity,
       fit: BoxFit.cover,
       cacheWidth: decodeWidth,
-      cacheHeight: decodeHeight,
       filterQuality: FilterQuality.medium,
       gaplessPlayback: true,
       // Keep a deterministic local fallback for development environments
