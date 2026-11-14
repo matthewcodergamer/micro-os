@@ -73,7 +73,7 @@ class _StatusBarState extends State<StatusBar> {
               items: [
                 PopupMenuItem(
                   onTap: () {},
-                  child: const Text('About MicroOS'),
+                  child: const Text('About Misty OS'),
                 ),
                 const PopupMenuDivider(),
                 PopupMenuItem(
