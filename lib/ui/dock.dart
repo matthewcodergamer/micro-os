@@ -59,6 +59,10 @@ class _DockState extends State<Dock> {
     final landscape = screen.width > screen.height;
     final compact = screen.width < kCompactBreakpoint;
     final smallerDimension = math.min(screen.width, screen.height);
+    // Keep the portrait Dock focused; every other app remains in Launchpad.
+    final dockApps = compact && !landscape
+        ? const [AppId.files, AppId.browser, AppId.terminal, AppId.aiHub, AppId.settings]
+        : Dock._apps;
     // Landscape has very little vertical room; keep the Dock visually
     // secondary while preserving comfortable touch targets in portrait.
     final iconSize = landscape
@@ -81,7 +85,7 @@ class _DockState extends State<Dock> {
     final horizontalPadding = landscape || compact ? 8.0 : 14.0;
     final spacing = landscape ? 4.0 : compact ? 5.0 : 10.0;
 
-    final scales = List<double>.generate(Dock._apps.length, (index) {
+    final scales = List<double>.generate(dockApps.length, (index) {
       final pointer = _pointerX;
       if (pointer == null || effectWidth <= 0) return 1;
       final iconCenter = index * (iconSize + spacing) + iconSize / 2;
@@ -154,9 +158,9 @@ class _DockState extends State<Dock> {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                          for (var index = 0; index < Dock._apps.length; index++) ...[
+                          for (var index = 0; index < dockApps.length; index++) ...[
                             Builder(builder: (context) {
-                              final app = Dock._apps[index];
+                              final app = dockApps[index];
                               final scale = scales[index];
                               return SizedBox(
                                 width: iconSize * scale,
@@ -185,7 +189,7 @@ class _DockState extends State<Dock> {
                                 ),
                               );
                             }),
-                            if (index != Dock._apps.length - 1)
+                            if (index != dockApps.length - 1)
                               SizedBox(width: spacing),
                           ],
                             ],
@@ -205,36 +209,7 @@ class _DockState extends State<Dock> {
   }
 }
 
-Widget _dockAssetIcon(AppId app, double size) {
-  final asset = switch (app) {
-    AppId.files => 'assets/icons/dock/finder-icon.png',
-    AppId.terminal => 'assets/icons/dock/terminal-icon.png',
-    AppId.browser => 'assets/icons/dock/safari-icon.png',
-    AppId.settings => 'assets/icons/dock/settings-icon.png',
-    AppId.desktop ||
-    AppId.aiHub ||
-    AppId.maps ||
-    AppId.mail ||
-    AppId.notes ||
-    AppId.photos ||
-    AppId.music ||
-    AppId.appStore ||
-    AppId.calculator => null,
-  };
-  if (asset == null) return MacAppIcon(app: app, size: size);
-  return ClipRRect(
-    borderRadius: BorderRadius.circular(size * 0.22),
-    child: Image.asset(
-      asset,
-      width: size,
-      height: size,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.medium,
-      cacheWidth: (size * 2).round(),
-      cacheHeight: (size * 2).round(),
-    ),
-  );
-}
+Widget _dockAssetIcon(AppId app, double size) => MacAppIcon(app: app, size: size);
 
 class _DockItem extends StatelessWidget {
   const _DockItem({
