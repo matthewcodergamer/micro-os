@@ -21,14 +21,14 @@ Do not stop after writing a plan. Implement, test, and document the work.
 
 ## 1. Project overview
 
-MicroOS is a Flutter-based Android desktop environment with a macOS-inspired Golden Gate interface.
+Misty OS is a Flutter-based Android desktop environment with a macOS-inspired Golden Gate interface.
 
 Its architecture includes:
 
 - Flutter: desktop interface, windows, Dock, settings and terminal UI.
 - PRoot: Ubuntu 24.04 ARM64 Linux userspace.
 - X11/Openbox: Linux graphical desktop.
-- VNC/noVNC: remote desktop display inside MicroOS.
+- VNC/noVNC: remote desktop display inside Misty OS.
 - OpenCode: AI coding agent running inside the Linux environment.
 - PTY/xterm: interactive Linux terminal.
 - TTS bridge: Android text-to-speech integration for OpenCode.
@@ -42,7 +42,7 @@ This is a Linux userspace running through PRoot, not a separate Linux kernel.
 
 ### Problem
 
-Pasting large blocks of text into the MicroOS terminal can freeze the application or cause it to crash. Investigate the actual source of memory pressure rather than assuming one component is responsible.
+Pasting large blocks of text into the Misty OS terminal can freeze the application or cause it to crash. Investigate the actual source of memory pressure rather than assuming one component is responsible.
 
 ### Inspect
 
@@ -66,7 +66,7 @@ Do not corrupt newlines, shell commands, Unicode characters or pasted code.
 
 Test ordinary commands, large blocks, multiline commands, Unicode and emoji, long code snippets, pastes during terminal output, and pastes after reconnecting to a terminal session.
 
-**Success:** Large pastes no longer freeze MicroOS, and normal terminal interaction remains responsive.
+**Success:** Large pastes no longer freeze Misty OS, and normal terminal interaction remains responsive.
 
 ## 3. Priority 2 — Android background execution
 
@@ -78,8 +78,8 @@ OpenCode and the Linux environment should continue working when the user switche
 
 Implement a native Android foreground service with:
 
-- A persistent notification showing that MicroOS has an active session.
-- A deliberate way to stop the session and a way to return to MicroOS.
+- A persistent notification showing that Misty OS has an active session.
+- A deliberate way to stop the session and a way to return to Misty OS.
 - Correct Android permissions and foreground-service configuration for the actual target SDK.
 - Flutter communication through a MethodChannel or equivalent.
 - Safe service startup, shutdown and reconnection.
@@ -108,10 +108,10 @@ Use a wake lock only when genuinely needed. Avoid unnecessary battery drain.
 
 On the actual Samsung Galaxy A07:
 
-1. Start MicroOS, Linux and OpenCode.
+1. Start Misty OS, Linux and OpenCode.
 2. Begin a task that produces continuing output.
 3. Press Home, open YouTube and play a video.
-4. Leave MicroOS in the background for at least 10 minutes.
+4. Leave Misty OS in the background for at least 10 minutes.
 5. Return and verify that the session is still active or recovers correctly.
 6. Repeat with the screen locked and Battery Saver enabled.
 
@@ -193,7 +193,7 @@ Preserve the existing UTF-8 terminal improvements.
 
 ## 7. Preserve and optimize the interface
 
-MicroOS should retain its macOS-inspired appearance.
+Misty OS should retain its macOS-inspired appearance.
 
 Inspect:
 
@@ -331,7 +331,7 @@ If a build fails:
 
 ## 10. Definition of done
 
-- [ ] Large terminal pastes no longer freeze MicroOS.
+- [ ] Large terminal pastes no longer freeze Misty OS.
 - [ ] Unicode and multiline pastes remain correct.
 - [ ] Terminal scrollback is limited to 1,000 lines.
 - [ ] Terminal output buffers are bounded.
@@ -388,9 +388,9 @@ Do not claim a feature works unless you have evidence. Do not stop while actiona
 
 > The following project reference is retained from the previous README so setup instructions and current alpha limitations are not lost while the engineering task list becomes the primary README.
 
-# MicroOS
+# Misty OS
 
-**MicroOS is an early alpha.** It is experimental software under active development. Expect bugs, incomplete features, performance issues, and possible data loss. It has not yet been validated across Android devices. Install and test at your own risk; back up important files first.
+**Misty OS is an early alpha.** It is experimental software under active development. Expect bugs, incomplete features, performance issues, and possible data loss. It has not yet been validated across Android devices. Install and test at your own risk; back up important files first.
 
 A Flutter shell that runs an Ubuntu userspace on Android, with a macOS-style
 window manager, a PTY terminal, a desktop browser, and a developer toolchain
@@ -407,7 +407,7 @@ The UI and the Linux guest are deliberately separated: `lib/` is pure Flutter,
 
 ## Alpha status and Known Limitations
 
-MicroOS is an early alpha, not a finished or production-ready operating
+Misty OS is an early alpha, not a finished or production-ready operating
 system. The Android APK is an experimental sideload build. The app's Linux
 guest runs in userspace through proot; it does **not** boot a separate Linux
 kernel.
@@ -419,11 +419,11 @@ kernel.
 - **Storage and network:** first-run Linux provisioning downloads roughly
   700 MB–1.2 GB of packages. Use Wi-Fi and have at least 1 GB free before
   starting; additional working space is recommended.
-- **Browser:** MicroOS installs **Falkon**, not the Ubuntu Chromium Snap.
+- **Browser:** Misty OS installs **Falkon**, not the Ubuntu Chromium Snap.
   Chromium on Ubuntu arm64 is distributed as a snap, and snapd cannot run
   inside this proot environment. Falkon is a desktop browser using
   QtWebEngine (Chromium's Blink renderer and V8 engine).
-- **ZRAM:** MicroOS cannot enable or configure kernel ZRAM. The proot guest
+- **ZRAM:** Misty OS cannot enable or configure kernel ZRAM. The proot guest
   shares Android's kernel and lacks the privileges required to manage swap.
   The app can display host memory/swap information, but it does not control
   the device's ZRAM configuration.
@@ -482,7 +482,7 @@ the crashes.
 
 Rendering an X11 server directly into a Flutter texture requires a native X
 server (the way Termux:X11 does it). That is a native Android app, not
-something a Flutter plugin can do. MicroOS therefore runs:
+something a Flutter plugin can do. Misty OS therefore runs:
 
 ```
 Xvfb :1  →  openbox  →  x11vnc  →  websockify  →  noVNC  →  WebView
@@ -498,7 +498,7 @@ second app.
 ZRAM is a **kernel** feature. A proot guest shares Android's kernel and has
 no `CAP_SYS_ADMIN`, so `swapon` returns `EPERM`. No script inside the guest
 can enable it. Android manages ZRAM at the host level on devices that support
-it. MicroOS displays available memory/swap information (including
+it. Misty OS displays available memory/swap information (including
 `/proc/meminfo` and `/sys/block/zram0/mm_stat` when exposed); it does not
 enable, disable, or tune ZRAM.
 
@@ -528,11 +528,11 @@ Push to `main`. GitHub Actions builds both targets:
 1. Open the repository on GitHub.
 2. Click the **Actions** tab.
 3. Select **Build Android APK** → the newest green run.
-4. Download **MicroOS-apk** under *Artifacts* (you must be signed in to GitHub).
+4. Download **MistyOS-apk** under *Artifacts* (you must be signed in to GitHub).
 5. Or open **Releases** — every non-PR run attaches
-   `MicroOS-<run>-arm64.apk` to a release tagged `apk-<run>`.
+   `MistyOS-<run>-arm64.apk` to a release tagged `apk-<run>`.
 
-Install with `adb install -r MicroOS-…-arm64.apk`, or copy it to the phone and
+Install with `adb install -r MistyOS-…-arm64.apk`, or copy it to the phone and
 allow "install unknown apps". This build is debug-signed and sideload-only; it
 is not Play-Store compliant (targetSdk 28 is required for the current proot
 execution arrangement).
