@@ -89,7 +89,7 @@ class ControlCenterOverlay extends StatelessWidget {
                 _tileRow([
                   _Tile(
                     icon: Icons.memory_rounded,
-                    label: 'Memory',
+                    label: 'RAM',
                     value: '${stats.ramUsedMb} MB',
                     active: true,
                   ),
@@ -119,6 +119,7 @@ class ControlCenterOverlay extends StatelessWidget {
             color: Colors.white,
             fontSize: 15,
             fontWeight: FontWeight.w600,
+            decoration: TextDecoration.none,
           ),
         ),
       ],
@@ -161,7 +162,11 @@ class ControlCenterOverlay extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                decoration: TextDecoration.none,
+              ),
             ),
           ),
         ],

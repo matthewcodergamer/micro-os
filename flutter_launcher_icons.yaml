@@ -1,3 +1,6 @@
+# The approved Play Store artwork is the only icon source.
+# tool/generate_launcher_icon.py derives the legacy and adaptive layers from
+# playstore-icon-512.png; never point these at generated or generic art.
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: false
@@ -5,5 +8,4 @@ flutter_launcher_icons:
   min_sdk_android: 26
   adaptive_icon_background: "assets/icon/misty_background.png"
   adaptive_icon_foreground: "assets/icon/misty_foreground.png"
-  adaptive_icon_foreground_inset: 8
-  adaptive_icon_monochrome: "assets/icon/misty_monochrome.png"
+  adaptive_icon_foreground_inset: 0

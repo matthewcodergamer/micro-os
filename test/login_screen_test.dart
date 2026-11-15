@@ -1,64 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:micro_os/services/settings_store.dart';
 import 'package:micro_os/ui/login_screen.dart';
 
+import 'package:flutter_test/flutter_test.dart';
+
 void main() {
-  testWidgets('animated login screen continues when no password is configured',
-      (tester) async {
-    final settings = SettingsStore();
-    var unlocked = false;
+  testWidgets(
+    'animated login screen continues when no password is configured',
+    (tester) async {
+      final settings = SettingsStore();
+      var unlocked = false;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: LoginScreen(
-          settings: settings,
-          onUnlock: () => unlocked = true,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LoginScreen(
+            settings: settings,
+            onUnlock: () => unlocked = true,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Welcome back'), findsOneWidget);
-    expect(find.text('Continue to Desktop'), findsOneWidget);
-    await tester.tap(find.text('Continue to Desktop'));
-    await tester.pump();
+      expect(find.text('Welcome back'), findsOneWidget);
+      expect(find.text('Continue to Desktop'), findsOneWidget);
+      await tester.tap(find.text('Continue to Desktop'));
+      await tester.pump();
 
-    expect(unlocked, isTrue);
-    settings.dispose();
-  });
+      expect(unlocked, isTrue);
+      settings.dispose();
+    },
+  );
 
-  testWidgets('password login rejects wrong input and accepts the saved password',
-      (tester) async {
-    final settings = SettingsStore()..loginPassword = 'microos-test-password';
-    var unlocked = false;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: LoginScreen(
-          settings: settings,
-          onUnlock: () => unlocked = true,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField), 'wrong-password');
-    await tester.tap(find.byTooltip('Unlock Misty OS'));
-    await tester.pump();
-
-    expect(find.text('Incorrect password. Try again.'), findsOneWidget);
-    expect(unlocked, isFalse);
-
-    await tester.enterText(find.byType(TextField), 'microos-test-password');
-    await tester.tap(find.byTooltip('Unlock Misty OS'));
-    await tester.pump();
-
-    expect(unlocked, isTrue);
-    settings.dispose();
-  });
-
-  testWidgets('password visibility control is available', (tester) async {
+  testWidgets('password field stays hidden until the profile is revealed', (
+    tester,
+  ) async {
     final settings = SettingsStore()..loginPassword = 'test-password';
 
     await tester.pumpWidget(
@@ -66,6 +41,69 @@ void main() {
         home: LoginScreen(settings: settings, onUnlock: () {}),
       ),
     );
+    await tester.pumpAndSettle();
+
+    // macOS-style first stage: the account is visible, the field is not.
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Tap or swipe up to unlock'), findsOneWidget);
+
+    await tester.tap(find.text('Tap or swipe up to unlock'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsOneWidget);
+    settings.dispose();
+  });
+
+  testWidgets(
+    'password login rejects wrong input and accepts the saved password',
+    (tester) async {
+      final settings = SettingsStore()..loginPassword = 'microos-test-password';
+      var unlocked = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LoginScreen(
+            settings: settings,
+            onUnlock: () => unlocked = true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Tap or swipe up to unlock'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'wrong-password');
+      await tester.tap(find.widgetWithText(FilledButton, 'Unlock Misty OS'));
+      // Let the error message and the shake settle before tapping again: the
+      // button moves while the panel animates.
+      await tester.pumpAndSettle();
+
+      expect(find.text('Incorrect password. Try again.'), findsOneWidget);
+      expect(unlocked, isFalse);
+
+      await tester.enterText(find.byType(TextField), 'microos-test-password');
+      await tester.tap(find.widgetWithText(FilledButton, 'Unlock Misty OS'));
+      await tester.pumpAndSettle();
+
+      expect(unlocked, isTrue);
+      settings.dispose();
+    },
+  );
+
+  testWidgets('password visibility control is available after revealing', (
+    tester,
+  ) async {
+    final settings = SettingsStore()..loginPassword = 'test-password';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginScreen(settings: settings, onUnlock: () {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tap or swipe up to unlock'));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Show password'), findsOneWidget);

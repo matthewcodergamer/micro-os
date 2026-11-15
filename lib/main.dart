@@ -99,7 +99,7 @@ Future<void> main() async {
   unawaited(stats.start());
 
   runApp(
-    MicroOSApp(
+    MistyOSApp(
       runtime: runtime,
       stats: stats,
       auth: auth,
@@ -109,8 +109,8 @@ Future<void> main() async {
   );
 }
 
-class MicroOSApp extends StatefulWidget {
-  const MicroOSApp({
+class MistyOSApp extends StatefulWidget {
+  const MistyOSApp({
     super.key,
     required this.runtime,
     required this.stats,
@@ -126,10 +126,10 @@ class MicroOSApp extends StatefulWidget {
   final OpenCodeTtsServer ttsServer;
 
   @override
-  State<MicroOSApp> createState() => _MicroOSAppState();
+  State<MistyOSApp> createState() => _MistyOSAppState();
 }
 
-class _MicroOSAppState extends State<MicroOSApp> {
+class _MistyOSAppState extends State<MistyOSApp> {
   late final DesktopState _desktop;
 
   @override
@@ -166,7 +166,13 @@ class _MicroOSAppState extends State<MicroOSApp> {
           final scale = media.textScaler.scale(1.0).clamp(0.9, 1.15).toDouble();
           return MediaQuery(
             data: media.copyWith(textScaler: TextScaler.linear(scale)),
-            child: child ?? const SizedBox.shrink(),
+            // Overlays (Control Center, Spotlight, error cards) are not always
+            // wrapped in a Material. Without a decoration-less default style
+            // Flutter paints text with yellow double underlines in debug builds.
+            child: DefaultTextStyle.merge(
+              style: const TextStyle(decoration: TextDecoration.none),
+              child: child ?? const SizedBox.shrink(),
+            ),
           );
         },
         home: const DesktopScreen(),

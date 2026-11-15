@@ -3,11 +3,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/terminal_profiles.dart';
+import '../core/wallpapers.dart';
 
 /// Stores ordinary UI settings separately from secrets.
 ///
 /// The optional lock-screen password uses Android encrypted storage backed by
-/// the platform keystore. It gates the MicroOS shell only; it does not encrypt
+/// the platform keystore. It gates the Misty OS shell only; it does not encrypt
 /// Linux files or replace Android device authentication.
 class SettingsStore extends ChangeNotifier {
   static const _kSingleProcess = 'browser.single_process';
@@ -20,6 +21,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kSystemBarsVisible = 'system.bars_visible';
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
+  static const _kWallpaper = 'desktop.wallpaper';
 
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -30,7 +32,8 @@ class SettingsStore extends ChangeNotifier {
   String openCodeTheme = 'light';
   double terminalFontSize = 13;
   String terminalProfile = kDefaultTerminalProfile;
-  String userName = 'MicroOS User';
+  String userName = 'Misty OS User';
+  String wallpaper = kDefaultWallpaperId;
   String? loginPassword;
   bool loginPasswordStorageUnavailable = false;
   bool loginPasswordMigrationPending = false;
@@ -42,6 +45,9 @@ class SettingsStore extends ChangeNotifier {
       loginPasswordStorageUnavailable ||
       (loginPassword != null && loginPassword!.isNotEmpty);
 
+  /// Asset path for the selected desktop wallpaper.
+  String get wallpaperAsset => wallpaperAssetFor(wallpaper);
+
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     singleProcessBrowser = prefs.getBool(_kSingleProcess) ?? false;
@@ -51,10 +57,11 @@ class SettingsStore extends ChangeNotifier {
         (prefs.getDouble(_kTerminalFontSize) ?? 13).clamp(10, 18).toDouble();
     terminalProfile =
         prefs.getString(_kTerminalProfile) ?? kDefaultTerminalProfile;
-    userName = prefs.getString(_kUserName) ?? 'MicroOS User';
+    userName = prefs.getString(_kUserName) ?? 'Misty OS User';
     autoReadOpenCode = prefs.getBool(_kAutoReadOpenCode) ?? false;
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
+    wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
 
     // Migrate older installations that kept the password in plain preferences.
     final legacyPassword = prefs.getString(_kLoginPassword);
@@ -118,7 +125,7 @@ class SettingsStore extends ChangeNotifier {
 
   Future<void> setUserName(String value) async {
     final trimmed = value.trim();
-    userName = trimmed.isEmpty ? 'MicroOS User' : trimmed;
+    userName = trimmed.isEmpty ? 'Misty OS User' : trimmed;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kUserName, userName);
@@ -167,6 +174,13 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kOpenCodeTheme, value);
+  }
+
+  Future<void> setWallpaper(String value) async {
+    wallpaper = wallpaperById(value).id;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kWallpaper, wallpaper);
   }
 
   Future<void> markInstalled() async {

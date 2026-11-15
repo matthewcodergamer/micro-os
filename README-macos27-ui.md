@@ -1,4 +1,4 @@
-# MicroOS "macOS 27 Golden Gate" UI
+# Misty OS "macOS 27 Golden Gate" UI
 
 Drop-in replacement for the UI layer of `matthewcodergamer/micro-os`.
 Built against the current `main` (Launchpad, welcome panel, terminal tabs,

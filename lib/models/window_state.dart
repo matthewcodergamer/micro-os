@@ -3,6 +3,21 @@ import 'dart:ui';
 /// Every application that can be hosted in a desktop window.
 enum AppId { terminal, desktop, browser, files, aiHub, settings, maps, mail, notes, photos, music, appStore, calculator }
 
+/// Apps that render a real, working surface today.
+///
+/// Anything outside this list still appears in Launchpad, but is visibly
+/// marked as forthcoming instead of pretending to work.
+const List<AppId> kAvailableApps = <AppId>[
+  AppId.files,
+  AppId.terminal,
+  AppId.browser,
+  AppId.desktop,
+  AppId.aiHub,
+  AppId.settings,
+];
+
+bool isAppAvailable(AppId app) => kAvailableApps.contains(app);
+
 extension AppIdInfo on AppId {
   String get title => switch (this) {
         AppId.terminal => 'Terminal',
