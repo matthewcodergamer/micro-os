@@ -91,8 +91,9 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _tryUnlock() {
     if (widget.settings.loginPasswordStorageUnavailable) {
-      setState(() => _error =
-          'Secure password storage is unavailable. Restart Misty OS and try again.');
+      setState(
+        () => _error = 'Secure password storage is unavailable. Restart Misty OS and try again.',
+      );
       _shake.forward(from: 0);
       return;
     }
@@ -125,7 +126,10 @@ class _LoginScreenState extends State<LoginScreen>
           end: Alignment.bottomRight,
           colors: [Color(0xFF0A84FF), Color(0xFF5E5CE6)],
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.35),
+          width: 2,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.35),
@@ -134,11 +138,7 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ],
       ),
-      child: Icon(
-        Icons.person_rounded,
-        color: Colors.white,
-        size: size * 0.55,
-      ),
+      child: Icon(Icons.person_rounded, color: Colors.white, size: size * 0.55),
     );
   }
 
@@ -157,7 +157,11 @@ class _LoginScreenState extends State<LoginScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: Colors.white70),
+          Icon(
+            Icons.keyboard_arrow_up_rounded,
+            size: 18,
+            color: Colors.white70,
+          ),
           SizedBox(width: 4),
           Text('Tap or swipe up to unlock'),
         ],
@@ -175,9 +179,7 @@ class _LoginScreenState extends State<LoginScreen>
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.24),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.16),
@@ -296,6 +298,12 @@ class _LoginScreenState extends State<LoginScreen>
       math.min(screen.width * 0.22, screen.height * 0.15),
     );
     final avatarSize = shortScreen ? 68.0 : 88.0;
+    // Explicit gaps instead of Spacer: the content lives in a scroll view so a
+    // short screen (landscape phone, split screen, keyboard open) can never
+    // overflow or push the Unlock button out of reach.
+    final topGap = shortScreen
+        ? 8.0
+        : (screen.height * 0.07).clamp(16.0, 96.0).toDouble();
 
     return Material(
       color: Colors.transparent,
@@ -317,119 +325,141 @@ class _LoginScreenState extends State<LoginScreen>
             child: SlideTransition(
               position: _slide,
               child: SafeArea(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onVerticalDragUpdate: (details) {
-                    if (details.delta.dy < -3) _reveal();
-                  },
-                  child: Column(
-                    children: [
-                      const Spacer(flex: 1),
-                      // The clock lifts slightly as the profile reveals.
-                      AnimatedSlide(
-                        duration: const Duration(milliseconds: 420),
-                        curve: Curves.easeOutCubic,
-                        offset: _revealed && _needsPassword
-                            ? const Offset(0, -0.08)
-                            : Offset.zero,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              lockTime(now),
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: clockSize,
-                                fontWeight: FontWeight.w200,
-                                letterSpacing: -1.5,
-                                height: 1,
-                                decoration: TextDecoration.none,
+                            SizedBox(height: topGap),
+                            // The clock lifts slightly as the profile reveals.
+                            AnimatedSlide(
+                              duration: const Duration(milliseconds: 420),
+                              curve: Curves.easeOutCubic,
+                              offset: _revealed && _needsPassword
+                                  ? const Offset(0, -0.08)
+                                  : Offset.zero,
+                              child: Column(
+                                children: [
+                                  Text(
+                                    lockTime(now),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: clockSize,
+                                      fontWeight: FontWeight.w200,
+                                      letterSpacing: -1.5,
+                                      height: 1,
+                                      decoration: TextDecoration.none,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    lockDate(now),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w400,
+                                      decoration: TextDecoration.none,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            SizedBox(height: shortScreen ? 26 : 44),
+                            AnimatedBuilder(
+                              animation: _shake,
+                              builder: (context, child) {
+                                final progress = _shake.value;
+                                final offset =
+                                    math.sin(progress * math.pi * 10) *
+                                    (1 - progress) *
+                                    8;
+                                return Transform.translate(
+                                  offset: Offset(offset, 0),
+                                  child: child,
+                                );
+                              },
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _needsPassword ? _reveal : null,
+                                onVerticalDragEnd: (details) {
+                                  // Swipe up (negative dy) on the profile reveals
+                                  // the password panel, matching macOS.
+                                  if (details.velocity.pixelsPerSecond.dy <
+                                      -20) {
+                                    _reveal();
+                                  }
+                                },
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _avatar(avatarSize),
+                                    const SizedBox(height: 14),
+                                    Text(
+                                      widget.settings.userName,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        decoration: TextDecoration.none,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 7),
+                                    Text(
+                                      'Welcome back',
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.66,
+                                        ),
+                                        fontSize: 13,
+                                        letterSpacing: 0.2,
+                                        decoration: TextDecoration.none,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    if (!_needsPassword)
+                                      _continuePanel()
+                                    else
+                                      AnimatedSize(
+                                        duration: const Duration(
+                                          milliseconds: 340,
+                                        ),
+                                        curve: Curves.easeOutCubic,
+                                        alignment: Alignment.topCenter,
+                                        child: AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 220,
+                                          ),
+                                          child: _revealed
+                                              ? _passwordPanel()
+                                              : _revealHint(),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: shortScreen ? 26 : 48),
                             Text(
-                              lockDate(now),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w400,
+                              'Misty OS  ·  Lightweight. Cloud-Native. Powerful.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.45),
+                                fontSize: 12,
+                                letterSpacing: 0.25,
                                 decoration: TextDecoration.none,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const Spacer(flex: 2),
-                      AnimatedBuilder(
-                        animation: _shake,
-                        builder: (context, child) {
-                          final progress = _shake.value;
-                          final offset =
-                              math.sin(progress * math.pi * 10) *
-                                  (1 - progress) *
-                                  8;
-                          return Transform.translate(
-                            offset: Offset(offset, 0),
-                            child: child,
-                          );
-                        },
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _needsPassword ? _reveal : null,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _avatar(avatarSize),
-                              const SizedBox(height: 14),
-                              Text(
-                                widget.settings.userName,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  decoration: TextDecoration.none,
-                                ),
-                              ),
-                              const SizedBox(height: 7),
-                              Text(
-                                'Welcome back',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.66),
-                                  fontSize: 13,
-                                  letterSpacing: 0.2,
-                                  decoration: TextDecoration.none,
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              if (!_needsPassword)
-                                _continuePanel()
-                              else
-                                AnimatedSize(
-                                  duration: const Duration(milliseconds: 340),
-                                  curve: Curves.easeOutCubic,
-                                  alignment: Alignment.topCenter,
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 220),
-                                    child: _revealed
-                                        ? _passwordPanel()
-                                        : _revealHint(),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Spacer(flex: 2),
-                      Text(
-                        'Misty OS  ·  Lightweight. Cloud-Native. Powerful.',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.45),
-                          fontSize: 12,
-                          letterSpacing: 0.25,
-                          decoration: TextDecoration.none,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                    ],
+                    ),
                   ),
                 ),
               ),
