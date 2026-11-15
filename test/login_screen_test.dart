@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:micro_os/services/settings_store.dart';
 import 'package:micro_os/ui/login_screen.dart';
+
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('animated login screen continues when no password is configured',
@@ -28,6 +29,28 @@ void main() {
     settings.dispose();
   });
 
+  testWidgets('password field stays hidden until the profile is revealed',
+      (tester) async {
+    final settings = SettingsStore()..loginPassword = 'test-password';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginScreen(settings: settings, onUnlock: () {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // macOS-style first stage: the account is visible, the field is not.
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Tap or swipe up to unlock'), findsOneWidget);
+
+    await tester.tap(find.text('Tap or swipe up to unlock'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsOneWidget);
+    settings.dispose();
+  });
+
   testWidgets('password login rejects wrong input and accepts the saved password',
       (tester) async {
     final settings = SettingsStore()..loginPassword = 'microos-test-password';
@@ -41,6 +64,9 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tap or swipe up to unlock'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'wrong-password');
@@ -58,7 +84,8 @@ void main() {
     settings.dispose();
   });
 
-  testWidgets('password visibility control is available', (tester) async {
+  testWidgets('password visibility control is available after revealing',
+      (tester) async {
     final settings = SettingsStore()..loginPassword = 'test-password';
 
     await tester.pumpWidget(
@@ -66,6 +93,9 @@ void main() {
         home: LoginScreen(settings: settings, onUnlock: () {}),
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tap or swipe up to unlock'));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Show password'), findsOneWidget);
