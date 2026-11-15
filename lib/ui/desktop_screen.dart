@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../core/theme.dart';
+import '../core/wallpapers.dart';
 import '../models/window_state.dart';
+import '../services/settings_store.dart';
 import 'apps/ai_hub_app.dart';
 import 'apps/desktop_session_app.dart';
 import 'apps/files_app.dart';
@@ -128,21 +130,34 @@ class _DesktopScreenState extends State<DesktopScreen> {
           fit: StackFit.expand,
           children: [
             // Wallpaper always edge-to-edge
-            const RepaintBoundary(child: Wallpaper()),
+            RepaintBoundary(child: Wallpaper(asset: settings.wallpaperAsset)),
 
-            if (runtime.isReady && !desktop.locked) ...[
-              // Windows
+            // Long-press anywhere on empty desktop to change the wallpaper.
+            if (!desktop.locked)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onLongPress: () => _pickWallpaper(context, settings),
+                ),
+              ),
+
+            // Windows stay mounted while the screen is locked so terminal and
+            // Linux sessions survive locking/unlocking, exactly like macOS.
+            // WindowFrame returns an AnimatedPositioned, which must stay a
+            // direct child of this Stack: wrapping it in any other widget
+            // (e.g. RepaintBoundary) breaks StackParentData and makes windows
+            // full-bleed, mis-stacked or invisible.
+            if (runtime.isReady)
               for (final window in desktop.ordered)
                 if (!window.minimized)
-                  RepaintBoundary(
-                    child: WindowFrame(
-                      window: window,
-                      desktop: desktop,
-                      screen: size,
-                      child: _contentFor(window, scope),
-                    ),
+                  WindowFrame(
+                    window: window,
+                    desktop: desktop,
+                    screen: size,
+                    child: _contentFor(window, scope),
                   ),
 
+            if (runtime.isReady && !desktop.locked) ...[
               // Menu bar
               Positioned(
                 top: 0,
@@ -249,6 +264,72 @@ class _DesktopScreenState extends State<DesktopScreen> {
           ],
         );
       },
+    );
+  }
+
+  /// Desktop long-press → wallpaper picker. The choice is persisted by
+  /// [SettingsStore] and re-applied on next launch.
+  Future<void> _pickWallpaper(
+    BuildContext context,
+    SettingsStore settings,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xF21C1C1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Wallpaper',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Tap a wallpaper to apply it to the desktop.',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 190,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < kWallpapers.length; i++) ...[
+                      Expanded(
+                        child: WallpaperThumbnail(
+                          wallpaper: kWallpapers[i],
+                          selected: settings.wallpaper == kWallpapers[i].id,
+                          onTap: () {
+                            settings.setWallpaper(kWallpapers[i].id);
+                            Navigator.of(sheetContext).pop();
+                          },
+                        ),
+                      ),
+                      if (i != kWallpapers.length - 1)
+                        const SizedBox(width: 12),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

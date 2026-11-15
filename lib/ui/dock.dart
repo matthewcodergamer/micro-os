@@ -9,6 +9,10 @@ import '../models/window_state.dart';
 import 'mac_icons.dart';
 
 /// Glass dock with the responsive cosine magnification used by ThanasOS.
+///
+/// The row is always centred: when the icons fit they sit in the middle of the
+/// glass, and when they do not the row becomes horizontally scrollable instead
+/// of being clipped at the right edge.
 class Dock extends StatefulWidget {
   const Dock({
     super.key,
@@ -26,13 +30,6 @@ class Dock extends StatefulWidget {
     AppId.desktop,
     AppId.aiHub,
     AppId.settings,
-    AppId.maps,
-    AppId.mail,
-    AppId.notes,
-    AppId.photos,
-    AppId.music,
-    AppId.appStore,
-    AppId.calculator,
   ];
 
   @override
@@ -61,7 +58,13 @@ class _DockState extends State<Dock> {
     final smallerDimension = math.min(screen.width, screen.height);
     // Keep the portrait Dock focused; every other app remains in Launchpad.
     final dockApps = compact && !landscape
-        ? const [AppId.files, AppId.browser, AppId.terminal, AppId.aiHub, AppId.settings]
+        ? const [
+            AppId.files,
+            AppId.browser,
+            AppId.terminal,
+            AppId.aiHub,
+            AppId.settings,
+          ]
         : Dock._apps;
     // Landscape has very little vertical room; keep the Dock visually
     // secondary while preserving comfortable touch targets in portrait.
@@ -99,100 +102,126 @@ class _DockState extends State<Dock> {
 
     return RepaintBoundary(
       child: AnimatedSlide(
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-      offset: widget.visible ? Offset.zero : const Offset(0, 1.2),
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 220),
-        opacity: widget.visible ? 1 : 0,
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: landscape ? 4 : 8),
-            child: MouseRegion(
-              onHover: (event) => _trackPointer(
-                event.localPosition.dx - horizontalPadding,
-              ),
-              onExit: (_) => _clearPointer(),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanStart: (details) => _trackPointer(
-                  details.localPosition.dx - horizontalPadding,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        offset: widget.visible ? Offset.zero : const Offset(0, 1.2),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 220),
+          opacity: widget.visible ? 1 : 0,
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: landscape ? 4 : 8),
+              child: MouseRegion(
+                onHover: (event) => _trackPointer(
+                  event.localPosition.dx - horizontalPadding,
                 ),
-                onPanUpdate: (details) => _trackPointer(
-                  details.localPosition.dx - horizontalPadding,
-                ),
-                onPanEnd: (_) => _clearPointer(),
-                onPanCancel: _clearPointer,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: BackdropFilter(
-                    // A smaller blur keeps the translucent glass while reducing
-                    // the cost of a full-screen backdrop filter on mobile GPUs.
-                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: horizontalPadding,
-                        vertical: landscape ? 4 : compact ? 6 : 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0x991C1C1E),
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.22),
-                          width: 0.8,
+                onExit: (_) => _clearPointer(),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanStart: (details) => _trackPointer(
+                    details.localPosition.dx - horizontalPadding,
+                  ),
+                  onPanUpdate: (details) => _trackPointer(
+                    details.localPosition.dx - horizontalPadding,
+                  ),
+                  onPanEnd: (_) => _clearPointer(),
+                  onPanCancel: _clearPointer,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: BackdropFilter(
+                      // A smaller blur keeps the translucent glass while
+                      // reducing the cost of a full-screen backdrop filter on
+                      // mobile GPUs.
+                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding,
+                          vertical: landscape ? 4 : compact ? 6 : 10,
                         ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x66000000),
-                            blurRadius: 30,
-                            offset: Offset(0, 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0x991C1C1E),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.22),
+                            width: 0.8,
                           ),
-                        ],
-                      ),
-                      child: SizedBox(
-                        width: math.min(screen.width - 20, 900),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                          for (var index = 0; index < dockApps.length; index++) ...[
-                            Builder(builder: (context) {
-                              final app = dockApps[index];
-                              final scale = scales[index];
-                              return SizedBox(
-                                width: iconSize * scale,
-                                height: iconSize * 1.32,
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: Transform.scale(
-                                    scale: scale,
-                                    alignment: Alignment.bottomCenter,
-                                    child: _DockItem(
-                                      app: app,
-                                      running: desktop.isRunning(app),
-                                      size: iconSize,
-                                      onTap: () => widget.onOpen(app),
-                                      onLongPress: desktop.isRunning(app)
-                                          ? () {
-                                              for (final window in [...desktop.windows]) {
-                                                if (window.app == app) {
-                                                  desktop.close(window.id);
-                                                }
-                                              }
-                                            }
-                                          : null,
-                                    ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x66000000),
+                              blurRadius: 30,
+                              offset: Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: SizedBox(
+                          width: math.min(screen.width - 20, 900),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minWidth: constraints.maxWidth,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      for (var index = 0;
+                                          index < dockApps.length;
+                                          index++) ...[
+                                        Builder(
+                                          builder: (context) {
+                                            final app = dockApps[index];
+                                            final scale = scales[index];
+                                            return SizedBox(
+                                              width: iconSize * scale,
+                                              height: iconSize * 1.32,
+                                              child: Align(
+                                                alignment:
+                                                    Alignment.bottomCenter,
+                                                child: Transform.scale(
+                                                  scale: scale,
+                                                  alignment:
+                                                      Alignment.bottomCenter,
+                                                  child: _DockItem(
+                                                    app: app,
+                                                    running:
+                                                        desktop.isRunning(app),
+                                                    size: iconSize,
+                                                    onTap: () =>
+                                                        widget.onOpen(app),
+                                                    onLongPress: desktop
+                                                            .isRunning(app)
+                                                        ? () {
+                                                            for (final window
+                                                                in [
+                                                              ...desktop
+                                                                  .windows
+                                                            ]) {
+                                                              if (window.app ==
+                                                                  app) {
+                                                                desktop.close(
+                                                                    window.id);
+                                                              }
+                                                            }
+                                                          }
+                                                        : null,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        if (index != dockApps.length - 1)
+                                          SizedBox(width: spacing),
+                                      ],
+                                    ],
                                   ),
                                 ),
                               );
-                            }),
-                            if (index != dockApps.length - 1)
-                              SizedBox(width: spacing),
-                          ],
-                            ],
+                            },
                           ),
                         ),
                       ),
@@ -204,12 +233,9 @@ class _DockState extends State<Dock> {
           ),
         ),
       ),
-      ),
     );
   }
 }
-
-Widget _dockAssetIcon(AppId app, double size) => MacAppIcon(app: app, size: size);
 
 class _DockItem extends StatelessWidget {
   const _DockItem({
@@ -229,12 +255,13 @@ class _DockItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       onLongPress: onLongPress,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _dockAssetIcon(app, size),
+          MacAppIcon(app: app, size: size),
           const SizedBox(height: 4),
           RunningDot(active: running),
         ],

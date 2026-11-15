@@ -11,6 +11,28 @@ ShapeBorder _squircle(double size, {BorderSide side = BorderSide.none}) {
   );
 }
 
+/// The single source of truth for approved application artwork.
+///
+/// Dock, Launchpad, Spotlight, Finder, window title bars and the app switcher
+/// all render [MacAppIcon], which reads this registry. Add a new PNG here and
+/// it appears everywhere at once — no screen may map its own icons.
+class AppIconRegistry {
+  const AppIconRegistry._();
+
+  static const Map<AppId, String> _assets = <AppId, String>{
+    AppId.files: 'assets/icons/dock/finder-icon.png',
+    AppId.terminal: 'assets/icons/dock/terminal-icon.png',
+    AppId.browser: 'assets/icons/dock/safari-icon.png',
+    AppId.settings: 'assets/icons/dock/settings-icon.png',
+  };
+
+  /// Approved artwork for [app], or `null` when only the generic squircle
+  /// glyph exists yet.
+  static String? assetFor(AppId app) => _assets[app];
+
+  static bool hasAsset(AppId app) => _assets.containsKey(app);
+}
+
 /// Dock / Spotlight app icon: a glossy squircle with a per-app glyph.
 class MacAppIcon extends StatelessWidget {
   const MacAppIcon({super.key, required this.app, required this.size});
@@ -21,13 +43,7 @@ class MacAppIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Use the approved Dock artwork everywhere this icon is shown.
-    final asset = switch (app) {
-      AppId.files => 'assets/icons/dock/finder-icon.png',
-      AppId.terminal => 'assets/icons/dock/terminal-icon.png',
-      AppId.browser => 'assets/icons/dock/safari-icon.png',
-      AppId.settings => 'assets/icons/dock/settings-icon.png',
-      _ => null,
-    };
+    final asset = AppIconRegistry.assetFor(app);
     if (asset != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.22),

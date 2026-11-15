@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Controls the native Android foreground service that keeps MicroOS's app
+/// Controls the native Android foreground service that keeps Misty OS's app
 /// process important while a PRoot session is active.
 class BackgroundSession {
   static const MethodChannel _channel = MethodChannel('microos/session');

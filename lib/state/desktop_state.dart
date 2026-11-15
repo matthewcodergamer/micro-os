@@ -122,13 +122,18 @@ class DesktopState extends ChangeNotifier {
     this.bottomReserve = bottomReserve;
     this.bottomInset = bottomInset;
     if (changed) {
-      // Keep maximized windows glued to the usable area when the keyboard or
-      // orientation changes.
+      // Keep every window inside the usable area when the keyboard,
+      // orientation or Dock changes. Maximized windows are glued to it.
       for (final w in windows) {
-        if (w.maximized) {
+        if (w.maximized || w.pinned) {
           w.rect = _maxRect(screen);
-        } else if (w.pinned) {
-          w.rect = _maxRect(screen);
+        } else {
+          final area = _area(screen);
+          final width = math.min(w.rect.width, area.width);
+          final height = math.min(w.rect.height, area.height);
+          final left = _clampD(w.rect.left, area.left, area.right - width);
+          final top = _clampD(w.rect.top, area.top, area.bottom - height);
+          w.rect = Rect.fromLTWH(left, top, width, height);
         }
       }
       notifyListeners();
@@ -145,7 +150,11 @@ class DesktopState extends ChangeNotifier {
   }) {
     // Keep the legacy screen argument used by the desktop widgets while
     // allowing callers that rely on syncToScreen() to omit it.
-    final layoutScreen = screen ?? _screen;
+    final rawScreen = screen ?? _screen;
+    // On the first frames _screen can still be Size.zero. Never build a window
+    // with a zero/negative rect: it is invisible and looks exactly like the
+    // "blank white window" bug users report.
+    final layoutScreen = rawScreen.isEmpty ? const Size(1080, 1920) : rawScreen;
     if (!newWindow) {
       final existing = windowFor(app);
       if (existing != null) {
@@ -175,6 +184,18 @@ class DesktopState extends ChangeNotifier {
     final maximize = _compactFor(layoutScreen);
     if (maximize) {
       rect = _maxRect(layoutScreen);
+    }
+
+    // Defensive clamp so a window can never be born with no visible area.
+    final minWidth = math.min(320.0, layoutScreen.width);
+    final minHeight = math.min(200.0, layoutScreen.height);
+    if (rect.width < minWidth || rect.height < minHeight) {
+      rect = Rect.fromLTWH(
+        rect.left,
+        rect.top,
+        math.max(minWidth, rect.width),
+        math.max(minHeight, rect.height),
+      );
     }
 
     final w = ManagedWindow(

@@ -210,7 +210,7 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
 }
 
 
-/// Launchpad-style app grid for the complete MicroOS app registry.
+/// Launchpad-style app grid for the complete Misty OS app registry.
 class LaunchpadOverlay extends StatefulWidget {
   const LaunchpadOverlay({
     super.key,
@@ -326,14 +326,24 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    MacAppIcon(app: app, size: 58),
+                                    Opacity(
+                                      opacity: isAppAvailable(app) ? 1 : 0.42,
+                                      child: MacAppIcon(app: app, size: 58),
+                                    ),
                                     const SizedBox(height: 9),
                                     Text(
-                                      app.title,
+                                      isAppAvailable(app)
+                                          ? app.title
+                                          : '${app.title} · soon',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        decoration: TextDecoration.none,
+                                      ),
                                     ),
                                   ],
                                 ),
