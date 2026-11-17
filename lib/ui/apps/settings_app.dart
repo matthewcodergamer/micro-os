@@ -13,6 +13,7 @@ import '../../services/performance_monitor.dart';
 import '../../services/settings_store.dart';
 
 enum _Page {
+  appearance,
   desktop,
   wallpaper,
   pointer,
@@ -40,6 +41,7 @@ class _SettingsAppState extends State<SettingsApp> {
   String _search = '';
 
   IconData _icon(_Page page) => switch (page) {
+    _Page.appearance => Icons.palette_rounded,
     _Page.desktop => Icons.display_settings_rounded,
     _Page.wallpaper => Icons.wallpaper_rounded,
     _Page.pointer => Icons.mouse_rounded,
@@ -68,6 +70,7 @@ class _SettingsAppState extends State<SettingsApp> {
       listenable: Listenable.merge([settings, runtime]),
       builder: (context, _) {
         return switch (_page) {
+          _Page.appearance => _AppearancePage(settings: settings),
           _Page.desktop => _DesktopPage(settings: settings),
           _Page.wallpaper => _WallpaperPage(settings: settings),
           _Page.pointer => _PointerPage(settings: settings),
@@ -225,6 +228,7 @@ class _SettingsAppState extends State<SettingsApp> {
   }
 
   String _title(_Page p) => switch (p) {
+    _Page.appearance => 'Appearance',
     _Page.desktop => 'Desktop & Dock',
     _Page.wallpaper => 'Wallpaper',
     _Page.pointer => 'Trackpad & Pointer',
@@ -237,6 +241,43 @@ class _SettingsAppState extends State<SettingsApp> {
     _Page.login => 'Users & Login',
     _Page.about => 'About',
   };
+}
+
+class _AppearancePage extends StatelessWidget {
+  const _AppearancePage({required this.settings});
+  final dynamic settings;
+
+  static const _colors = <({String name, int value})>[
+    (name: 'Blue', value: 0xFF0A84FF),
+    (name: 'Purple', value: 0xFFBF5AF2),
+    (name: 'Pink', value: 0xFFFF375F),
+    (name: 'Red', value: 0xFFFF453A),
+    (name: 'Orange', value: 0xFFFF9F0A),
+    (name: 'Yellow', value: 0xFFFFD60A),
+    (name: 'Green', value: 0xFF30D158),
+    (name: 'Teal', value: 0xFF64D2FF),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(padding: const EdgeInsets.all(24), children: [
+      const Text('Appearance', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      const Text('Choose the system accent colour used by controls, focus rings and sliders.', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+      const SizedBox(height: 20),
+      const Text('Accent colour', style: TextStyle(color: MicroColors.text, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 12),
+      Wrap(spacing: 10, runSpacing: 10, children: [
+        for (final color in _colors)
+          ChoiceChip(
+            avatar: CircleAvatar(backgroundColor: Color(color.value), radius: 8),
+            label: Text(color.name),
+            selected: settings.accentColorValue == color.value,
+            onSelected: (_) => settings.setAccentColor(color.value),
+          ),
+      ]),
+    ]);
+  }
 }
 
 class _DesktopPage extends StatelessWidget {
