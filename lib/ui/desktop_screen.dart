@@ -234,6 +234,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     onClose: () => setState(() => _control = false),
                     runtime: runtime,
                     stats: stats,
+                    settings: settings,
                   ),
                 ),
             ],
