@@ -52,9 +52,9 @@ BoxDecoration glassDecoration({
   );
 }
 
-ThemeData buildMicroTheme() {
+ThemeData buildMicroTheme({Color accentColor = MicroColors.accent}) {
   final scheme = ColorScheme.fromSeed(
-    seedColor: MicroColors.accent,
+    seedColor: accentColor,
     brightness: Brightness.dark,
   );
 
@@ -94,7 +94,7 @@ ThemeData buildMicroTheme() {
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
     ),
     sliderTheme: const SliderThemeData(
-      activeTrackColor: MicroColors.accent,
+      activeTrackColor: accentColor,
       thumbColor: Colors.white,
       inactiveTrackColor: Color(0xFF48484C),
     ),
@@ -113,7 +113,7 @@ ThemeData buildMicroTheme() {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: MicroColors.accent, width: 1.4),
+        borderSide: BorderSide(color: accentColor, width: 1.4),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
