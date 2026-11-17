@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../app_scope.dart';
 import '../../core/macos_design.dart';
 import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
@@ -51,6 +52,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   @override
   void initState() {
     super.initState();
+    final settings = AppScope.of(context).settings;
+    _trackpadMode = settings.trackpadMode;
+    _trackpadSpeed = settings.trackpadSpeed;
     WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
   }
 
@@ -253,8 +257,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     _controller?.runJavaScript('window.__microOsRightClick?.();');
   }
 
-  void _setTrackpadSpeed(double speed) {
+  Future<void> _setTrackpadSpeed(double speed) async {
     setState(() => _trackpadSpeed = speed);
+    await AppScope.of(context).settings.setTrackpadSpeed(speed);
     _controller?.runJavaScript(
       'window.__microOsTrackpadSpeed=$speed;window.__microOsSetTrackpadSpeed?.($speed);',
     );
@@ -392,8 +397,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     );
   }
 
-  void _toggleTrackpadMode() {
+  Future<void> _toggleTrackpadMode() async {
     setState(() => _trackpadMode = !_trackpadMode);
+    await AppScope.of(context).settings.setTrackpadMode(_trackpadMode);
     _controller?.runJavaScript(
       'window.__microOsSetTrackpadMode(${_trackpadMode ? 'true' : 'false'});',
     );
