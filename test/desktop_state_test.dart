@@ -34,6 +34,26 @@ void main() {
       desktop.dispose();
     });
 
+    test('windows can snap to either half and return to their prior size', () {
+      final desktop = DesktopState(LinuxRuntime());
+      desktop.syncToScreen(const Size(1200, 800));
+      final window = desktop.open(AppId.terminal, screen: const Size(1200, 800));
+      final original = window.rect;
+
+      desktop.snapToHalf(window.id, const Size(1200, 800), left: true);
+      expect(window.rect.left, 0);
+      expect(window.rect.width, 600);
+      expect(window.maximized, isFalse);
+
+      desktop.snapToHalf(window.id, const Size(1200, 800), left: false);
+      expect(window.rect.left, 600);
+      expect(window.rect.width, 600);
+
+      desktop.centerWindow(window.id, const Size(1200, 800));
+      expect(window.rect, original);
+      desktop.dispose();
+    });
+
     test('rotation clamps a floating window back inside the usable area', () {
       final desktop = DesktopState(LinuxRuntime());
       desktop.syncToScreen(const Size(1200, 800));
