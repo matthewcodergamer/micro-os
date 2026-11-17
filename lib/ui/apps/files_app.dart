@@ -259,6 +259,48 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     }
   }
 
+  void _selectAllVisible() {
+    setState(() => _selectedPaths.addAll(_visibleEntries.map(_entryPath)));
+  }
+
+  Future<void> _copySelectedPaths() async {
+    if (_selectedPaths.isEmpty) return;
+    final paths = _selectedPaths.toList()..sort();
+    await Clipboard.setData(ClipboardData(text: paths.join('\n')));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copied ${paths.length} paths')));
+  }
+
+  Future<void> _trashSelected() async {
+    final paths = _selectedPaths.toList();
+    if (paths.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: MicroColors.panelSolid,
+        title: Text('Move ${paths.length} items to Trash?', style: const TextStyle(color: MicroColors.text)),
+        content: const Text('The selected items will be moved to the Linux Trash folder.', style: TextStyle(color: MicroColors.subtle)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Move to Trash', style: TextStyle(color: MicroColors.red))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await _runGuest(r'''mkdir -p /root/.local/share/Trash/files
+for path in "$@"; do
+  [ -e "$path" ] || [ -L "$path" ] || continue
+  target="/root/.local/share/Trash/files/$(basename -- "$path")"
+  if [ -e "$target" ] || [ -L "$target" ]; then target="$target.$(date +%s%N)"; fi
+  mv -- "$path" "$target"
+done''', paths);
+      if (mounted) setState(() => _selectedPaths.clear());
+      await _load();
+    } catch (error) {
+      _notifyActionError(error);
+    }
+  }
+
   Future<void> _createFolder() async {
     final name = await _askName('New Folder', '');
     if (name == null) return;
@@ -452,7 +494,9 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
               PopupMenuButton<String>(
                 tooltip: 'View options', icon: const Icon(Icons.view_column_rounded, size: 18, color: MicroColors.text),
                 onSelected: (v) => setState(() {
-                  if (v == 'hidden') {
+                  if (v == 'select-all') {
+                    _selectAllVisible();
+                  } else if (v == 'hidden') {
                     _showHiddenFiles = !_showHiddenFiles;
                   } else if (v == 'sort-name' || v == 'sort-size' || v == 'sort-kind') {
                     _sort = v == 'sort-size' ? _FinderSort.size : v == 'sort-kind' ? _FinderSort.kind : _FinderSort.name;
@@ -469,6 +513,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                   const PopupMenuItem(value: 'columns', child: Text('Column View')),
                   PopupMenuItem(value: 'hidden', child: Text(_showHiddenFiles ? 'Hide Hidden Files' : 'Show Hidden Files')),
                   const PopupMenuDivider(),
+                  const PopupMenuItem(value: 'select-all', child: Text('Select All')),
                   const PopupMenuItem(value: 'sort-name', child: Text('Sort by Name')),
                   const PopupMenuItem(value: 'sort-size', child: Text('Sort by Size')),
                   const PopupMenuItem(value: 'sort-kind', child: Text('Sort by Kind')),
@@ -505,6 +550,17 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
             ),
           ),
         ),
+        if (_selectedPaths.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            color: MicroColors.sidebar,
+            child: Row(children: [
+              Expanded(child: Text('${_selectedPaths.length} selected', style: const TextStyle(color: MicroColors.text, fontSize: 11))),
+              IconButton(tooltip: 'Copy selected paths', visualDensity: VisualDensity.compact, onPressed: _copySelectedPaths, icon: const Icon(Icons.copy_rounded, size: 17, color: MicroColors.text)),
+              IconButton(tooltip: 'Move selected to Trash', visualDensity: VisualDensity.compact, onPressed: _trashSelected, icon: const Icon(Icons.delete_outline_rounded, size: 17, color: MicroColors.red)),
+              IconButton(tooltip: 'Clear selection', visualDensity: VisualDensity.compact, onPressed: () => setState(() => _selectedPaths.clear()), icon: const Icon(Icons.close_rounded, size: 17, color: MicroColors.text)),
+            ]),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
