@@ -89,6 +89,8 @@ jobs:
           grep -q 'setTrackpadSpeed' lib/services/settings_store.dart
           grep -q '_syncTrackpadSettings' lib/ui/apps/desktop_session_app.dart
           grep -q '_visiblePages' lib/ui/apps/settings_app.dart
+          grep -q 'Clear search' lib/ui/apps/settings_app.dart
+          grep -q 'No matching settings' lib/ui/apps/settings_app.dart
           grep -q 'Icons.display_settings_rounded' lib/ui/apps/settings_app.dart
           grep -q '_goBack' lib/ui/apps/files_app.dart
           grep -q '_goForward' lib/ui/apps/files_app.dart
