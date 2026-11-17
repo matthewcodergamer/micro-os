@@ -148,18 +148,95 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
 
     if (!mounted || action == null) return;
     if (action == _TerminalMenuAction.copy) {
-      final selectedText = tab.terminal.buffer.getText(selection);
-      if (selectedText.isNotEmpty) {
-        await Clipboard.setData(ClipboardData(text: selectedText));
-      }
-      tab.controller.clearSelection();
+      await _copyTab(tab);
     } else if (action == _TerminalMenuAction.paste) {
-      final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
-      final text = clipboard?.text;
-      if (text != null && text.isNotEmpty) {
-        await _enqueuePaste(tab, text);
-      }
+      await _pasteTab(tab);
     }
+  }
+
+  _Tab? get _activeTab {
+    if (_tabs.isEmpty) return null;
+    return _tabs[_active.clamp(0, _tabs.length - 1).toInt()];
+  }
+
+  Future<void> _copyTab(_Tab tab) async {
+    final selection = tab.controller.selection;
+    final text = selection == null ? '' : tab.terminal.buffer.getText(selection);
+    if (text.isEmpty) {
+      _notify('Long-press or drag to select text first.');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    tab.controller.clearSelection();
+    _notify('Copied ${text.length} characters.');
+  }
+
+  Future<void> _pasteTab(_Tab tab) async {
+    final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = clipboard?.text;
+    if (text == null || text.isEmpty) {
+      _notify('Clipboard is empty.');
+      return;
+    }
+    await _enqueuePaste(tab, text);
+  }
+
+  void _notify(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        duration: const Duration(milliseconds: 1400),
+      ));
+  }
+
+  void _copyActive() {
+    final tab = _activeTab;
+    if (tab != null) unawaited(_copyTab(tab));
+  }
+
+  void _pasteActive() {
+    final tab = _activeTab;
+    if (tab != null) unawaited(_pasteTab(tab));
+  }
+
+  void _sendKey(TerminalKey key, {bool ctrl = false}) {
+    _activeTab?.terminal.keyInput(key, ctrl: ctrl);
+  }
+
+  void _sendText(String text) {
+    _activeTab?.terminal.textInput(text);
+  }
+
+  /// Scrolls the scrollback buffer, or sends wheel/arrow input when the
+  /// full-screen alternate buffer (OpenCode, vim, less) owns the screen.
+  void _scrollActive(int lines) {
+    final tab = _activeTab;
+    if (tab == null || lines == 0) return;
+
+    if (tab.terminal.isUsingAltBuffer) {
+      final up = lines < 0;
+      final button = up ? TerminalMouseButton.wheelUp : TerminalMouseButton.wheelDown;
+      for (var i = 0; i < lines.abs().clamp(1, 6); i++) {
+        final handled = tab.terminal.mouseInput(
+          button,
+          TerminalMouseButtonState.down,
+          const CellOffset(0, 0),
+        );
+        if (!handled) {
+          tab.terminal.keyInput(up ? TerminalKey.arrowUp : TerminalKey.arrowDown);
+        }
+      }
+      return;
+    }
+
+    if (!tab.scrollController.hasClients) return;
+    final position = tab.scrollController.position;
+    final target = (position.pixels + lines * 48)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    position.jumpTo(target);
   }
 
 
@@ -330,7 +407,10 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                       child: TerminalView(
                         tab.terminal,
                         controller: tab.controller,
+                        scrollController: tab.scrollController,
                         theme: profile.toXterm(),
+                        cursorType: TerminalCursorType.block,
+                        alwaysShowCursor: true,
                         textStyle: TerminalStyle(
                           fontSize: widget.settings.terminalFontSize,
                           fontFamily: 'JetBrains Mono',
@@ -341,6 +421,14 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                 ],
               ),
             ),
+            _TerminalKeyBar(
+              onCopy: _copyActive,
+              onPaste: _pasteActive,
+              onScrollUp: () => _scrollActive(-4),
+              onScrollDown: () => _scrollActive(4),
+              onKey: (key, ctrl) => _sendKey(key, ctrl: ctrl),
+              onText: _sendText,
+            ),
           ],
         );
       },
@@ -349,6 +437,113 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
 }
 
 enum _TerminalMenuAction { copy, paste }
+
+/// Always-visible accessory row. xterm's gestures handle long-press and drag
+/// selection, but on a phone the copy affordance and scrollback must be
+/// reachable without a hidden menu or a mouse wheel.
+class _TerminalKeyBar extends StatelessWidget {
+  const _TerminalKeyBar({
+    required this.onCopy,
+    required this.onPaste,
+    required this.onScrollUp,
+    required this.onScrollDown,
+    required this.onKey,
+    required this.onText,
+  });
+
+  final VoidCallback onCopy;
+  final VoidCallback onPaste;
+  final VoidCallback onScrollUp;
+  final VoidCallback onScrollDown;
+  final void Function(TerminalKey key, bool ctrl) onKey;
+  final ValueChanged<String> onText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 38,
+      color: MicroColors.windowHeader,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        children: [
+          _KeyChip(label: 'Copy', icon: Icons.copy_rounded, onTap: onCopy),
+          _KeyChip(label: 'Paste', icon: Icons.content_paste_rounded, onTap: onPaste),
+          const _KeyDivider(),
+          _KeyChip(label: 'Esc', onTap: () => onKey(TerminalKey.escape, false)),
+          _KeyChip(label: 'Tab', onTap: () => onKey(TerminalKey.tab, false)),
+          _KeyChip(label: 'PgUp', icon: Icons.keyboard_arrow_up_rounded, onTap: onScrollUp),
+          _KeyChip(label: 'PgDn', icon: Icons.keyboard_arrow_down_rounded, onTap: onScrollDown),
+          _KeyChip(label: '←', onTap: () => onKey(TerminalKey.arrowLeft, false)),
+          _KeyChip(label: '↑', onTap: () => onKey(TerminalKey.arrowUp, false)),
+          _KeyChip(label: '↓', onTap: () => onKey(TerminalKey.arrowDown, false)),
+          _KeyChip(label: '→', onTap: () => onKey(TerminalKey.arrowRight, false)),
+          _KeyChip(label: '/', onTap: () => onText('/')),
+          _KeyChip(label: '^C', onTap: () => onKey(TerminalKey.keyC, true)),
+          _KeyChip(label: '^D', onTap: () => onKey(TerminalKey.keyD, true)),
+        ],
+      ),
+    );
+  }
+}
+
+class _KeyChip extends StatelessWidget {
+  const _KeyChip({required this.label, this.icon, required this.onTap});
+
+  final String label;
+  final IconData? icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Material(
+        color: MicroColors.windowBody,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          canRequestFocus: false,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: MicroColors.text),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: MicroColors.text,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KeyDivider extends StatelessWidget {
+  const _KeyDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 20,
+      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+      color: MicroColors.subtle.withValues(alpha: 0.25),
+    );
+  }
+}
 
 class _Tab {
   _Tab({
@@ -361,6 +556,7 @@ class _Tab {
   final Terminal terminal;
   final TerminalController controller;
   final Pty? pty;
+  final ScrollController scrollController = ScrollController();
   String title;
   Future<void> pasteQueue = Future<void>.value();
   int pendingPasteCodeUnits = 0;
@@ -370,6 +566,7 @@ class _Tab {
     if (disposed) return;
     disposed = true;
     pendingPasteCodeUnits = 0;
+    scrollController.dispose();
     try {
       pty?.kill();
     } catch (_) {
