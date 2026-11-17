@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../app_scope.dart';
 import '../../core/macos_design.dart';
 import '../../core/terminal_profiles.dart';
+import '../../core/wallpapers.dart';
 import '../../core/theme.dart';
 import '../../services/github_auth.dart';
 import '../../services/linux_runtime.dart';
@@ -13,6 +14,7 @@ import '../../services/settings_store.dart';
 
 enum _Page {
   desktop,
+  wallpaper,
   performance,
   github,
   huggingface,
@@ -38,6 +40,7 @@ class _SettingsAppState extends State<SettingsApp> {
 
   IconData _icon(_Page page) => switch (page) {
     _Page.desktop => Icons.display_settings_rounded,
+    _Page.wallpaper => Icons.wallpaper_rounded,
     _Page.performance => Icons.speed_rounded,
     _Page.github => Icons.code_rounded,
     _Page.huggingface => Icons.hub_rounded,
@@ -64,6 +67,7 @@ class _SettingsAppState extends State<SettingsApp> {
       builder: (context, _) {
         return switch (_page) {
           _Page.desktop => _DesktopPage(settings: settings),
+          _Page.wallpaper => _WallpaperPage(settings: settings),
           _Page.performance => const _PerformancePage(),
           _Page.github => _GitHubPage(auth: auth, runtime: runtime),
           _Page.huggingface => _HuggingFacePage(auth: auth, runtime: runtime),
@@ -161,6 +165,7 @@ class _SettingsAppState extends State<SettingsApp> {
 
   String _title(_Page p) => switch (p) {
     _Page.desktop => 'Desktop & Dock',
+    _Page.wallpaper => 'Wallpaper',
     _Page.performance => 'Performance',
     _Page.github => 'GitHub',
     _Page.huggingface => 'Hugging Face',
@@ -213,6 +218,102 @@ class _DesktopPage extends StatelessWidget {
             await settings.setSystemBarsVisible(visible);
             await SystemChrome.setEnabledSystemUIMode(
               visible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _WallpaperPage extends StatelessWidget {
+  const _WallpaperPage({required this.settings});
+  final dynamic settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(22),
+      children: [
+        const Text(
+          'Wallpaper',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Choose the desktop background. Your selection is saved on this device.',
+          style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+        ),
+        const SizedBox(height: 18),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth > 650 ? 3 : 2;
+            final itemWidth = (constraints.maxWidth - (columns - 1) * 12) / columns;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 14,
+              children: [
+                for (final wallpaper in kWallpapers)
+                  SizedBox(
+                    width: itemWidth,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => settings.setWallpaper(wallpaper.id),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: AspectRatio(
+                                  aspectRatio: 16 / 10,
+                                  child: Image.asset(
+                                    wallpaper.asset,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: Sequoia.sidebarTint,
+                                      alignment: Alignment.center,
+                                      child: const Icon(Icons.image_not_supported_outlined,
+                                          color: Sequoia.labelSecondary),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (settings.wallpaper == wallpaper.id)
+                                Positioned(
+                                  right: 8,
+                                  top: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF0A84FF),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.check, size: 14, color: Colors.white),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            wallpaper.name,
+                            style: TextStyle(
+                              color: MicroColors.text,
+                              fontSize: 12,
+                              fontWeight: settings.wallpaper == wallpaper.id
+                                  ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             );
           },
         ),
