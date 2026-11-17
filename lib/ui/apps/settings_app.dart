@@ -992,6 +992,33 @@ class _BrowserPage extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
+        const Text('Default browser', style: TextStyle(color: MicroColors.text)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: settings.browserEngine as String,
+          decoration: const InputDecoration(labelText: 'Browser engine'),
+          items: const [
+            DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
+            DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
+          ],
+          onChanged: (value) { if (value != null) settings.setBrowserEngine(value); },
+        ),
+        const SizedBox(height: 14),
+        TextFormField(
+          initialValue: settings.browserHomePage as String,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          decoration: const InputDecoration(labelText: 'Home page', hintText: 'https://example.com'),
+          onFieldSubmitted: (value) async {
+            try {
+              await settings.setBrowserHomePage(value);
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Browser home page saved.')));
+            } catch (error) {
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+            }
+          },
+        ),
+        const SizedBox(height: 12),
         SwitchListTile(
           title: const Text(
             'Single-process mode',
