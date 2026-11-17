@@ -34,6 +34,22 @@ class SettingsApp extends StatefulWidget {
 
 class _SettingsAppState extends State<SettingsApp> {
   _Page _page = _Page.desktop;
+  String _search = '';
+
+  IconData _icon(_Page page) => switch (page) {
+    _Page.desktop => Icons.display_settings_rounded,
+    _Page.performance => Icons.speed_rounded,
+    _Page.github => Icons.code_rounded,
+    _Page.huggingface => Icons.hub_rounded,
+    _Page.linux => Icons.terminal_rounded,
+    _Page.terminal => Icons.keyboard_rounded,
+    _Page.browser => Icons.language_rounded,
+    _Page.login => Icons.person_rounded,
+    _Page.about => Icons.info_outline_rounded,
+  };
+
+  List<_Page> get _visiblePages => _Page.values.where((page) =>
+    _title(page).toLowerCase().contains(_search.trim().toLowerCase())).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -74,14 +90,38 @@ class _SettingsAppState extends State<SettingsApp> {
               ),
             ),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+              padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
               children: [
-                for (final page in _Page.values)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(10, 3, 8, 12),
+                  child: Text('SYSTEM SETTINGS', style: TextStyle(
+                    color: Sequoia.labelTertiary, fontSize: 10,
+                    fontWeight: FontWeight.w700, letterSpacing: 1.1)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
+                  child: SizedBox(height: 34, child: TextField(
+                    onChanged: (value) => setState(() => _search = value),
+                    style: const TextStyle(color: Sequoia.label, fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: 'Search settings',
+                      hintStyle: const TextStyle(color: Sequoia.labelTertiary, fontSize: 12),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 16, color: Sequoia.labelSecondary),
+                      filled: true, fillColor: Colors.black.withValues(alpha: 0.16),
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    ),
+                  )),
+                ),
+                for (final page in _visiblePages)
                   _SidebarItem(
                     label: _title(page),
+                    icon: _icon(page),
                     selected: _page == page,
                     onTap: () => setState(() => _page = page),
                   ),
+                if (_visiblePages.isEmpty)
+                  const Padding(padding: EdgeInsets.all(10), child: Text('No matching settings', style: TextStyle(color: Sequoia.labelTertiary, fontSize: 11))),
               ],
             ),
           ),
@@ -101,7 +141,7 @@ class _SettingsAppState extends State<SettingsApp> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             children: [
-              for (final page in _Page.values)
+              for (final page in _visiblePages)
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: _CompactPageTab(
@@ -1390,11 +1430,13 @@ class _PerfStat extends StatelessWidget {
 class _SidebarItem extends StatelessWidget {
   const _SidebarItem({
     required this.label,
+    required this.icon,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1418,7 +1460,10 @@ class _SidebarItem extends StatelessWidget {
               borderRadius: BorderRadius.circular(7),
             ),
             alignment: Alignment.centerLeft,
-            child: Text(
+            child: Row(children: [
+              Icon(icon, size: 16, color: selected ? Sequoia.label : Sequoia.labelSecondary),
+              const SizedBox(width: 9),
+              Expanded(child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1427,7 +1472,8 @@ class _SidebarItem extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
-            ),
+              )),
+            ]),
           ),
         ),
       ),
