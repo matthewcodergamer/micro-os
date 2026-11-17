@@ -303,6 +303,7 @@ exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" X
   --disable-low-res-tiling \
   --disk-cache-size=67108864 --media-cache-size=16777216 \
   --start-maximized \
+  --restore-last-session \
   --user-data-dir="$BROWSER_HOME/.config/chromium" "$@"
 BROWSER
 chmod 755 /usr/local/bin/start-browser.sh
@@ -326,6 +327,9 @@ fi
 if ! grep -q 'browser.startup.homepage' "$FIREFOX_PREFS" 2>/dev/null; then
   printf '%s\n' 'user_pref("browser.startup.homepage", "about:home");' >> "$FIREFOX_PREFS"
   printf '%s\n' 'user_pref("browser.startup.page", 1);' >> "$FIREFOX_PREFS"
+fi
+if ! grep -q 'browser.sessionstore.resume_from_crash' "$FIREFOX_PREFS" 2>/dev/null; then
+  printf '%s\n' 'user_pref("browser.sessionstore.resume_from_crash", true);' 'user_pref("browser.startup.page", 3);' >> "$FIREFOX_PREFS"
 fi
 if ! grep -q 'browser.shell.checkDefaultBrowser' "$FIREFOX_PREFS" 2>/dev/null; then
   printf '%s\n' 'user_pref("browser.shell.checkDefaultBrowser", false);' >> "$FIREFOX_PREFS"
