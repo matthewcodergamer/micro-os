@@ -82,7 +82,11 @@ Future<void> main() async {
   final settings = SettingsStore();
 
   await settings.load();
-  await SystemControls.setBrightness(settings.screenBrightness);
+  try {
+    await SystemControls.setBrightness(settings.screenBrightness);
+  } catch (_) {
+    // Non-Android builds may not provide the native display-controls channel.
+  }
   await SystemChrome.setEnabledSystemUIMode(
     settings.systemBarsVisible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
   );
