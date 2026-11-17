@@ -264,7 +264,7 @@ class DesktopState extends ChangeNotifier {
       w.rect = w.restoreRect ?? appDefaultRect(w.app, screen);
       w.restoreRect = null;
     } else {
-      w.restoreRect = w.rect;
+      w.restoreRect ??= w.rect;
       w.maximized = true;
       w.pinned = _compactFor(screen);
       w.rect = _maxRect(screen);
