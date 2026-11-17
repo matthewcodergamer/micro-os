@@ -26,6 +26,7 @@ class _FilesAppState extends State<FilesApp> {
   List<_FileEntry> _entries = const [];
   bool _loading = true;
   bool _listView = false;
+  bool _showHiddenFiles = false;
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
   String? _error;
@@ -171,8 +172,10 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
 
   List<_FileEntry> get _visibleEntries {
     final query = _search.trim().toLowerCase();
-    if (query.isEmpty) return _entries;
-    return _entries.where((entry) => entry.name.toLowerCase().contains(query)).toList(growable: false);
+    return _entries.where((entry) {
+      if (!_showHiddenFiles && entry.name.startsWith('.')) return false;
+      return query.isEmpty || entry.name.toLowerCase().contains(query);
+    }).toList(growable: false);
   }
 
   String _formatSize(int bytes) {
@@ -433,7 +436,12 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
               PopupMenuButton<String>(
                 tooltip: 'View options', icon: const Icon(Icons.view_column_rounded, size: 18, color: MicroColors.text),
                 onSelected: (v) => setState(() { _listView = v == 'list'; _columnSelection = v == 'columns' ? '' : null; }),
-                itemBuilder: (_) => const [PopupMenuItem(value: 'icons', child: Text('Icon View')), PopupMenuItem(value: 'list', child: Text('List View')), PopupMenuItem(value: 'columns', child: Text('Column View'))],
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'icons', child: Text('Icon View')),
+                  const PopupMenuItem(value: 'list', child: Text('List View')),
+                  const PopupMenuItem(value: 'columns', child: Text('Column View')),
+                  PopupMenuItem(value: 'hidden', child: Text(_showHiddenFiles ? 'Hide Hidden Files' : 'Show Hidden Files')),
+                ],
               ),
             ],
           ),
