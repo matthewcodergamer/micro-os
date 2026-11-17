@@ -439,7 +439,7 @@ done''', paths);
 mime="$(python3 -c 'import mimetypes,sys; print(mimetypes.guess_type(sys.argv[1])[0] or "application/octet-stream")' "$1")"
 printf '%s\0' "$mime"
 case "$mime" in
-  text/*|application/json|application/xml|application/javascript)
+  text/*|application/json|application/xml|application/javascript|application/x-shellscript|application/x-python|application/x-yaml|application/toml)
     head -c 16384 -- "$1"
     ;;
   image/*)
@@ -470,6 +470,14 @@ esac''',
       await subscription.cancel();
       pty.kill();
     }
+    Uint8List? imageBytes;
+    if (mime.startsWith('image/') && payload != '__MICROOS_PREVIEW_TOO_LARGE__') {
+      try {
+        imageBytes = base64Decode(payload);
+      } catch (_) {
+        payload = 'Image preview could not be decoded.';
+      }
+    }
     if (!mounted) return;
     showDialog<void>(
       context: context,
@@ -478,8 +486,8 @@ esac''',
         title: Text(entry.name, style: const TextStyle(color: MicroColors.text)),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 620, maxHeight: 520),
-          child: mime.startsWith('image/') && payload != '__MICROOS_PREVIEW_TOO_LARGE__'
-              ? InteractiveViewer(child: Image.memory(base64Decode(payload), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Text('Image preview could not be decoded.', style: TextStyle(color: MicroColors.subtle))))
+          child: imageBytes != null
+              ? InteractiveViewer(child: Image.memory(imageBytes!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Text('Image preview could not be decoded.', style: TextStyle(color: MicroColors.subtle))))
               : SingleChildScrollView(child: SelectableText(
                   payload == '__MICROOS_PREVIEW_TOO_LARGE__'
                       ? 'This image is larger than the 4 MB preview limit.'
