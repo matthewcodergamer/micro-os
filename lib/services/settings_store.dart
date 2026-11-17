@@ -12,6 +12,8 @@ import '../core/wallpapers.dart';
 /// Linux files or replace Android device authentication.
 class SettingsStore extends ChangeNotifier {
   static const _kSingleProcess = 'browser.single_process';
+  static const _kBrowserEngine = 'browser.engine';
+  static const _kBrowserHomePage = 'browser.home_page';
   static const _kInstalledAt = 'runtime.installed_at';
   static const _kOpenCodeTheme = 'opencode.theme';
   static const _kTerminalFontSize = 'terminal.font_size';
@@ -31,6 +33,8 @@ class SettingsStore extends ChangeNotifier {
   );
 
   bool singleProcessBrowser = false;
+  String browserEngine = 'chromium';
+  String browserHomePage = 'https://www.google.com';
   String? installedAt;
   String openCodeTheme = 'light';
   double terminalFontSize = 13;
@@ -57,6 +61,8 @@ class SettingsStore extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     singleProcessBrowser = prefs.getBool(_kSingleProcess) ?? false;
+    browserEngine = prefs.getString(_kBrowserEngine) == 'firefox' ? 'firefox' : 'chromium';
+    browserHomePage = _validHomePage(prefs.getString(_kBrowserHomePage)) ?? 'https://www.google.com';
     installedAt = prefs.getString(_kInstalledAt);
     openCodeTheme = prefs.getString(_kOpenCodeTheme) ?? 'light';
     terminalFontSize =
@@ -109,6 +115,29 @@ class SettingsStore extends ChangeNotifier {
       loginPasswordMigrationPending = legacyPassword != null;
     }
     notifyListeners();
+  }
+
+  String? _validHomePage(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || !uri.hasAuthority || !{'http', 'https'}.contains(uri.scheme.toLowerCase())) return null;
+    return uri.toString();
+  }
+
+  Future<void> setBrowserEngine(String value) async {
+    browserEngine = value == 'firefox' ? 'firefox' : 'chromium';
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kBrowserEngine, browserEngine);
+  }
+
+  Future<void> setBrowserHomePage(String value) async {
+    final next = _validHomePage(value);
+    if (next == null) throw ArgumentError('Enter a valid http or https URL.');
+    browserHomePage = next;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kBrowserHomePage, next);
   }
 
   Future<void> setSingleProcessBrowser(bool value) async {
