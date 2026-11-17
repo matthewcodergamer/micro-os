@@ -367,7 +367,7 @@ done''', paths);
       if (entry.isDirectory) {
         _navigate(path);
       } else {
-        _showFileDetails(entry);
+        _previewEntry(entry);
       }
     } else if (action == 'terminal') {
       widget.onOpenTerminal?.call(<String>[
@@ -429,6 +429,70 @@ done''', paths);
         }
       }
     }
+  }
+
+  Future<void> _previewEntry(_FileEntry entry) async {
+    final path = _entryPath(entry);
+    final pty = widget.runtime.startShell(argv: <String>[
+      '/bin/bash', '-lc',
+      r'''set -eu
+mime="$(python3 -c 'import mimetypes,sys; print(mimetypes.guess_type(sys.argv[1])[0] or "application/octet-stream")' "$1")"
+printf '%s\\0' "$mime"
+case "$mime" in
+  text/*|application/json|application/xml|application/javascript)
+    head -c 16384 -- "$1"
+    ;;
+  image/*)
+    size="$(stat -c %s -- "$1")"
+    if [ "$size" -le 4194304 ]; then base64 -w0 -- "$1"; else printf '__MICROOS_PREVIEW_TOO_LARGE__'; fi
+    ;;
+  *) printf 'Preview is not available for this file type.' ;;
+esac''',
+      'microos-preview', path,
+    ]);
+    final bytes = BytesBuilder(copy: false);
+    final subscription = pty.output.listen(bytes.add);
+    String mime = 'application/octet-stream';
+    String payload = 'Preview unavailable.';
+    try {
+      final code = await pty.exitCode.timeout(const Duration(seconds: 10));
+      final output = utf8.decode(bytes.takeBytes(), allowMalformed: true);
+      final separator = output.indexOf('\\u0000');
+      if (separator >= 0) {
+        mime = output.substring(0, separator);
+        payload = output.substring(separator + 1);
+      } else if (code != 0) {
+        payload = 'Could not preview this file.';
+      }
+    } catch (error) {
+      payload = 'Preview failed: $error';
+    } finally {
+      await subscription.cancel();
+      pty.kill();
+    }
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: MicroColors.panelSolid,
+        title: Text(entry.name, style: const TextStyle(color: MicroColors.text)),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620, maxHeight: 520),
+          child: mime.startsWith('image/') && payload != '__MICROOS_PREVIEW_TOO_LARGE__'
+              ? InteractiveViewer(child: Image.memory(base64Decode(payload), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Text('Image preview could not be decoded.', style: TextStyle(color: MicroColors.subtle))))
+              : SingleChildScrollView(child: SelectableText(
+                  payload == '__MICROOS_PREVIEW_TOO_LARGE__'
+                      ? 'This image is larger than the 4 MB preview limit.'
+                      : payload,
+                  style: TextStyle(color: MicroColors.text, fontSize: 12, fontFamily: mime.startsWith('text/') ? 'JetBrains Mono' : null),
+                )),
+        ),
+        actions: [
+          TextButton(onPressed: () async { await Clipboard.setData(ClipboardData(text: path)); if (context.mounted) Navigator.pop(context); }, child: const Text('Copy Path')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
   }
 
   void _showFileDetails(_FileEntry entry) {
