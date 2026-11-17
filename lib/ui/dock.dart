@@ -92,7 +92,7 @@ class _DockState extends State<Dock> {
 
     final scales = List<double>.generate(dockApps.length, (index) {
       final pointer = _pointerX;
-      if (pointer == null || effectWidth <= 0) return 1;
+      if (!settings.dockMagnification || pointer == null || effectWidth <= 0) return 1;
       final iconCenter = index * (iconSize + spacing) + iconSize / 2;
       final minX = pointer - effectWidth / 2;
       final maxX = pointer + effectWidth / 2;
