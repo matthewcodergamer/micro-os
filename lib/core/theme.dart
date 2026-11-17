@@ -93,7 +93,7 @@ ThemeData buildMicroTheme({Color accentColor = MicroColors.accent}) {
       }),
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
     ),
-    sliderTheme: const SliderThemeData(
+    sliderTheme: SliderThemeData(
       activeTrackColor: accentColor,
       thumbColor: Colors.white,
       inactiveTrackColor: Color(0xFF48484C),
@@ -118,7 +118,7 @@ ThemeData buildMicroTheme({Color accentColor = MicroColors.accent}) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: MicroColors.accent,
+        backgroundColor: accentColor,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         shape: const StadiumBorder(),
@@ -132,7 +132,7 @@ ThemeData buildMicroTheme({Color accentColor = MicroColors.accent}) {
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: MicroColors.accent),
+      style: TextButton.styleFrom(foregroundColor: accentColor),
     ),
     dividerColor: MicroColors.hairline,
     progressIndicatorTheme: const ProgressIndicatorThemeData(
