@@ -148,10 +148,12 @@ class _MistyOSAppState extends State<MistyOSApp> {
       stats: widget.stats,
       auth: widget.auth,
       settings: widget.settings,
-      child: MaterialApp(
+      child: AnimatedBuilder(
+        animation: widget.settings,
+        builder: (context, _) => MaterialApp(
         title: 'Misty OS',
         debugShowCheckedModeBanner: false,
-        theme: buildMicroTheme(),
+        theme: buildMicroTheme(accentColor: widget.settings.accentColor),
         builder: (context, child) {
           final media = MediaQuery.of(context);
           // Keep the desktop chrome from exploding on phones with huge
@@ -169,6 +171,7 @@ class _MistyOSAppState extends State<MistyOSApp> {
           );
         },
         home: const DesktopScreen(),
+        ),
       ),
     );
   }
