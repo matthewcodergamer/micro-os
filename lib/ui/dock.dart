@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
+import '../core/macos_design.dart';
 import '../core/theme.dart';
 import '../models/window_state.dart';
 import 'mac_icons.dart';
@@ -14,11 +15,7 @@ import 'mac_icons.dart';
 /// glass, and when they do not the row becomes horizontally scrollable instead
 /// of being clipped at the right edge.
 class Dock extends StatefulWidget {
-  const Dock({
-    super.key,
-    required this.onOpen,
-    required this.visible,
-  });
+  const Dock({super.key, required this.onOpen, required this.visible});
 
   final ValueChanged<AppId> onOpen;
   final bool visible;
@@ -71,22 +68,26 @@ class _DockState extends State<Dock> {
     final iconSize = landscape
         ? (screen.height < 420 ? 30.0 : 36.0)
         : compact
-            ? (screen.width < 390 ? 30.0 : 36.0)
-            : 52.0;
+        ? (screen.width < 390 ? 30.0 : 36.0)
+        : 52.0;
     final maxScale = landscape
         ? 1.28
         : smallerDimension < 480
-            ? 1.4
-            : 1.6;
+        ? 1.4
+        : 1.6;
     final effectWidth = smallerDimension < 480
         ? smallerDimension * 0.4
         : smallerDimension < 768
-            ? smallerDimension * 0.35
-            : smallerDimension < 1024
-                ? smallerDimension * 0.3
-                : 300.0;
+        ? smallerDimension * 0.35
+        : smallerDimension < 1024
+        ? smallerDimension * 0.3
+        : 300.0;
     final horizontalPadding = landscape || compact ? 8.0 : 14.0;
-    final spacing = landscape ? 4.0 : compact ? 5.0 : 10.0;
+    final spacing = landscape
+        ? 4.0
+        : compact
+        ? 5.0
+        : 10.0;
 
     final scales = List<double>.generate(dockApps.length, (index) {
       final pointer = _pointerX;
@@ -112,9 +113,8 @@ class _DockState extends State<Dock> {
             child: Padding(
               padding: EdgeInsets.only(bottom: landscape ? 4 : 8),
               child: MouseRegion(
-                onHover: (event) => _trackPointer(
-                  event.localPosition.dx - horizontalPadding,
-                ),
+                onHover: (event) =>
+                    _trackPointer(event.localPosition.dx - horizontalPadding),
                 onExit: (_) => _clearPointer(),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -127,7 +127,7 @@ class _DockState extends State<Dock> {
                   onPanEnd: (_) => _clearPointer(),
                   onPanCancel: _clearPointer,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(24),
                     child: BackdropFilter(
                       // A smaller blur keeps the translucent glass while
                       // reducing the cost of a full-screen backdrop filter on
@@ -136,23 +136,17 @@ class _DockState extends State<Dock> {
                       child: Container(
                         padding: EdgeInsets.symmetric(
                           horizontal: horizontalPadding,
-                          vertical: landscape ? 4 : compact ? 6 : 10,
+                          vertical: landscape
+                              ? 4
+                              : compact
+                              ? 6
+                              : 10,
                         ),
-                        decoration: BoxDecoration(
-                          color: const Color(0x991C1C1E),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.22),
-                            width: 0.8,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x66000000),
-                              blurRadius: 30,
-                              offset: Offset(0, 12),
-                            ),
-                          ],
-                        ),
+                        decoration: Sequoia.glass(
+                          radius: 24,
+                          tint: 0.62,
+                          borderAlpha: 0.2,
+                        ).copyWith(boxShadow: Sequoia.panelShadow()),
                         child: SizedBox(
                           width: math.min(screen.width - 20, 900),
                           child: LayoutBuilder(
@@ -168,9 +162,11 @@ class _DockState extends State<Dock> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      for (var index = 0;
-                                          index < dockApps.length;
-                                          index++) ...[
+                                      for (
+                                        var index = 0;
+                                        index < dockApps.length;
+                                        index++
+                                      ) ...[
                                         Builder(
                                           builder: (context) {
                                             final app = dockApps[index];
@@ -187,23 +183,25 @@ class _DockState extends State<Dock> {
                                                       Alignment.bottomCenter,
                                                   child: _DockItem(
                                                     app: app,
-                                                    running:
-                                                        desktop.isRunning(app),
+                                                    running: desktop.isRunning(
+                                                      app,
+                                                    ),
                                                     size: iconSize,
                                                     onTap: () =>
                                                         widget.onOpen(app),
-                                                    onLongPress: desktop
-                                                            .isRunning(app)
+                                                    onLongPress:
+                                                        desktop.isRunning(app)
                                                         ? () {
                                                             for (final window
                                                                 in [
-                                                              ...desktop
-                                                                  .windows
-                                                            ]) {
+                                                                  ...desktop
+                                                                      .windows,
+                                                                ]) {
                                                               if (window.app ==
                                                                   app) {
                                                                 desktop.close(
-                                                                    window.id);
+                                                                  window.id,
+                                                                );
                                                               }
                                                             }
                                                           }

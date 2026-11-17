@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/macos_design.dart';
 import '../core/theme.dart';
 import '../models/window_state.dart';
 import '../state/desktop_state.dart';
@@ -25,6 +26,9 @@ class WindowFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final focused = desktop.focused?.id == window.id;
     final maxed = window.maximized;
+    final radius = maxed
+        ? BorderRadius.zero
+        : BorderRadius.circular(Sequoia.windowRadius);
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 230),
@@ -43,20 +47,15 @@ class WindowFrame extends StatelessWidget {
           child: RepaintBoundary(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(maxed ? 0 : 12),
+                borderRadius: radius,
+                // Sequoia casts one wide, soft shadow per window and lifts the
+                // focused window instead of recolouring its chrome.
                 boxShadow: maxed
                     ? null
-                    : [
-                        BoxShadow(
-                          color: Colors.black
-                              .withValues(alpha: focused ? 0.45 : 0.28),
-                          blurRadius: focused ? 28 : 18,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+                    : Sequoia.panelShadow(opacity: focused ? 0.5 : 0.3),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(maxed ? 0 : 12),
+                borderRadius: radius,
                 child: Material(
                   color: MicroColors.windowBody,
                   child: Column(
@@ -101,8 +100,18 @@ class _TitleBar extends StatelessWidget {
           ? null
           : (d) => desktop.move(window.id, d.delta, screen),
       child: Container(
-        height: 38,
-        color: MicroColors.windowHeader,
+        height: Sequoia.titleBarHeight,
+        decoration: BoxDecoration(
+          color: focused
+              ? MicroColors.windowHeader
+              : Sequoia.toolbarTint.withValues(alpha: 0.92),
+          border: Border(
+            bottom: BorderSide(
+              color: Colors.white.withValues(alpha: focused ? 0.05 : 0.03),
+              width: 0.8,
+            ),
+          ),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           children: [
@@ -150,11 +159,20 @@ class _TrafficLights extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _Light(color: focused ? MicroColors.red : MicroColors.inactiveLight, onTap: onClose),
-        const SizedBox(width: 8),
-        _Light(color: focused ? MicroColors.amber : MicroColors.inactiveLight, onTap: onMinimize),
-        const SizedBox(width: 8),
-        _Light(color: focused ? MicroColors.green : MicroColors.inactiveLight, onTap: onZoom),
+        _Light(
+          color: focused ? Sequoia.closeLight : MicroColors.inactiveLight,
+          onTap: onClose,
+        ),
+        const SizedBox(width: Sequoia.trafficLightGap),
+        _Light(
+          color: focused ? Sequoia.miniLight : MicroColors.inactiveLight,
+          onTap: onMinimize,
+        ),
+        const SizedBox(width: Sequoia.trafficLightGap),
+        _Light(
+          color: focused ? Sequoia.zoomLight : MicroColors.inactiveLight,
+          onTap: onZoom,
+        ),
       ],
     );
   }
@@ -171,12 +189,15 @@ class _Light extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 12,
-        height: 12,
+        width: Sequoia.trafficLightSize,
+        height: Sequoia.trafficLightSize,
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.black.withValues(alpha: 0.15), width: 0.5),
+          border: Border.all(
+            color: Colors.black.withValues(alpha: 0.15),
+            width: 0.5,
+          ),
         ),
       ),
     );

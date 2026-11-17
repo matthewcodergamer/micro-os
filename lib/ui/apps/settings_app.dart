@@ -3,13 +3,26 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app_scope.dart';
+import '../../core/macos_design.dart';
 import '../../core/terminal_profiles.dart';
 import '../../core/theme.dart';
 import '../../services/github_auth.dart';
 import '../../services/linux_runtime.dart';
+import '../../services/performance_monitor.dart';
 import '../../services/settings_store.dart';
 
-enum _Page { desktop, speech, github, huggingface, linux, terminal, browser, login, about }
+enum _Page {
+  desktop,
+  performance,
+  speech,
+  github,
+  huggingface,
+  linux,
+  terminal,
+  browser,
+  login,
+  about,
+}
 
 class SettingsApp extends StatefulWidget {
   const SettingsApp({super.key, required this.runtime});
@@ -31,65 +44,95 @@ class _SettingsAppState extends State<SettingsApp> {
     final runtime = widget.runtime;
     final wide = MediaQuery.sizeOf(context).width > 600;
 
-    return Row(
-      children: [
-        if (wide)
+    final content = ListenableBuilder(
+      listenable: Listenable.merge([settings, runtime]),
+      builder: (context, _) {
+        return switch (_page) {
+          _Page.desktop => _DesktopPage(settings: settings),
+          _Page.performance => const _PerformancePage(),
+          _Page.speech => _SpeechPage(settings: settings),
+          _Page.github => _GitHubPage(auth: auth, runtime: runtime),
+          _Page.huggingface => _HuggingFacePage(auth: auth, runtime: runtime),
+          _Page.linux => _LinuxPage(runtime: runtime),
+          _Page.terminal => _TerminalPage(settings: settings),
+          _Page.browser => _BrowserPage(settings: settings),
+          _Page.login => _LoginPage(settings: settings),
+          _Page.about => const _AboutPage(),
+        };
+      },
+    );
+
+    if (wide) {
+      return Row(
+        children: [
           Container(
-            width: 220,
-            color: MicroColors.sidebar,
+            width: Sequoia.sidebarWidth,
+            decoration: BoxDecoration(
+              // Sequoia sidebars are translucent over the window body rather
+              // than a flat grey column.
+              color: Sequoia.sidebarTint.withValues(alpha: 0.86),
+              border: Border(
+                right: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+              ),
+            ),
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
               children: [
-                for (final p in _Page.values)
-                  ListTile(
-                    dense: true,
-                    selected: _page == p,
-                    selectedTileColor: MicroColors.accent.withValues(alpha: 0.2),
-                    title: Text(
-                      _title(p),
-                      style: TextStyle(
-                        color: _page == p ? MicroColors.accent : MicroColors.text,
-                        fontSize: 14,
-                      ),
-                    ),
-                    onTap: () => setState(() => _page = p),
+                for (final page in _Page.values)
+                  _SidebarItem(
+                    label: _title(page),
+                    selected: _page == page,
+                    onTap: () => setState(() => _page = page),
                   ),
               ],
             ),
           ),
-        Expanded(
-          child: ListenableBuilder(
-            listenable: Listenable.merge([settings, runtime]),
-            builder: (context, _) {
-              return switch (_page) {
-                _Page.desktop => _DesktopPage(settings: settings),
-                _Page.speech => _SpeechPage(settings: settings),
-                _Page.github => _GitHubPage(auth: auth, runtime: runtime),
-                _Page.huggingface => _HuggingFacePage(auth: auth, runtime: runtime),
-                _Page.linux => _LinuxPage(runtime: runtime),
-                _Page.terminal => _TerminalPage(settings: settings),
-                _Page.browser => _BrowserPage(settings: settings),
-                _Page.login => _LoginPage(settings: settings),
-                _Page.about => const _AboutPage(),
-              };
-            },
+          Expanded(child: content),
+        ],
+      );
+    }
+
+    // Phones get a horizontal page bar instead. Without it the sidebar simply
+    // disappeared below 600 px and every settings page except the first one
+    // became unreachable.
+    return Column(
+      children: [
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            children: [
+              for (final page in _Page.values)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: _CompactPageTab(
+                    label: _title(page),
+                    selected: _page == page,
+                    onTap: () => setState(() => _page = page),
+                  ),
+                ),
+            ],
           ),
         ),
+        const Divider(height: 1),
+        Expanded(child: content),
       ],
     );
   }
 
   String _title(_Page p) => switch (p) {
-        _Page.desktop => 'Desktop & Dock',
-        _Page.speech => 'Speech',
-        _Page.github => 'GitHub',
-        _Page.huggingface => 'Hugging Face',
-        _Page.linux => 'Linux',
-        _Page.terminal => 'Terminal',
-        _Page.browser => 'Browser',
-        _Page.login => 'Users & Login',
-        _Page.about => 'About',
-      };
+    _Page.desktop => 'Desktop & Dock',
+    _Page.performance => 'Performance',
+    _Page.speech => 'Speech',
+    _Page.github => 'GitHub',
+    _Page.huggingface => 'Hugging Face',
+    _Page.linux => 'Linux',
+    _Page.terminal => 'Terminal',
+    _Page.browser => 'Browser',
+    _Page.login => 'Users & Login',
+    _Page.about => 'About',
+  };
 }
 
 class _DesktopPage extends StatelessWidget {
@@ -101,17 +144,33 @@ class _DesktopPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('Desktop & Dock', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Desktop & Dock',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 20),
         SwitchListTile(
-          title: const Text('Automatically hide and show the Dock', style: TextStyle(color: MicroColors.text)),
+          title: const Text(
+            'Automatically hide and show the Dock',
+            style: TextStyle(color: MicroColors.text),
+          ),
           value: settings.dockAutoHide,
           onChanged: (v) => settings.setDockAutoHide(v),
         ),
         const Divider(height: 28),
         SwitchListTile(
-          title: const Text('Show Android system bars', style: TextStyle(color: MicroColors.text)),
-          subtitle: const Text('Temporarily restore the status and navigation bars', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          title: const Text(
+            'Show Android system bars',
+            style: TextStyle(color: MicroColors.text),
+          ),
+          subtitle: const Text(
+            'Temporarily restore the status and navigation bars',
+            style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+          ),
           value: settings.systemBarsVisible,
           onChanged: (visible) async {
             await settings.setSystemBarsVisible(visible);
@@ -134,10 +193,20 @@ class _SpeechPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('Speech', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Speech',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 20),
         SwitchListTile(
-          title: const Text('Auto-read OpenCode output', style: TextStyle(color: MicroColors.text)),
+          title: const Text(
+            'Auto-read OpenCode output',
+            style: TextStyle(color: MicroColors.text),
+          ),
           value: settings.autoReadOpenCode,
           onChanged: (v) => settings.setAutoReadOpenCode(v),
         ),
@@ -186,7 +255,10 @@ class _GitHubPageState extends State<_GitHubPage> {
     try {
       final identity = await widget.auth.verify(token);
       if (identity == null) {
-        _notify('GitHub rejected this token. Check its validity and repository permissions.', error: true);
+        _notify(
+          'GitHub rejected this token. Check its validity and repository permissions.',
+          error: true,
+        );
         return;
       }
       await widget.auth.saveToken(token, identity.login);
@@ -235,32 +307,64 @@ class _GitHubPageState extends State<_GitHubPage> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('GitHub', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'GitHub',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(_login == null ? 'Not connected' : 'Connected as $_login',
-            style: const TextStyle(color: MicroColors.subtle)),
+        Text(
+          _login == null ? 'Not connected' : 'Connected as $_login',
+          style: const TextStyle(color: MicroColors.subtle),
+        ),
         const SizedBox(height: 16),
-        const Text('Use a Personal Access Token. It is stored in secure platform storage and supplied to Linux tools without writing it into project files.',
-            style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+        const Text(
+          'Use a Personal Access Token. It is stored in secure platform storage and supplied to Linux tools without writing it into project files.',
+          style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+        ),
         const SizedBox(height: 16),
         TextField(
           controller: _token,
           obscureText: true,
           autocorrect: false,
           enableSuggestions: false,
-          decoration: const InputDecoration(labelText: 'GitHub Personal Access Token', hintText: 'ghp_…'),
+          decoration: const InputDecoration(
+            labelText: 'GitHub Personal Access Token',
+            hintText: 'ghp_…',
+          ),
         ),
         const SizedBox(height: 12),
-        Wrap(spacing: 8, children: [
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Verify & Save'),
-          ),
-          TextButton(onPressed: _busy || _login == null ? null : _clear, child: const Text('Disconnect')),
-        ]),
+        Wrap(
+          spacing: 8,
+          children: [
+            FilledButton(
+              onPressed: _busy ? null : _save,
+              child: _busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Verify & Save'),
+            ),
+            TextButton(
+              onPressed: _busy || _login == null ? null : _clear,
+              child: const Text('Disconnect'),
+            ),
+          ],
+        ),
         if (_message != null) ...[
           const SizedBox(height: 12),
-          Text(_message!, style: TextStyle(color: _error ? MicroColors.red : MicroColors.green, fontSize: 12)),
+          Text(
+            _message!,
+            style: TextStyle(
+              color: _error ? MicroColors.red : MicroColors.green,
+              fontSize: 12,
+            ),
+          ),
         ],
       ],
     );
@@ -287,7 +391,8 @@ class _HuggingFacePageState extends State<_HuggingFacePage> {
   void initState() {
     super.initState();
     widget.auth.readHuggingFaceToken().then((value) {
-      if (mounted) setState(() => _account = value == null ? null : 'Token saved');
+      if (mounted)
+        setState(() => _account = value == null ? null : 'Token saved');
     });
   }
 
@@ -352,32 +457,64 @@ class _HuggingFacePageState extends State<_HuggingFacePage> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('Hugging Face', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Hugging Face',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(_account == null ? 'Not connected' : 'Connected · $_account',
-            style: const TextStyle(color: MicroColors.subtle)),
+        Text(
+          _account == null ? 'Not connected' : 'Connected · $_account',
+          style: const TextStyle(color: MicroColors.subtle),
+        ),
         const SizedBox(height: 16),
-        const Text('The access token is stored securely and passed to Linux processes as HF_TOKEN.',
-            style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+        const Text(
+          'The access token is stored securely and passed to Linux processes as HF_TOKEN.',
+          style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+        ),
         const SizedBox(height: 16),
         TextField(
           controller: _token,
           obscureText: true,
           autocorrect: false,
           enableSuggestions: false,
-          decoration: const InputDecoration(labelText: 'Hugging Face access token', hintText: 'hf_…'),
+          decoration: const InputDecoration(
+            labelText: 'Hugging Face access token',
+            hintText: 'hf_…',
+          ),
         ),
         const SizedBox(height: 12),
-        Wrap(spacing: 8, children: [
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Verify & Save'),
-          ),
-          TextButton(onPressed: _busy || _account == null ? null : _clear, child: const Text('Disconnect')),
-        ]),
+        Wrap(
+          spacing: 8,
+          children: [
+            FilledButton(
+              onPressed: _busy ? null : _save,
+              child: _busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Verify & Save'),
+            ),
+            TextButton(
+              onPressed: _busy || _account == null ? null : _clear,
+              child: const Text('Disconnect'),
+            ),
+          ],
+        ),
         if (_message != null) ...[
           const SizedBox(height: 12),
-          Text(_message!, style: TextStyle(color: _error ? MicroColors.red : MicroColors.green, fontSize: 12)),
+          Text(
+            _message!,
+            style: TextStyle(
+              color: _error ? MicroColors.red : MicroColors.green,
+              fontSize: 12,
+            ),
+          ),
         ],
       ],
     );
@@ -393,13 +530,17 @@ class _LinuxPage extends StatelessWidget {
     if (!context.mounted) return;
     if (!status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Storage access was not granted. You can enable it in Android app settings.')),
+        const SnackBar(
+          content: Text(
+            'Storage access was not granted. You can enable it in Android app settings.',
+          ),
+        ),
       );
       if (status.isPermanentlyDenied) await openAppSettings();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Storage access granted.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Storage access granted.')));
     }
   }
 
@@ -407,7 +548,13 @@ class _LinuxPage extends StatelessWidget {
     final code = await runtime.repairPackages();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(code == 0 ? 'Linux package repair completed.' : 'Package repair exited with code $code.')),
+      SnackBar(
+        content: Text(
+          code == 0
+              ? 'Linux package repair completed.'
+              : 'Package repair exited with code $code.',
+        ),
+      ),
     );
   }
 
@@ -416,7 +563,9 @@ class _LinuxPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Stop Linux session?'),
-        content: const Text('This will terminate active Linux terminals, desktop services and browser processes.'),
+        content: const Text(
+          'This will terminate active Linux terminals, desktop services and browser processes.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -432,9 +581,8 @@ class _LinuxPage extends StatelessWidget {
     if (confirmed != true) return;
     await runtime.stopSession();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Linux session stopped.')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Linux session stopped.')));
   }
 
   @override
@@ -442,22 +590,42 @@ class _LinuxPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('Linux', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Linux',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 12),
-        Text('Status: ${runtime.status.name}', style: const TextStyle(color: MicroColors.subtle)),
+        Text(
+          'Status: ${runtime.status.name}',
+          style: const TextStyle(color: MicroColors.subtle),
+        ),
         if (runtime.error != null) ...[
           const SizedBox(height: 8),
-          Text(runtime.error!, style: const TextStyle(color: MicroColors.red, fontSize: 12)),
+          Text(
+            runtime.error!,
+            style: const TextStyle(color: MicroColors.red, fontSize: 12),
+          ),
         ],
         if (runtime.isBusy) ...[
           const SizedBox(height: 12),
-          LinearProgressIndicator(value: runtime.progress == 0 ? null : runtime.progress),
-          Text(runtime.stage, style: const TextStyle(color: MicroColors.subtle, fontSize: 13)),
+          LinearProgressIndicator(
+            value: runtime.progress == 0 ? null : runtime.progress,
+          ),
+          Text(
+            runtime.stage,
+            style: const TextStyle(color: MicroColors.subtle, fontSize: 13),
+          ),
         ],
         const SizedBox(height: 16),
         FilledButton(
           onPressed: runtime.isBusy ? null : () => runtime.install(),
-          child: Text(runtime.isReady ? 'Reinstall Workstation' : 'Install Workstation'),
+          child: Text(
+            runtime.isReady ? 'Reinstall Workstation' : 'Install Workstation',
+          ),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
@@ -466,12 +634,16 @@ class _LinuxPage extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         OutlinedButton(
-          onPressed: !runtime.isReady || runtime.isBusy ? null : () => _repair(context),
+          onPressed: !runtime.isReady || runtime.isBusy
+              ? null
+              : () => _repair(context),
           child: const Text('Repair Linux packages'),
         ),
         const SizedBox(height: 8),
         OutlinedButton(
-          onPressed: runtime.hasActiveSession ? () => _stopSession(context) : null,
+          onPressed: runtime.hasActiveSession
+              ? () => _stopSession(context)
+              : null,
           child: const Text('Stop Linux session'),
         ),
       ],
@@ -488,9 +660,19 @@ class _TerminalPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('Terminal', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Terminal',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 20),
-        Text('Font size: ${settings.terminalFontSize.round()}', style: const TextStyle(color: MicroColors.text)),
+        Text(
+          'Font size: ${settings.terminalFontSize.round()}',
+          style: const TextStyle(color: MicroColors.text),
+        ),
         Slider(
           value: settings.terminalFontSize,
           min: 10,
@@ -526,10 +708,23 @@ class _BrowserPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('Browser', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Browser',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         SwitchListTile(
-          title: const Text('Single-process mode', style: TextStyle(color: MicroColors.text)),
-          subtitle: const Text('More stable on low-memory devices', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          title: const Text(
+            'Single-process mode',
+            style: TextStyle(color: MicroColors.text),
+          ),
+          subtitle: const Text(
+            'More stable on low-memory devices',
+            style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+          ),
           value: settings.singleProcessBrowser,
           onChanged: (v) => settings.setSingleProcessBrowser(v),
         ),
@@ -598,10 +793,14 @@ class _LoginPageState extends State<_LoginPage> {
       await widget.settings.setLoginPassword(_password.text);
       _password.clear();
       _confirmation.clear();
-      if (mounted) setState(() => _message = 'Lock screen password saved securely.');
+      if (mounted)
+        setState(() => _message = 'Lock screen password saved securely.');
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Encrypted storage could not save the password. Try again.');
+        setState(
+          () => _error =
+              'Encrypted storage could not save the password. Try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -621,7 +820,10 @@ class _LoginPageState extends State<_LoginPage> {
       if (mounted) setState(() => _message = 'Lock screen password removed.');
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Encrypted storage could not remove the password. Try again.');
+        setState(
+          () => _error =
+              'Encrypted storage could not remove the password. Try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -634,7 +836,14 @@ class _LoginPageState extends State<_LoginPage> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('Users & Login', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Users & Login',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 12),
         TextField(
           controller: _name,
@@ -652,9 +861,13 @@ class _LoginPageState extends State<_LoginPage> {
         ),
         const SizedBox(height: 20),
         Text(
-          settings.hasPassword ? 'Password protection is enabled' : 'No lock password is set',
+          settings.hasPassword
+              ? 'Password protection is enabled'
+              : 'No lock password is set',
           style: TextStyle(
-            color: settings.hasPassword ? MicroColors.green : MicroColors.subtle,
+            color: settings.hasPassword
+                ? MicroColors.green
+                : MicroColors.subtle,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -667,11 +880,14 @@ class _LoginPageState extends State<_LoginPage> {
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(
             labelText: 'New lock screen password',
-            helperText: 'At least 4 characters. Saved using Android encrypted storage.',
+            helperText:
+                'At least 4 characters. Saved using Android encrypted storage.',
             suffixIcon: IconButton(
               tooltip: _showPassword ? 'Hide password' : 'Show password',
               onPressed: () => setState(() => _showPassword = !_showPassword),
-              icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+              icon: Icon(
+                _showPassword ? Icons.visibility_off : Icons.visibility,
+              ),
             ),
           ),
         ),
@@ -688,7 +904,11 @@ class _LoginPageState extends State<_LoginPage> {
         const SizedBox(height: 8),
         const Text(
           'This password protects the Misty OS lock screen only. It does not encrypt Linux files or replace your Android device lock.',
-          style: TextStyle(color: MicroColors.subtle, fontSize: 12, height: 1.4),
+          style: TextStyle(
+            color: MicroColors.subtle,
+            fontSize: 12,
+            height: 1.4,
+          ),
         ),
         if (settings.loginPasswordStorageUnavailable) ...[
           const SizedBox(height: 8),
@@ -713,18 +933,26 @@ class _LoginPageState extends State<_LoginPage> {
               child: Text(_saving ? 'Saving…' : 'Save password'),
             ),
             TextButton(
-              onPressed: _saving || !settings.hasPassword ? null : _removePassword,
+              onPressed: _saving || !settings.hasPassword
+                  ? null
+                  : _removePassword,
               child: const Text('Remove password'),
             ),
           ],
         ),
         if (_error != null) ...[
           const SizedBox(height: 12),
-          Text(_error!, style: const TextStyle(color: MicroColors.red, fontSize: 12)),
+          Text(
+            _error!,
+            style: const TextStyle(color: MicroColors.red, fontSize: 12),
+          ),
         ],
         if (_message != null) ...[
           const SizedBox(height: 12),
-          Text(_message!, style: const TextStyle(color: MicroColors.green, fontSize: 12)),
+          Text(
+            _message!,
+            style: const TextStyle(color: MicroColors.green, fontSize: 12),
+          ),
         ],
       ],
     );
@@ -739,10 +967,547 @@ class _AboutPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text('About Misty OS', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'About Misty OS',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         SizedBox(height: 12),
-        Text('Misty OS is a lightweight, cloud-native Linux workstation designed to run seamlessly on mobile hardware.', style: TextStyle(color: MicroColors.subtle)),
+        Text(
+          'Misty OS is a lightweight, cloud-native Linux workstation designed to run seamlessly on mobile hardware.',
+          style: TextStyle(color: MicroColors.subtle),
+        ),
       ],
+    );
+  }
+}
+
+/// Read-only view over the Misty Performance Engine telemetry.
+///
+/// The page owns its monitor: polling `/proc` and collecting frame timings only
+/// happens while this page is on screen, so the shell pays nothing for telemetry
+/// it is not displaying.
+class _PerformancePage extends StatefulWidget {
+  const _PerformancePage();
+
+  @override
+  State<_PerformancePage> createState() => _PerformancePageState();
+}
+
+class _PerformancePageState extends State<_PerformancePage> {
+  final PerformanceMonitor _monitor = PerformanceMonitor();
+
+  @override
+  void initState() {
+    super.initState();
+    _monitor.start();
+  }
+
+  @override
+  void dispose() {
+    _monitor.dispose();
+    super.dispose();
+  }
+
+  String _mb(int megabytes) {
+    if (megabytes <= 0) return '0 MB';
+    if (megabytes >= 1024) return '${(megabytes / 1024).toStringAsFixed(1)} GB';
+    return '$megabytes MB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _monitor,
+      builder: (context, _) {
+        final snapshot = _monitor.snapshot;
+        final memory = snapshot.memory;
+        final frames = snapshot.frames;
+        final pressure = snapshot.memoryPressureAvg10;
+
+        return ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Performance',
+                    style: TextStyle(
+                      color: MicroColors.text,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Reset frame statistics',
+                  onPressed: _monitor.resetFrameStats,
+                  icon: const Icon(
+                    Icons.restart_alt_rounded,
+                    size: 20,
+                    color: MicroColors.subtle,
+                  ),
+                ),
+              ],
+            ),
+            const Text(
+              'Every value is measured on this device. Sources the kernel hides are '
+              'reported as unavailable instead of being estimated.',
+              style: TextStyle(
+                color: MicroColors.subtle,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            _PerfCard(
+              title: 'Dominant bottleneck',
+              trailing: snapshot.capturedAt == null
+                  ? 'sampling…'
+                  : 'updated ${snapshot.capturedAt!.hour.toString().padLeft(2, '0')}:'
+                        '${snapshot.capturedAt!.minute.toString().padLeft(2, '0')}:'
+                        '${snapshot.capturedAt!.second.toString().padLeft(2, '0')}',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    describeBottleneck(snapshot),
+                    style: const TextStyle(
+                      color: Sequoia.label,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _PerfPill(
+                        label: 'CPU',
+                        value: formatPercent(snapshot.cpuPercent),
+                      ),
+                      _PerfPill(
+                        label: 'Memory pressure',
+                        value: pressure == null
+                            ? 'unavailable'
+                            : '${pressure.toStringAsFixed(1)}% · '
+                                  '${pressureBand(pressure)}',
+                      ),
+                      _PerfPill(
+                        label: 'Frames p95',
+                        value: frames.hasData
+                            ? formatMs(frames.p95)
+                            : 'no frames yet',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            _PerfCard(
+              title: 'Memory',
+              trailing: memory.readable
+                  ? '${_mb(memory.usedMb)} of ${_mb(memory.totalMb)}'
+                  : 'unavailable',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: memory.readable ? memory.usedFraction : null,
+                      minHeight: 6,
+                      backgroundColor: Colors.white.withValues(alpha: 0.10),
+                      color: Sequoia.accent,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _PerfRow(
+                    label: 'Available',
+                    value: memory.readable
+                        ? _mb(memory.availableMb)
+                        : 'unavailable',
+                  ),
+                  _PerfRow(
+                    label: 'Cached',
+                    value: memory.readable
+                        ? _mb(memory.cachedKb ~/ 1024)
+                        : 'unavailable',
+                  ),
+                  _PerfRow(
+                    label: 'Anonymous pages',
+                    value: memory.readable
+                        ? _mb(memory.anonKb ~/ 1024)
+                        : 'unavailable',
+                  ),
+                  _PerfRow(
+                    label: 'ZRAM / swap in use',
+                    value: memory.swapTotalMb > 0
+                        ? '${_mb(memory.swapUsedMb)} of ${_mb(memory.swapTotalMb)}'
+                        : 'no swap device',
+                  ),
+                  _PerfRow(
+                    label: 'PSI memory stall',
+                    value: pressure == null
+                        ? 'unavailable'
+                        : '${pressure.toStringAsFixed(1)}% · ${pressureBand(pressure)}',
+                  ),
+                ],
+              ),
+            ),
+            _PerfCard(
+              title: 'ZRAM compression',
+              trailing: formatRatio(snapshot.zramRatio),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _PerfRow(
+                    label: 'Compressed memory',
+                    value: snapshot.zramUsedMb == null
+                        ? 'unavailable'
+                        : _mb(snapshot.zramUsedMb!),
+                  ),
+                  _PerfRow(
+                    label: 'Physical RAM currently used',
+                    value: memory.readable ? _mb(memory.usedMb) : 'unavailable',
+                  ),
+                  const Text(
+                    'zram0 counters are readable on most Android kernels; when SELinux hides '
+                    'them the ratio stays unavailable rather than being guessed.',
+                    style: TextStyle(
+                      color: MicroColors.subtle,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _PerfCard(
+              title: 'Rendering',
+              trailing: frames.hasData
+                  ? '${frames.samples} frames'
+                  : 'no samples',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _PerfStat(
+                          label: 'p50',
+                          value: frames.hasData ? formatMs(frames.p50) : '—',
+                        ),
+                      ),
+                      Expanded(
+                        child: _PerfStat(
+                          label: 'p95',
+                          value: frames.hasData ? formatMs(frames.p95) : '—',
+                        ),
+                      ),
+                      Expanded(
+                        child: _PerfStat(
+                          label: 'p99',
+                          value: frames.hasData ? formatMs(frames.p99) : '—',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    frames.hasData && frames.p95 <= 16.7
+                        ? 'Frame pacing is inside the 16.7 ms budget (60 fps).'
+                        : 'Frame pacing is above the 16.7 ms budget; expect visible stutter.',
+                    style: TextStyle(
+                      color: frames.hasData && frames.p95 <= 16.7
+                          ? MicroColors.green
+                          : MicroColors.subtle,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _PerfCard(
+              title: 'Top processes by RSS',
+              child: snapshot.topProcesses.isEmpty
+                  ? const Text(
+                      'Android does not expose other applications to third-party /proc reads, '
+                      'so no process list is available on this device.',
+                      style: TextStyle(
+                        color: MicroColors.subtle,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final process in snapshot.topProcesses)
+                          _PerfRow(
+                            label: '${process.name} (${process.pid})',
+                            value: _mb(process.rssMb),
+                          ),
+                        if (snapshot.processListLimited)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Only processes visible to this app are listed.',
+                              style: TextStyle(
+                                color: MicroColors.subtle,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PerfCard extends StatelessWidget {
+  const _PerfCard({required this.title, required this.child, this.trailing});
+
+  final String title;
+  final String? trailing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: Sequoia.groupedCard(radius: Sequoia.popoverRadius),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: MicroColors.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (trailing != null)
+                Text(
+                  trailing!,
+                  style: const TextStyle(
+                    color: MicroColors.subtle,
+                    fontSize: 11,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _PerfPill extends StatelessWidget {
+  const _PerfPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: MicroColors.subtle, fontSize: 10),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              color: MicroColors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PerfRow extends StatelessWidget {
+  const _PerfRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: MicroColors.subtle, fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            value,
+            style: const TextStyle(
+              color: MicroColors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PerfStat extends StatelessWidget {
+  const _PerfStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            color: MicroColors.text,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Sequoia-style sidebar row: 34 px tall, 7 px radius selection pill.
+class _SidebarItem extends StatelessWidget {
+  const _SidebarItem({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(7),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(7),
+          onTap: onTap,
+          child: Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? Sequoia.accent.withValues(alpha: 0.26)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(7),
+            ),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? Sequoia.label : Sequoia.labelSecondary,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact page switcher shown when the window is too narrow for a sidebar.
+class _CompactPageTab extends StatelessWidget {
+  const _CompactPageTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected
+                ? Sequoia.accent.withValues(alpha: 0.26)
+                : Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Sequoia.label : Sequoia.labelSecondary,
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

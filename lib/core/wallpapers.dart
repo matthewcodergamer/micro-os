@@ -23,6 +23,11 @@ const List<MistyWallpaper> kWallpapers = <MistyWallpaper>[
     asset: 'assets/wallpapers/option3.png',
   ),
   MistyWallpaper(
+    id: 'sequoia',
+    name: 'Sequoia',
+    asset: 'assets/wallpapers/sequoia.jpg',
+  ),
+  MistyWallpaper(
     id: 'bigsur',
     name: 'Big Sur',
     asset: 'assets/wallpapers/wallpaper-bigsur.png',
