@@ -479,6 +479,30 @@ class LinuxRuntime extends ChangeNotifier {
   }
 
   /// Starts an interactive shell (or [argv]) inside the guest.
+  /// Saves the Xvfb framebuffer size and applies it to a running display.
+  /// The saved value is read by start-gui.sh on the next session as well.
+  Future<bool> setDisplayResolution(String resolution) async {
+    const supported = {'1024x768', '1280x720', '1600x900', '1920x1080'};
+    if (!supported.contains(resolution) || !isReady) return false;
+    final pty = startShell(argv: <String>[
+      '/bin/bash', '-lc',
+      r'''set -eu
+mkdir -p /root/.microos
+printf '%s\n' "$1" > /root/.microos/display-resolution
+if [ -S /tmp/.X11-unix/X1 ]; then
+  xrandr --display :1 --fb "$1"
+fi''',
+      'microos-display', resolution,
+    ]);
+    try {
+      return await pty.exitCode.timeout(const Duration(seconds: 8)) == 0;
+    } catch (_) {
+      return false;
+    } finally {
+      pty.kill();
+    }
+  }
+
   Pty startShell({List<String>? argv}) {
     unawaited(_ensureBackgroundSession());
     final pty = Pty.start(
