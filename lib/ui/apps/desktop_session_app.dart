@@ -507,20 +507,48 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       child: Column(
         children: [
           Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            color: const Color(0xFF141822),
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  MicroColors.windowHeader,
+                  Sequoia.toolbarTint.withValues(alpha: 0.96),
+                ],
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.075),
+                  width: 0.7,
+                ),
+              ),
+            ),
             child: Row(
               children: [
-                const Icon(Icons.circle, size: 8, color: MicroColors.green),
-                const SizedBox(width: 6),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: MicroColors.green,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 if (widget.launchBrowser) ...[
                   DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _selectedBrowser,
                       isDense: true,
                       dropdownColor: const Color(0xFF202735),
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      borderRadius: BorderRadius.circular(10),
+                      iconSize: 16,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                       items: const [
                         DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
                         DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
@@ -534,7 +562,11 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                   child: Text(
                     _status,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
+                    style: const TextStyle(
+                      color: MicroColors.subtle,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
                 if (controller != null) ...[
