@@ -21,6 +21,8 @@ class SettingsStore extends ChangeNotifier {
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
   static const _kWallpaper = 'desktop.wallpaper';
+  static const _kTrackpadMode = 'desktop.trackpad_mode';
+  static const _kTrackpadSpeed = 'desktop.trackpad_speed';
 
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -38,6 +40,8 @@ class SettingsStore extends ChangeNotifier {
   bool loginPasswordMigrationPending = false;
   bool dockAutoHide = true;
   bool systemBarsVisible = false;
+  bool trackpadMode = true;
+  double trackpadSpeed = 1.35;
 
   bool get hasPassword =>
       loginPasswordStorageUnavailable ||
@@ -59,6 +63,8 @@ class SettingsStore extends ChangeNotifier {
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
+    trackpadMode = prefs.getBool(_kTrackpadMode) ?? true;
+    trackpadSpeed = (prefs.getDouble(_kTrackpadSpeed) ?? 1.35).clamp(0.7, 2.2).toDouble();
 
     // Migrate older installations that kept the password in plain preferences.
     final legacyPassword = prefs.getString(_kLoginPassword);
@@ -171,6 +177,20 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kWallpaper, wallpaper);
+  }
+
+  Future<void> setTrackpadMode(bool value) async {
+    trackpadMode = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kTrackpadMode, value);
+  }
+
+  Future<void> setTrackpadSpeed(double value) async {
+    trackpadSpeed = value.clamp(0.7, 2.2).toDouble();
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kTrackpadSpeed, trackpadSpeed);
   }
 
   Future<void> markInstalled() async {
