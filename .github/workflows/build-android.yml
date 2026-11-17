@@ -84,6 +84,10 @@ jobs:
           grep -q '_WallpaperPage' lib/ui/apps/settings_app.dart
           grep -q 'settings.setWallpaper(wallpaper.id)' lib/ui/apps/settings_app.dart
           grep -q 'wallpaperById' lib/core/wallpapers.dart
+          grep -q '_PointerPage' lib/ui/apps/settings_app.dart
+          grep -q 'setTrackpadMode' lib/services/settings_store.dart
+          grep -q 'setTrackpadSpeed' lib/services/settings_store.dart
+          grep -q '_syncTrackpadSettings' lib/ui/apps/desktop_session_app.dart
           grep -q '_visiblePages' lib/ui/apps/settings_app.dart
           grep -q 'Icons.display_settings_rounded' lib/ui/apps/settings_app.dart
           grep -q '_goBack' lib/ui/apps/files_app.dart
