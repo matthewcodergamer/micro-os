@@ -435,7 +435,14 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
               ),
               PopupMenuButton<String>(
                 tooltip: 'View options', icon: const Icon(Icons.view_column_rounded, size: 18, color: MicroColors.text),
-                onSelected: (v) => setState(() { _listView = v == 'list'; _columnSelection = v == 'columns' ? '' : null; }),
+                onSelected: (v) => setState(() {
+                  if (v == 'hidden') {
+                    _showHiddenFiles = !_showHiddenFiles;
+                  } else {
+                    _listView = v == 'list';
+                    _columnSelection = v == 'columns' ? '' : null;
+                  }
+                }),
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'icons', child: Text('Icon View')),
                   const PopupMenuItem(value: 'list', child: Text('List View')),
