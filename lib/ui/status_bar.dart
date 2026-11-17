@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 import '../app_scope.dart';
 import '../core/format.dart';
@@ -61,9 +62,13 @@ class _StatusBarState extends State<StatusBar> {
       // pixels as maximised windows, and blurring a region that contains an
       // Android platform view (the noVNC surface) blanks that region on some
       // GPUs. A translucent gradient gives the Sequoia look without the risk.
-      child: Container(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 390;
+          final showDate = constraints.maxWidth >= 340;
+          return Container(
         height: widget.height,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 12),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -84,7 +89,7 @@ class _StatusBarState extends State<StatusBar> {
           children: [
             // Apple menu
             _MenuButton(
-              label: '',
+              label: 'Misty',
               items: [
                 PopupMenuItem(
                   onTap: () {},
@@ -109,50 +114,76 @@ class _StatusBarState extends State<StatusBar> {
             ),
             const Spacer(),
             // Status items
-            IconButton(
-              icon: const Icon(
-                Icons.search_rounded,
-                size: 18,
-                color: Colors.white,
-              ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
-              onPressed: widget.onSpotlight,
+            _StatusAction(
               tooltip: 'Spotlight',
+              onPressed: widget.onSpotlight,
+              icon: CupertinoIcons.search,
+              size: compact ? 17 : 18,
             ),
-            IconButton(
-              icon: const Icon(
-                Icons.apps_rounded,
-                size: 19,
-                color: Colors.white,
-              ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
-              onPressed: widget.onLaunchpad,
+            _StatusAction(
               tooltip: 'Launchpad',
+              onPressed: widget.onLaunchpad,
+              icon: CupertinoIcons.square_grid_2x2,
+              size: compact ? 17 : 18,
             ),
-            IconButton(
-              icon: const Icon(
-                Icons.toggle_on_rounded,
-                size: 20,
-                color: Colors.white,
-              ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
-              onPressed: widget.onControlCenter,
+            _StatusAction(
               tooltip: 'Control Center',
+              onPressed: widget.onControlCenter,
+              icon: CupertinoIcons.slider_horizontal_3,
+              size: compact ? 17 : 18,
             ),
-            const SizedBox(width: 4),
-            Text(
-              menuBarDate(_now, compact: true),
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-            ),
+            if (showDate) ...[
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  menuBarDate(_now, compact: true),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    fontSize: compact ? 11 : 12,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -0.15,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
+      );
+        },
       ),
     );
   }
 }
+
+class _StatusAction extends StatelessWidget {
+  const _StatusAction({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+    required this.size,
+  });
+
+  final String tooltip;
+  final VoidCallback onPressed;
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    icon: Icon(icon, size: size, color: Colors.white),
+    padding: EdgeInsets.zero,
+    constraints: const BoxConstraints(minWidth: 30, minHeight: 28),
+    visualDensity: VisualDensity.compact,
+    splashRadius: 17,
+    onPressed: onPressed,
+    tooltip: tooltip,
+  );
+}
+
+
 
 class _MenuButton extends StatelessWidget {
   const _MenuButton({required this.label, required this.items});
