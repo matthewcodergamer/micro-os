@@ -135,14 +135,14 @@ class DesktopState extends ChangeNotifier {
       // orientation or Dock changes. Maximized windows are glued to it.
       for (final w in windows) {
         if (w.minimized) {
-          final saved = w.restoreRect ?? w.rect;
+          final saved = w.minimizedRestoreRect ?? w.rect;
           final width = math.min(saved.width, _area(screen).width);
           final height = math.min(saved.height, _area(screen).height);
           final area = _area(screen);
           final left = _clampD(saved.left, area.left, area.right - width);
           final top = _clampD(saved.top, area.top, area.bottom - height);
-          w.restoreRect = Rect.fromLTWH(left, top, width, height);
-          w.rect = _minimizedRect(screen, w.restoreRect!);
+          w.minimizedRestoreRect = Rect.fromLTWH(left, top, width, height);
+          w.rect = _minimizedRect(screen, w.minimizedRestoreRect!);
         } else if (w.maximized || w.pinned) {
           w.rect = _maxRect(screen);
         } else {
@@ -238,8 +238,8 @@ class DesktopState extends ChangeNotifier {
     if (w == null) return;
     if (w.minimized) {
       w.minimized = false;
-      if (w.restoreRect != null) w.rect = w.restoreRect!;
-      w.restoreRect = null;
+      if (w.minimizedRestoreRect != null) w.rect = w.minimizedRestoreRect!;
+      w.minimizedRestoreRect = null;
     }
     w.zIndex = ++_zCounter;
     notifyListeners();
@@ -257,9 +257,9 @@ class DesktopState extends ChangeNotifier {
         );
     if (w == null) return;
     if (w.minimized) return;
-    w.restoreRect = w.rect;
+    w.minimizedRestoreRect = w.rect;
     w.minimized = true;
-    w.rect = _minimizedRect(_screen.isEmpty ? const Size(1080, 1920) : _screen, w.restoreRect!);
+    w.rect = _minimizedRect(_screen.isEmpty ? const Size(1080, 1920) : _screen, w.minimizedRestoreRect!);
     notifyListeners();
   }
 
