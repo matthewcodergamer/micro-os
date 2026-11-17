@@ -93,6 +93,15 @@ class DesktopState extends ChangeNotifier {
     return Rect.fromLTRB(0, topReserve, screen.width, bottom);
   }
 
+  /// Where a minimized window animates while remaining mounted. Keeping its
+  /// child alive preserves browser/WebView and terminal sessions across restore.
+  Rect _minimizedRect(Size screen, Rect saved) => Rect.fromLTWH(
+        saved.left,
+        screen.height + 40,
+        saved.width,
+        saved.height,
+      );
+
   /// Where a maximized window sits. On phones the Dock is hidden while a
   /// window is maximized, so it runs to the bottom edge.
   Rect _maxRect(Size screen) {
@@ -125,7 +134,16 @@ class DesktopState extends ChangeNotifier {
       // Keep every window inside the usable area when the keyboard,
       // orientation or Dock changes. Maximized windows are glued to it.
       for (final w in windows) {
-        if (w.maximized || w.pinned) {
+        if (w.minimized) {
+          final saved = w.restoreRect ?? w.rect;
+          final width = math.min(saved.width, _area(screen).width);
+          final height = math.min(saved.height, _area(screen).height);
+          final area = _area(screen);
+          final left = _clampD(saved.left, area.left, area.right - width);
+          final top = _clampD(saved.top, area.top, area.bottom - height);
+          w.restoreRect = Rect.fromLTWH(left, top, width, height);
+          w.rect = _minimizedRect(screen, w.restoreRect!);
+        } else if (w.maximized || w.pinned) {
           w.rect = _maxRect(screen);
         } else {
           final area = _area(screen);
@@ -158,9 +176,6 @@ class DesktopState extends ChangeNotifier {
     if (!newWindow) {
       final existing = windowFor(app);
       if (existing != null) {
-        if (existing.minimized) {
-          existing.minimized = false;
-        }
         focus(existing.id);
         return existing;
       }
@@ -221,7 +236,11 @@ class DesktopState extends ChangeNotifier {
           orElse: () => null,
         );
     if (w == null) return;
-    if (w.minimized) w.minimized = false;
+    if (w.minimized) {
+      w.minimized = false;
+      if (w.restoreRect != null) w.rect = w.restoreRect!;
+      w.restoreRect = null;
+    }
     w.zIndex = ++_zCounter;
     notifyListeners();
   }
@@ -237,7 +256,10 @@ class DesktopState extends ChangeNotifier {
           orElse: () => null,
         );
     if (w == null) return;
+    if (w.minimized) return;
+    w.restoreRect = w.rect;
     w.minimized = true;
+    w.rect = _minimizedRect(_screen.isEmpty ? const Size(1080, 1920) : _screen, w.restoreRect!);
     notifyListeners();
   }
 
