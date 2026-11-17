@@ -277,7 +277,7 @@ class _PointerPage extends StatelessWidget {
           min: 0.7,
           max: 2.2,
           divisions: 15,
-          value: speed.clamp(0.7, 2.2),
+          value: speed.clamp(0.7, 2.2).toDouble(),
           label: '${speed.toStringAsFixed(2)}×',
           onChanged: (value) => settings.setTrackpadSpeed(value),
         ),
