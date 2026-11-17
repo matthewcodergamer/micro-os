@@ -104,6 +104,9 @@ jobs:
           grep -q '_breadcrumbs' lib/ui/apps/files_app.dart
           grep -q '_trashSelected' lib/ui/apps/files_app.dart
           grep -q 'Copy selected paths' lib/ui/apps/files_app.dart
+          grep -q '_previewEntry' lib/ui/apps/files_app.dart
+          grep -q 'MICROOS_PREVIEW_TOO_LARGE' lib/ui/apps/files_app.dart
+          grep -q 'imageBytes' lib/ui/apps/files_app.dart
           grep -q 'browserHomePage' lib/services/settings_store.dart
           grep -q 'setBrowserEngine' lib/services/settings_store.dart
           grep -q 'Default browser' lib/ui/apps/settings_app.dart
