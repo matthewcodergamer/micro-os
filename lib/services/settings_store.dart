@@ -18,6 +18,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kTerminalProfile = 'terminal.profile';
   static const _kDockAutoHide = 'dock.auto_hide';
   static const _kDockScale = 'dock.scale';
+  static const _kDockMagnification = 'dock.magnification';
   static const _kSystemBarsVisible = 'system.bars_visible';
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
@@ -41,6 +42,7 @@ class SettingsStore extends ChangeNotifier {
   bool loginPasswordMigrationPending = false;
   bool dockAutoHide = true;
   double dockScale = 1.0;
+  bool dockMagnification = true;
   bool systemBarsVisible = false;
   bool trackpadMode = true;
   double trackpadSpeed = 1.35;
@@ -64,6 +66,7 @@ class SettingsStore extends ChangeNotifier {
     userName = prefs.getString(_kUserName) ?? 'Misty OS User';
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
     dockScale = (prefs.getDouble(_kDockScale) ?? 1.0).clamp(0.8, 1.2).toDouble();
+    dockMagnification = prefs.getBool(_kDockMagnification) ?? true;
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
     trackpadMode = prefs.getBool(_kTrackpadMode) ?? true;
@@ -159,6 +162,13 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kSystemBarsVisible, value);
+  }
+
+  Future<void> setDockMagnification(bool value) async {
+    dockMagnification = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kDockMagnification, value);
   }
 
   Future<void> setDockScale(double value) async {
