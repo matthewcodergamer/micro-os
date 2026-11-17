@@ -79,6 +79,12 @@ jobs:
           grep -q 'window-maximize' tool/setup.sh
           grep -q 'window-restore' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
+          grep -q '_sidebarItem' lib/ui/apps/files_app.dart
+          grep -q '_goBack' lib/ui/apps/files_app.dart
+          grep -q '_goForward' lib/ui/apps/files_app.dart
+          grep -q '_columnView' lib/ui/apps/files_app.dart
+          grep -q 'Move to Trash' lib/ui/apps/files_app.dart
+          grep -q 'Duplicate' lib/ui/apps/files_app.dart
           grep -q 'Do not launch Chromium as a side effect' tool/setup.sh
           ! grep -q "start-browser.sh --new-window chrome://newtab/" tool/setup.sh
           grep -q 'websockify --host=127.0.0.1' tool/setup.sh
