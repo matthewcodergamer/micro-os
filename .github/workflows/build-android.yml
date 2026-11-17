@@ -79,6 +79,8 @@ jobs:
           grep -q 'window-maximize' tool/setup.sh
           grep -q 'window-restore' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
+          grep -q 'Do not launch Chromium as a side effect' tool/setup.sh
+          ! grep -q "start-browser.sh --new-window chrome://newtab/" tool/setup.sh
           grep -q 'websockify --host=127.0.0.1' tool/setup.sh
           grep -q 'wait_for_novnc_http' tool/setup.sh
           grep -q 'http://127.0.0.1:6080/vnc.html' tool/setup.sh
