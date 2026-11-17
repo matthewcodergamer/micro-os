@@ -32,6 +32,7 @@ package com.matthewcodergamer.micro_os
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Build
+import android.provider.Settings
 import kotlin.math.roundToInt
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
@@ -94,6 +95,19 @@ class MainActivity : FlutterActivity() {
                         val currentBrightness = window.attributes.screenBrightness
                         val brightness = if (currentBrightness < 0f) 0.75f else currentBrightness
                         result.success(mapOf("brightness" to brightness.toDouble(), "volume" to volume))
+                    }
+                    "openNetworkSettings" -> {
+                        try {
+                            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)
+                            } else {
+                                Intent(Settings.ACTION_WIFI_SETTINGS)
+                            }
+                            startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            result.success(true)
+                        } catch (error: Exception) {
+                            result.error("NETWORK_SETTINGS_FAILED", error.message, null)
+                        }
                     }
                     "setBrightness" -> {
                         val value = (call.argument<Double>("value") ?: 0.75).toFloat().coerceIn(0.05f, 1f)
