@@ -574,11 +574,32 @@ class LinuxRuntime extends ChangeNotifier {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       final vnc = await _isPortOpen(5900);
-      final bridge = vnc && await _isPortOpen(6080);
+      // A listening socket alone can be stale or belong to the wrong service.
+      // Require the actual noVNC page to be served before attaching a WebView.
+      final bridge = vnc && await _isNoVncHttpReady();
       if (vnc && bridge) return true;
       await Future<void>.delayed(const Duration(milliseconds: 350));
     }
     return false;
+  }
+
+  Future<bool> _isNoVncHttpReady() async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 2);
+    try {
+      final request = await client
+          .getUrl(Uri.parse('http://127.0.0.1:6080/vnc.html'))
+          .timeout(const Duration(seconds: 2));
+      final response = await request.close().timeout(
+        const Duration(seconds: 2),
+      );
+      await response.drain<void>();
+      return response.statusCode == HttpStatus.ok;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
   }
 
   Future<bool> _isPortOpen(int port) async {
