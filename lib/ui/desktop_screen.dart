@@ -149,7 +149,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
             // full-bleed, mis-stacked or invisible.
             if (runtime.isReady)
               for (final window in desktop.ordered)
-                if (!window.minimized)
                   WindowFrame(
                     window: window,
                     desktop: desktop,
