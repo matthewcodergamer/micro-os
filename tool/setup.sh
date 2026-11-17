@@ -642,7 +642,8 @@ cat > /root/.microos/start-gui.sh <<'EOF'
 set -Eeuo pipefail
 export DISPLAY=:1 XCURSOR_THEME=WhiteSur-cursors XCURSOR_SIZE=24
 export XDG_RUNTIME_DIR=/tmp/microos-runtime
-GEOMETRY="1280x720x24"
+RESOLUTION="$(cat /root/.microos/display-resolution 2>/dev/null || printf '1280x720')"
+GEOMETRY="${RESOLUTION}x24"
 LOG=/tmp/.microos
 mkdir -p "$LOG" "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
 for process in websockify x11vnc openbox Xvfb; do pkill -9 -x "$process" 2>/dev/null || true; done
