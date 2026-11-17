@@ -1069,6 +1069,8 @@ class _BrowserPage extends StatelessWidget {
           ),
         ),
         const Text('Default browser', style: TextStyle(color: MicroColors.text)),
+        const SizedBox(height: 4),
+        const Text('The selected engine is used the next time the browser opens. Changes from the browser toolbar are saved here too.', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           value: settings.browserEngine as String,
