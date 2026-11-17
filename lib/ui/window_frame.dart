@@ -92,10 +92,32 @@ class _TitleBar extends StatelessWidget {
   final Size screen;
   final bool focused;
 
+  Future<void> _showWindowActions(BuildContext context) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: MicroColors.panelSolid,
+      showDragHandle: true,
+      builder: (context) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.vertical_split_rounded), title: const Text('Tile Left'), onTap: () => Navigator.pop(context, 'left')),
+        ListTile(leading: const Icon(Icons.vertical_split_rounded), title: const Text('Tile Right'), onTap: () => Navigator.pop(context, 'right')),
+        ListTile(leading: const Icon(Icons.center_focus_strong_rounded), title: const Text('Center Window'), onTap: () => Navigator.pop(context, 'center')),
+        ListTile(leading: const Icon(Icons.open_in_full_rounded), title: const Text('Zoom'), onTap: () => Navigator.pop(context, 'zoom')),
+      ])),
+    );
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case 'left': desktop.snapToHalf(window.id, screen, left: true);
+      case 'right': desktop.snapToHalf(window.id, screen, left: false);
+      case 'center': desktop.centerWindow(window.id, screen);
+      case 'zoom': desktop.toggleMaximize(window.id, screen);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onDoubleTap: () => desktop.toggleMaximize(window.id, screen),
+      onLongPress: () => _showWindowActions(context),
       onPanUpdate: window.maximized
           ? null
           : (d) => desktop.move(window.id, d.delta, screen),
