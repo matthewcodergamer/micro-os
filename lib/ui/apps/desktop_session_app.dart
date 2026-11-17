@@ -335,6 +335,15 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             cursorY=Math.max(r.top+1,Math.min(r.bottom-2,cursorY));
             cursor.style.left=cursorX+'px'; cursor.style.top=cursorY+'px';
           };
+          // Keep the pointer inside the live noVNC canvas after rotation,
+          // browser chrome changes, or a resized remote desktop.
+          const resizePointer=()=>{if(trackpad&&cursorX!==0&&cursorY!==0)clampCursor();};
+          if(typeof ResizeObserver!=='undefined'){
+            const canvasObserver=new ResizeObserver(resizePointer);
+            canvasObserver.observe(target);
+          }
+          window.addEventListener('resize',resizePointer,{passive:true});
+          window.visualViewport?.addEventListener('resize',resizePointer,{passive:true});
           const moveCursor=(dx,dy)=>{cursorX+=dx*sensitivity;cursorY+=dy*sensitivity;clampCursor();mouse('mousemove',cursorX,cursorY,-1,0);};
           const setMode=enabled=>{
             trackpad=!!enabled;
