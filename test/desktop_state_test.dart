@@ -54,6 +54,24 @@ void main() {
       desktop.dispose();
     });
 
+    test('minimized windows remain restorable with their original geometry', () {
+      final desktop = DesktopState(LinuxRuntime());
+      desktop.syncToScreen(const Size(1200, 800));
+      final window = desktop.open(AppId.browser, screen: const Size(1200, 800));
+      final original = window.rect;
+
+      desktop.minimize(window.id);
+      expect(window.minimized, isTrue);
+      expect(window.rect.top, greaterThan(800));
+      expect(desktop.windowFor(AppId.browser), same(window));
+
+      desktop.focus(window.id);
+      expect(window.minimized, isFalse);
+      expect(window.rect, original);
+      expect(window.restoreRect, isNull);
+      desktop.dispose();
+    });
+
     test('rotation clamps a floating window back inside the usable area', () {
       final desktop = DesktopState(LinuxRuntime());
       desktop.syncToScreen(const Size(1200, 800));
