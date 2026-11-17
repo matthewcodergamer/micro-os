@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../core/macos_design.dart';
 import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
 
