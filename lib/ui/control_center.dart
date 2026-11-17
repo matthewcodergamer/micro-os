@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../core/macos_design.dart';
 import '../core/theme.dart';
 import '../services/linux_runtime.dart';
 import '../services/system_stats.dart';
@@ -28,18 +29,14 @@ class ControlCenterOverlay extends StatelessWidget {
       listenable: Listenable.merge([runtime, stats]),
       builder: (context, _) => Stack(
         children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onClose,
-            child: const ColoredBox(color: Color(0x33000000)),
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onClose,
+              child: const ColoredBox(color: Color(0x33000000)),
+            ),
           ),
-        ),
-        Positioned(
-          top: topPadding + 6,
-          right: 12,
-          child: _panel(context),
-        ),
+          Positioned(top: topPadding + 6, right: 12, child: _panel(context)),
         ],
       ),
     );
@@ -48,23 +45,17 @@ class ControlCenterOverlay extends StatelessWidget {
   Widget _panel(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, 10)),
-        ],
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: Sequoia.panelShadow(),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
           child: Container(
-            width: math.min(320.0, MediaQuery.sizeOf(context).width - 24),
+            width: math.min(336.0, MediaQuery.sizeOf(context).width - 24),
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xCC1C1C1E),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-            ),
+            decoration: Sequoia.glass(radius: 22, tint: 0.72, borderAlpha: 0.2),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -143,8 +134,8 @@ class ControlCenterOverlay extends StatelessWidget {
     final label = ready
         ? 'Linux Ready'
         : busy
-            ? 'Installing…'
-            : 'Linux Offline';
+        ? 'Installing…'
+        : 'Linux Offline';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -193,8 +184,8 @@ class _Tile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: active ? 0.12 : 0.06),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withValues(alpha: active ? 0.13 : 0.06),
+        borderRadius: BorderRadius.circular(Sequoia.cardRadius + 4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

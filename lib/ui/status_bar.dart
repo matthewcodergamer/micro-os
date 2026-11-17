@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../core/format.dart';
+import '../core/macos_design.dart';
 import '../core/theme.dart';
 import '../models/window_state.dart';
 import '../state/desktop_state.dart';
@@ -56,13 +57,27 @@ class _StatusBarState extends State<StatusBar> {
 
     return Material(
       color: Colors.transparent,
+      // Tint only, deliberately no BackdropFilter: the menu bar spans the same
+      // pixels as maximised windows, and blurring a region that contains an
+      // Android platform view (the noVNC surface) blanks that region on some
+      // GPUs. A translucent gradient gives the Sequoia look without the risk.
       child: Container(
         height: widget.height,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: const Color(0xCC1C1C1E),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Sequoia.chromeBase.withValues(alpha: 0.72),
+              Sequoia.chromeBase.withValues(alpha: 0.58),
+            ],
+          ),
           border: Border(
-            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+            bottom: BorderSide(
+              color: Colors.white.withValues(alpha: 0.10),
+              width: 0.8,
+            ),
           ),
         ),
         child: Row(
@@ -95,21 +110,33 @@ class _StatusBarState extends State<StatusBar> {
             const Spacer(),
             // Status items
             IconButton(
-              icon: const Icon(Icons.search_rounded, size: 18, color: Colors.white),
+              icon: const Icon(
+                Icons.search_rounded,
+                size: 18,
+                color: Colors.white,
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
               onPressed: widget.onSpotlight,
               tooltip: 'Spotlight',
             ),
             IconButton(
-              icon: const Icon(Icons.apps_rounded, size: 19, color: Colors.white),
+              icon: const Icon(
+                Icons.apps_rounded,
+                size: 19,
+                color: Colors.white,
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
               onPressed: widget.onLaunchpad,
               tooltip: 'Launchpad',
             ),
             IconButton(
-              icon: const Icon(Icons.toggle_on_rounded, size: 20, color: Colors.white),
+              icon: const Icon(
+                Icons.toggle_on_rounded,
+                size: 20,
+                color: Colors.white,
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
               onPressed: widget.onControlCenter,

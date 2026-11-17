@@ -299,6 +299,8 @@ exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" X
   --disable-features=Translate,OptimizationHints \
   --js-flags="--max-old-space-size=512" \
   --disable-dev-shm-usage --no-first-run \
+  --disable-crash-reporter \
+  --disable-low-res-tiling \
   --disk-cache-size=67108864 --media-cache-size=16777216 \
   --start-maximized \
   --user-data-dir="$BROWSER_HOME/.config/chromium" "$@"

@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../core/macos_design.dart';
 import '../core/theme.dart';
 import '../models/window_state.dart';
 import 'mac_icons.dart';
@@ -37,9 +38,11 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return AppId.values;
     return AppId.values
-        .where((a) =>
-            a.title.toLowerCase().contains(q) ||
-            a.subtitle.toLowerCase().contains(q))
+        .where(
+          (a) =>
+              a.title.toLowerCase().contains(q) ||
+              a.subtitle.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -61,19 +64,24 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
           right: 14,
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
+              constraints: const BoxConstraints(
+                maxWidth: Sequoia.spotlightMaxWidth,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _glass(
-                    radius: 28,
+                    radius: Sequoia.sheetRadius,
                     child: SizedBox(
-                      height: 54,
+                      height: 52,
                       child: Row(
                         children: [
                           const SizedBox(width: 16),
-                          const Icon(Icons.search_rounded,
-                              color: Colors.white70, size: 24),
+                          const Icon(
+                            Icons.search_rounded,
+                            color: Colors.white70,
+                            size: 24,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: TextField(
@@ -106,11 +114,10 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
                       ),
                     ),
                   ),
-                  if (results.isNotEmpty)
-                    const SizedBox(height: 8),
+                  if (results.isNotEmpty) const SizedBox(height: 8),
                   if (results.isNotEmpty)
                     _glass(
-                      radius: 16,
+                      radius: Sequoia.popoverRadius,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -133,17 +140,17 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
       behavior: HitTestBehavior.opaque,
       onTap: () => widget.onOpen(app),
       child: Container(
-        height: 52,
+        height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: highlighted && _query.isNotEmpty
               ? MicroColors.accent.withValues(alpha: 0.85)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(Sequoia.cardRadius),
         ),
         child: Row(
           children: [
-            MacAppIcon(app: app, size: 34),
+            MacAppIcon(app: app, size: 30),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -180,26 +187,18 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x66000000),
-            blurRadius: 30,
-            offset: Offset(0, 12),
-          ),
-        ],
+        boxShadow: Sequoia.panelShadow(),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
           child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0x99202024),
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.28),
-                width: 0.8,
-              ),
+            decoration: Sequoia.glass(
+              radius: radius,
+              tint: 0.74,
+              borderAlpha: 0.24,
+              base: const Color(0xFF202024),
             ),
             child: child,
           ),
@@ -208,7 +207,6 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
     );
   }
 }
-
 
 /// Launchpad-style app grid for the complete Misty OS app registry.
 class LaunchpadOverlay extends StatefulWidget {
@@ -239,11 +237,14 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
   @override
   Widget build(BuildContext context) {
     final query = _search.text.trim().toLowerCase();
-    final apps = AppId.values.where((app) =>
-      query.isEmpty ||
-      app.title.toLowerCase().contains(query) ||
-      app.subtitle.toLowerCase().contains(query)
-    ).toList(growable: false);
+    final apps = AppId.values
+        .where(
+          (app) =>
+              query.isEmpty ||
+              app.title.toLowerCase().contains(query) ||
+              app.subtitle.toLowerCase().contains(query),
+        )
+        .toList(growable: false);
     return Stack(
       children: [
         Positioned.fill(
@@ -252,115 +253,150 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
               child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(18, widget.topPadding > 0 ? 14 : 20, 18, 10),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Launchpad',
-                          style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700),
-                        ),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        18,
+                        widget.topPadding > 0 ? 14 : 20,
+                        18,
+                        10,
                       ),
-                      IconButton(
-                        tooltip: 'Close Launchpad',
-                        onPressed: widget.onClose,
-                        icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Launchpad',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Close Launchpad',
+                            onPressed: widget.onClose,
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 520),
-                    child: TextField(
-                      controller: _search,
-                      onChanged: (_) => setState(() {}),
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
-                      decoration: InputDecoration(
-                        hintText: 'Search apps',
-                        hintStyle: const TextStyle(color: Colors.white54),
-                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.white70),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.12),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: TextField(
+                          controller: _search,
+                          onChanged: (_) => setState(() {}),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Search apps',
+                            hintStyle: const TextStyle(color: Colors.white54),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: Colors.white70,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white.withValues(alpha: 0.12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.16),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.16),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final width = constraints.maxWidth;
-                      final columns = width < 380 ? 3 : width < 620 ? 4 : 6;
-                      return GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: columns,
-                          mainAxisSpacing: 14,
-                          crossAxisSpacing: 8,
-                          childAspectRatio: 0.82,
-                        ),
-                        itemCount: apps.length,
-                        itemBuilder: (context, index) {
-                          final app = apps[index];
-                          return Semantics(
-                            button: true,
-                            label: app.title,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(18),
-                              onTap: () => widget.onOpen(app),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 7),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Opacity(
-                                      opacity: isAppAvailable(app) ? 1 : 0.42,
-                                      child: MacAppIcon(app: app, size: 58),
-                                    ),
-                                    const SizedBox(height: 9),
-                                    Text(
-                                      isAppAvailable(app)
-                                          ? app.title
-                                          : '${app.title} · soon',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        decoration: TextDecoration.none,
-                                      ),
-                                    ),
-                                  ],
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = constraints.maxWidth;
+                          final columns = width < 380
+                              ? 3
+                              : width < 620
+                              ? 4
+                              : 6;
+                          return GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  mainAxisSpacing: 14,
+                                  crossAxisSpacing: 8,
+                                  childAspectRatio: 0.82,
                                 ),
-                              ),
-                            ),
+                            itemCount: apps.length,
+                            itemBuilder: (context, index) {
+                              final app = apps[index];
+                              return Semantics(
+                                button: true,
+                                label: app.title,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(18),
+                                  onTap: () => widget.onOpen(app),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 3,
+                                      vertical: 7,
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Opacity(
+                                          opacity: isAppAvailable(app)
+                                              ? 1
+                                              : 0.42,
+                                          child: MacAppIcon(app: app, size: 58),
+                                        ),
+                                        const SizedBox(height: 9),
+                                        Text(
+                                          isAppAvailable(app)
+                                              ? app.title
+                                              : '${app.title} · soon',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            decoration: TextDecoration.none,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
-      ),
       ],
     );
   }
