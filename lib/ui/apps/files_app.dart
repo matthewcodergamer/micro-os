@@ -276,6 +276,11 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
               onTap: () => Navigator.pop(context, 'copy'),
             ),
             ListTile(
+              leading: const Icon(Icons.control_point_duplicate_rounded),
+              title: const Text('Duplicate'),
+              onTap: () => Navigator.pop(context, 'duplicate'),
+            ),
+            ListTile(
               leading: const Icon(Icons.drive_file_rename_outline_rounded),
               title: const Text('Rename'),
               onTap: () => Navigator.pop(context, 'rename'),
@@ -308,6 +313,16 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     } else if (action == 'copy') {
       await Clipboard.setData(ClipboardData(text: path));
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Path copied')));
+    } else if (action == 'duplicate') {
+      final dot = entry.name.lastIndexOf('.');
+      final copyName = entry.isDirectory || dot <= 0
+          ? '${entry.name} copy'
+          : '${entry.name.substring(0, dot)} copy${entry.name.substring(dot)}';
+      final destination = _path == '/' ? '/$copyName' : '$_path/$copyName';
+      try {
+        await _runGuest(r'if [ -e "$2" ] || [ -L "$2" ]; then echo "A copy already exists." >&2; exit 1; fi; cp -a -- "$1" "$2"', <String>[path, destination]);
+        await _load();
+      } catch (error) { _notifyActionError(error); }
     } else if (action == 'rename') {
       final name = await _askName('Rename', entry.name);
       if (name == null) return;
@@ -534,7 +549,9 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
   Widget _listTile(_FileEntry entry) {
     final folder = entry.isDirectory;
     final selected = _selectedPaths.contains(_entryPath(entry));
-    return ListTile(
+    return GestureDetector(
+      onSecondaryTap: () { _toggleSelection(entry); _showEntryActions(entry); },
+      child: ListTile(
       dense: true,
       selected: selected,
       leading: FinderItemIcon(
@@ -545,17 +562,25 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       subtitle: Text(folder ? 'Folder' : _formatSize(entry.size), style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
       onTap: folder ? () => _navigate(_entryPath(entry)) : () { _toggleSelection(entry); _showFileDetails(entry); },
       onLongPress: () { _toggleSelection(entry); _showEntryActions(entry); },
-    );
+    ));
   }
 
   Widget _gridItem(_FileEntry entry) {
     final folder = entry.isDirectory;
+    final selected = _selectedPaths.contains(_entryPath(entry));
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onSecondaryTap: () { _toggleSelection(entry); _showEntryActions(entry); },
       onTap: folder ? () => _navigate(_entryPath(entry)) : () { _toggleSelection(entry); _showFileDetails(entry); },
       onLongPress: () { _toggleSelection(entry); _showEntryActions(entry); },
-      child: Column(
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected ? MicroColors.accent.withValues(alpha: 0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          border: selected ? Border.all(color: MicroColors.accent.withValues(alpha: 0.55)) : null,
+        ),
+        padding: const EdgeInsets.all(4),
+        child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           FinderItemIcon(
@@ -573,6 +598,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
           if (!folder)
             Text(_formatSize(entry.size), style: const TextStyle(color: MicroColors.subtle, fontSize: 9)),
         ],
+        ),
       ),
     );
   }
