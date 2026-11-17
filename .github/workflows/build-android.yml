@@ -104,6 +104,12 @@ jobs:
           grep -q '_breadcrumbs' lib/ui/apps/files_app.dart
           grep -q '_trashSelected' lib/ui/apps/files_app.dart
           grep -q 'Copy selected paths' lib/ui/apps/files_app.dart
+          grep -q 'browserHomePage' lib/services/settings_store.dart
+          grep -q 'setBrowserEngine' lib/services/settings_store.dart
+          grep -q 'Default browser' lib/ui/apps/settings_app.dart
+          grep -q 'snapToHalf' lib/state/desktop_state.dart
+          grep -q 'Tile Left' lib/ui/window_frame.dart
+          grep -q 'centerWindow' lib/ui/window_frame.dart
           grep -q 'Show Hidden Files' lib/ui/apps/files_app.dart
           grep -q '_goBack' lib/ui/apps/files_app.dart
           grep -q '_goForward' lib/ui/apps/files_app.dart
