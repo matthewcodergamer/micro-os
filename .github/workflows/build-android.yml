@@ -94,6 +94,11 @@ jobs:
           grep -q 'Clear search' lib/ui/apps/settings_app.dart
           grep -q 'No matching settings' lib/ui/apps/settings_app.dart
           grep -q 'Icons.display_settings_rounded' lib/ui/apps/settings_app.dart
+          grep -q 'dockScale' lib/services/settings_store.dart
+          grep -q 'dockMagnification' lib/services/settings_store.dart
+          grep -q 'settings.dockScale' lib/ui/dock.dart
+          grep -q 'settings.dockMagnification' lib/ui/dock.dart
+          grep -q 'Magnify icons on hover' lib/ui/apps/settings_app.dart
           grep -q '_goBack' lib/ui/apps/files_app.dart
           grep -q '_goForward' lib/ui/apps/files_app.dart
           grep -q '_columnView' lib/ui/apps/files_app.dart
