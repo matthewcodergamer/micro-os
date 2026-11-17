@@ -93,7 +93,9 @@ class MainActivity : FlutterActivity() {
                         val maxVolume = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
                         val volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / maxVolume
                         val currentBrightness = window.attributes.screenBrightness
-                        val brightness = if (currentBrightness < 0f) 0.75f else currentBrightness
+                        val brightness = if (currentBrightness < 0f) {
+                            runCatching { Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 192) / 255f }.getOrDefault(0.75f)
+                        } else currentBrightness
                         result.success(mapOf("brightness" to brightness.toDouble(), "volume" to volume))
                     }
                     "openNetworkSettings" -> {
