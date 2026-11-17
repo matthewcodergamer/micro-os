@@ -113,6 +113,9 @@ jobs:
           grep -q 'snapToHalf' lib/state/desktop_state.dart
           grep -q 'Tile Left' lib/ui/window_frame.dart
           grep -q 'centerWindow' lib/ui/window_frame.dart
+          grep -q '_minimizedRect' lib/state/desktop_state.dart
+          grep -q 'window.minimized' lib/ui/window_frame.dart
+          grep -q 'minimized windows remain restorable' test/desktop_state_test.dart
           grep -q 'accentColorValue' lib/services/settings_store.dart
           grep -q '_AppearancePage' lib/ui/apps/settings_app.dart
           grep -q 'displayResolution' lib/services/settings_store.dart
