@@ -198,7 +198,9 @@ class _SystemControlSlidersState extends State<_SystemControlSliders> {
       final state = await SystemControls.getState();
       if (!mounted) return;
       setState(() {
-        _brightness = widget.settings.screenBrightness;
+        _brightness = widget.settings.screenBrightnessConfigured
+            ? widget.settings.screenBrightness
+            : (state['brightness'] ?? 0.75).clamp(0.05, 1.0).toDouble();
         _volume = (state['volume'] ?? 0.5).clamp(0.0, 1.0).toDouble();
         _loaded = true;
       });
