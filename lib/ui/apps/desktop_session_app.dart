@@ -7,6 +7,7 @@ import '../../app_scope.dart';
 import '../../core/macos_design.dart';
 import '../../core/theme.dart';
 import '../../services/linux_runtime.dart';
+import '../../services/settings_store.dart';
 
 /// Shows the real X11 desktop.
 ///
@@ -47,15 +48,44 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   bool _vncRetryCheckInFlight = false;
   bool _trackpadMode = true;
   double _trackpadSpeed = 1.35;
+  SettingsStore? _settingsStore;
+  bool _settingsInitialized = false;
   String _selectedBrowser = 'chromium';
 
   @override
   void initState() {
     super.initState();
-    final settings = AppScope.of(context).settings;
-    _trackpadMode = settings.trackpadMode;
-    _trackpadSpeed = settings.trackpadSpeed;
     WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_settingsInitialized) return;
+    _settingsStore = AppScope.of(context).settings;
+    _trackpadMode = _settingsStore!.trackpadMode;
+    _trackpadSpeed = _settingsStore!.trackpadSpeed;
+    _settingsStore!.addListener(_syncTrackpadSettings);
+    _settingsInitialized = true;
+  }
+
+  void _syncTrackpadSettings() {
+    final settings = _settingsStore;
+    if (settings == null || !mounted) return;
+    final modeChanged = _trackpadMode != settings.trackpadMode;
+    final speedChanged = _trackpadSpeed != settings.trackpadSpeed;
+    if (!modeChanged && !speedChanged) return;
+    setState(() {
+      _trackpadMode = settings.trackpadMode;
+      _trackpadSpeed = settings.trackpadSpeed;
+    });
+    final controller = _controller;
+    if (controller != null) {
+      controller.runJavaScript(
+        'window.__microOsSetTrackpadMode(${_trackpadMode ? 'true' : 'false'});'
+        'window.__microOsSetTrackpadSpeed($_trackpadSpeed);',
+      );
+    }
   }
 
   Future<void> _boot() async {
@@ -225,6 +255,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   void dispose() {
     _vncRetryTimer?.cancel();
     _vncRecoveryTimer?.cancel();
+    _settingsStore?.removeListener(_syncTrackpadSettings);
     super.dispose();
   }
 
@@ -259,7 +290,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
 
   Future<void> _setTrackpadSpeed(double speed) async {
     setState(() => _trackpadSpeed = speed);
-    await AppScope.of(context).settings.setTrackpadSpeed(speed);
+    await _settingsStore?.setTrackpadSpeed(speed);
     _controller?.runJavaScript(
       'window.__microOsTrackpadSpeed=$speed;window.__microOsSetTrackpadSpeed?.($speed);',
     );
@@ -399,7 +430,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
 
   Future<void> _toggleTrackpadMode() async {
     setState(() => _trackpadMode = !_trackpadMode);
-    await AppScope.of(context).settings.setTrackpadMode(_trackpadMode);
+    await _settingsStore?.setTrackpadMode(_trackpadMode);
     _controller?.runJavaScript(
       'window.__microOsSetTrackpadMode(${_trackpadMode ? 'true' : 'false'});',
     );
