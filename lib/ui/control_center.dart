@@ -74,6 +74,7 @@ class ControlCenterOverlay extends StatelessWidget {
                     label: 'Wi-Fi',
                     value: stats.connection,
                     active: true,
+                    onTap: () { SystemControls.openNetworkSettings(); },
                   ),
                   _Tile(
                     icon: Icons.battery_full_rounded,
@@ -250,16 +251,20 @@ class _Tile extends StatelessWidget {
     required this.label,
     required this.value,
     required this.active,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final String value;
   final bool active;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       constraints: const BoxConstraints(minHeight: 62),
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
@@ -318,6 +323,7 @@ class _Tile extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
