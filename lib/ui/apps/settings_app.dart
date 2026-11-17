@@ -15,6 +15,7 @@ import '../../services/settings_store.dart';
 enum _Page {
   desktop,
   wallpaper,
+  pointer,
   performance,
   github,
   huggingface,
@@ -41,6 +42,7 @@ class _SettingsAppState extends State<SettingsApp> {
   IconData _icon(_Page page) => switch (page) {
     _Page.desktop => Icons.display_settings_rounded,
     _Page.wallpaper => Icons.wallpaper_rounded,
+    _Page.pointer => Icons.mouse_rounded,
     _Page.performance => Icons.speed_rounded,
     _Page.github => Icons.code_rounded,
     _Page.huggingface => Icons.hub_rounded,
@@ -68,6 +70,7 @@ class _SettingsAppState extends State<SettingsApp> {
         return switch (_page) {
           _Page.desktop => _DesktopPage(settings: settings),
           _Page.wallpaper => _WallpaperPage(settings: settings),
+          _Page.pointer => _PointerPage(settings: settings),
           _Page.performance => const _PerformancePage(),
           _Page.github => _GitHubPage(auth: auth, runtime: runtime),
           _Page.huggingface => _HuggingFacePage(auth: auth, runtime: runtime),
@@ -166,6 +169,7 @@ class _SettingsAppState extends State<SettingsApp> {
   String _title(_Page p) => switch (p) {
     _Page.desktop => 'Desktop & Dock',
     _Page.wallpaper => 'Wallpaper',
+    _Page.pointer => 'Trackpad & Pointer',
     _Page.performance => 'Performance',
     _Page.github => 'GitHub',
     _Page.huggingface => 'Hugging Face',
@@ -220,6 +224,82 @@ class _DesktopPage extends StatelessWidget {
               visible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
             );
           },
+        ),
+      ],
+    );
+  }
+}
+
+class _PointerPage extends StatelessWidget {
+  const _PointerPage({required this.settings});
+  final dynamic settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final speed = settings.trackpadSpeed as double;
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text(
+          'Trackpad & Pointer',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Tune touch gestures for the Linux desktop. Changes are saved on this device and applied to the active VNC session.',
+          style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+        ),
+        const SizedBox(height: 18),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Trackpad mode', style: TextStyle(color: MicroColors.text)),
+          subtitle: const Text(
+            'Move a visible pointer with relative finger movement. Turn off for direct touch-to-screen positioning.',
+            style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+          ),
+          value: settings.trackpadMode,
+          onChanged: (value) => settings.setTrackpadMode(value),
+        ),
+        const Divider(height: 24),
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Pointer speed', style: TextStyle(color: MicroColors.text, fontWeight: FontWeight.w600)),
+            ),
+            Text('${speed.toStringAsFixed(2)}×', style: const TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          ],
+        ),
+        Slider(
+          min: 0.7,
+          max: 2.2,
+          divisions: 15,
+          value: speed.clamp(0.7, 2.2),
+          label: '${speed.toStringAsFixed(2)}×',
+          onChanged: (value) => settings.setTrackpadSpeed(value),
+        ),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Slow', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+            Text('Fast', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Sequoia.sidebarTint.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+          ),
+          child: const Text(
+            'Gestures: one finger moves and clicks, a long press opens the context menu, and two fingers scroll. Use the desktop toolbar for a quick right-click or keyboard.',
+            style: TextStyle(color: Sequoia.labelSecondary, fontSize: 12, height: 1.45),
+          ),
         ),
       ],
     );
