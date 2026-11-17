@@ -18,7 +18,6 @@ command -v zstd >/dev/null 2>&1 || {
 echo "==> Provisioning Ubuntu 24.04 ARM64 in Docker"
 docker run --platform linux/arm64 --name "$NAME" \
   -v "$ROOT/tool/setup.sh:/tmp/microos-setup.sh:ro" \
-  -v "$ROOT/tool/opencode-tts-plugin.js:/tmp/microos-tts-plugin.js:ro" \
   ubuntu:24.04 /bin/bash -lc '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
@@ -26,10 +25,6 @@ docker run --platform linux/arm64 --name "$NAME" \
     cp /tmp/microos-setup.sh /root/.microos/setup.sh
     chmod 755 /root/.microos/setup.sh
     bash /root/.microos/setup.sh
-
-    mkdir -p /root/.config/opencode/plugins
-    install -m 0644 /tmp/microos-tts-plugin.js /root/.config/opencode/plugins/microos-tts.js
-    echo "==> Installed local Android read-aloud plugin for OpenCode"
 
     echo "==> Installing Hugging Face CLI in an isolated Python environment"
     python3 -m venv /opt/huggingface-cli

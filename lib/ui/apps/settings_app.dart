@@ -14,7 +14,6 @@ import '../../services/settings_store.dart';
 enum _Page {
   desktop,
   performance,
-  speech,
   github,
   huggingface,
   linux,
@@ -50,7 +49,6 @@ class _SettingsAppState extends State<SettingsApp> {
         return switch (_page) {
           _Page.desktop => _DesktopPage(settings: settings),
           _Page.performance => const _PerformancePage(),
-          _Page.speech => _SpeechPage(settings: settings),
           _Page.github => _GitHubPage(auth: auth, runtime: runtime),
           _Page.huggingface => _HuggingFacePage(auth: auth, runtime: runtime),
           _Page.linux => _LinuxPage(runtime: runtime),
@@ -124,7 +122,6 @@ class _SettingsAppState extends State<SettingsApp> {
   String _title(_Page p) => switch (p) {
     _Page.desktop => 'Desktop & Dock',
     _Page.performance => 'Performance',
-    _Page.speech => 'Speech',
     _Page.github => 'GitHub',
     _Page.huggingface => 'Hugging Face',
     _Page.linux => 'Linux',
@@ -178,37 +175,6 @@ class _DesktopPage extends StatelessWidget {
               visible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
             );
           },
-        ),
-      ],
-    );
-  }
-}
-
-class _SpeechPage extends StatelessWidget {
-  const _SpeechPage({required this.settings});
-  final dynamic settings;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        const Text(
-          'Speech',
-          style: TextStyle(
-            color: MicroColors.text,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 20),
-        SwitchListTile(
-          title: const Text(
-            'Auto-read OpenCode output',
-            style: TextStyle(color: MicroColors.text),
-          ),
-          value: settings.autoReadOpenCode,
-          onChanged: (v) => settings.setAutoReadOpenCode(v),
         ),
       ],
     );

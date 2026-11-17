@@ -16,7 +16,6 @@ class SettingsStore extends ChangeNotifier {
   static const _kOpenCodeTheme = 'opencode.theme';
   static const _kTerminalFontSize = 'terminal.font_size';
   static const _kTerminalProfile = 'terminal.profile';
-  static const _kAutoReadOpenCode = 'tts.auto_read_opencode';
   static const _kDockAutoHide = 'dock.auto_hide';
   static const _kSystemBarsVisible = 'system.bars_visible';
   static const _kUserName = 'user.name';
@@ -37,7 +36,6 @@ class SettingsStore extends ChangeNotifier {
   String? loginPassword;
   bool loginPasswordStorageUnavailable = false;
   bool loginPasswordMigrationPending = false;
-  bool autoReadOpenCode = false;
   bool dockAutoHide = true;
   bool systemBarsVisible = false;
 
@@ -58,7 +56,6 @@ class SettingsStore extends ChangeNotifier {
     terminalProfile =
         prefs.getString(_kTerminalProfile) ?? kDefaultTerminalProfile;
     userName = prefs.getString(_kUserName) ?? 'Misty OS User';
-    autoReadOpenCode = prefs.getBool(_kAutoReadOpenCode) ?? false;
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
@@ -160,13 +157,6 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kDockAutoHide, value);
-  }
-
-  Future<void> setAutoReadOpenCode(bool value) async {
-    autoReadOpenCode = value;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kAutoReadOpenCode, value);
   }
 
   Future<void> setOpenCodeTheme(String value) async {

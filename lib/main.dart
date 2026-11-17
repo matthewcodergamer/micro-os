@@ -9,7 +9,6 @@ import 'app_scope.dart';
 import 'core/theme.dart';
 import 'services/github_auth.dart';
 import 'services/linux_runtime.dart';
-import 'services/opencode_tts_server.dart';
 import 'services/settings_store.dart';
 import 'services/system_stats.dart';
 import 'state/desktop_state.dart';
@@ -80,9 +79,7 @@ Future<void> main() async {
   final stats = SystemStats();
   final auth = GithubAuth();
   final settings = SettingsStore();
-  final ttsServer = OpenCodeTtsServer();
 
-  await ttsServer.start();
   await settings.load();
   await SystemChrome.setEnabledSystemUIMode(
     settings.systemBarsVisible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
@@ -104,7 +101,6 @@ Future<void> main() async {
       stats: stats,
       auth: auth,
       settings: settings,
-      ttsServer: ttsServer,
     ),
   );
 }
@@ -116,14 +112,12 @@ class MistyOSApp extends StatefulWidget {
     required this.stats,
     required this.auth,
     required this.settings,
-    required this.ttsServer,
   });
 
   final LinuxRuntime runtime;
   final SystemStats stats;
   final GithubAuth auth;
   final SettingsStore settings;
-  final OpenCodeTtsServer ttsServer;
 
   @override
   State<MistyOSApp> createState() => _MistyOSAppState();
@@ -143,7 +137,6 @@ class _MistyOSAppState extends State<MistyOSApp> {
     _desktop.dispose();
     widget.stats.dispose();
     widget.runtime.dispose();
-    widget.ttsServer.dispose();
     super.dispose();
   }
 

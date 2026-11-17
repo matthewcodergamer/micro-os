@@ -31,7 +31,6 @@ Its architecture includes:
 - VNC/noVNC: remote desktop display inside Misty OS.
 - OpenCode: AI coding agent running inside the Linux environment.
 - PTY/xterm: interactive Linux terminal.
-- TTS bridge: Android text-to-speech integration for OpenCode.
 - GitHub Actions: Linux root filesystem preparation and Android APK builds.
 
 This is a Linux userspace running through PRoot, not a separate Linux kernel.
@@ -180,15 +179,6 @@ Verify which browsers are actually installed. Test browser launch, display insid
 
 Do not assume Chromium or Firefox is installed merely because a launch script exists. Inspect the root filesystem and packaging method.
 
-### OpenCode TTS
-
-Inspect:
-
-- `lib/services/opencode_tts_server.dart`
-- `tool/opencode-tts-plugin.js`
-
-Verify the bridge at `127.0.0.1:17842`. Test the `/speak` endpoint from inside PRoot and confirm actual connectivity rather than assuming Android and PRoot share loopback networking.
-
 Preserve the existing UTF-8 terminal improvements.
 
 ## 7. Preserve and optimize the interface
@@ -293,7 +283,6 @@ Preserve uncommitted user changes.
 - Validate X11/VNC/noVNC.
 - Validate browser launch.
 - Validate OpenCode.
-- Validate TTS.
 - Fix startup races and duplicate processes.
 
 ### Phase F — Performance
@@ -343,7 +332,6 @@ If a build fails:
 - [ ] Terminal selection, copy and paste work.
 - [ ] Linux desktop and noVNC start reliably.
 - [ ] Installed browser launches inside the guest.
-- [ ] OpenCode TTS bridge works from PRoot.
 - [ ] Existing interface artwork and performance optimizations are preserved.
 - [ ] `flutter analyze` passes.
 - [ ] Tests pass.

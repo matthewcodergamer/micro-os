@@ -231,19 +231,6 @@ if "MicroOSSessionService" not in xml:
         1,
     )
 
-# Android 11+ only exposes installed TTS engines when this service query exists.
-if "android.intent.action.TTS_SERVICE" not in xml:
-    xml = xml.replace(
-        "<application",
-        """    <queries>
-        <intent>
-            <action android:name="android.intent.action.TTS_SERVICE"/>
-        </intent>
-    </queries>
-    <application""",
-        1,
-    )
-
 xml = xml.replace('android:label="micro_os"', 'android:label="Misty OS"')
 
 if "usesCleartextTraffic" not in xml:
@@ -372,5 +359,4 @@ PY
 grep -q "targetSdk = 28\|targetSdkVersion 28" android/app/build.gradle.kts android/app/build.gradle 2>/dev/null \
   || { echo "!! could not patch targetSdk, inspect android/app/build.gradle*"; exit 1; }
 
-echo "==> Android TTS service discovery enabled"
 echo "==> android project ready"
