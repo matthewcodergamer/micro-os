@@ -110,6 +110,17 @@ jobs:
           grep -q 'snapToHalf' lib/state/desktop_state.dart
           grep -q 'Tile Left' lib/ui/window_frame.dart
           grep -q 'centerWindow' lib/ui/window_frame.dart
+          grep -q 'accentColorValue' lib/services/settings_store.dart
+          grep -q '_AppearancePage' lib/ui/apps/settings_app.dart
+          grep -q 'displayResolution' lib/services/settings_store.dart
+          grep -q 'setDisplayResolution' lib/services/linux_runtime.dart
+          grep -q 'xrandr --display :1 --fb' tool/setup.sh
+          grep -q 'browserHomePage' lib/services/settings_store.dart
+          grep -q 'setBrowserEngine' lib/services/settings_store.dart
+          grep -q 'Default browser' lib/ui/apps/settings_app.dart
+          grep -q 'snapToHalf' lib/state/desktop_state.dart
+          grep -q 'Tile Left' lib/ui/window_frame.dart
+          grep -q 'centerWindow' lib/ui/window_frame.dart
           grep -q 'Show Hidden Files' lib/ui/apps/files_app.dart
           grep -q '_goBack' lib/ui/apps/files_app.dart
           grep -q '_goForward' lib/ui/apps/files_app.dart
