@@ -182,35 +182,62 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minHeight: 62),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: active ? 0.13 : 0.06),
-        borderRadius: BorderRadius.circular(Sequoia.cardRadius + 4),
+        color: Colors.white.withValues(alpha: active ? 0.105 : 0.045),
+        borderRadius: BorderRadius.circular(Sequoia.cardRadius + 2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: active ? 0.10 : 0.055),
+          width: 0.7,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Icon(icon, color: active ? Colors.white : Colors.white54, size: 22),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: active ? 0.10 : 0.045),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
               color: active ? Colors.white : Colors.white54,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              decoration: TextDecoration.none,
+              size: 17,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: TextStyle(
-              color: active ? Colors.white70 : Colors.white38,
-              fontSize: 11,
-              decoration: TextDecoration.none,
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: active ? Colors.white : Colors.white54,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: active ? Colors.white70 : Colors.white38,
+                    fontSize: 10,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
