@@ -91,6 +91,7 @@ class ManagedWindow {
   bool minimized = false;
   bool maximized = false;
   Rect? restoreRect;
+  Rect? minimizedRestoreRect;
 
   /// True when the window is locked to the usable area (phone portrait).
   bool pinned = false;
