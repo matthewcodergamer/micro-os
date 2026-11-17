@@ -17,6 +17,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kTerminalFontSize = 'terminal.font_size';
   static const _kTerminalProfile = 'terminal.profile';
   static const _kDockAutoHide = 'dock.auto_hide';
+  static const _kDockScale = 'dock.scale';
   static const _kSystemBarsVisible = 'system.bars_visible';
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
@@ -39,6 +40,7 @@ class SettingsStore extends ChangeNotifier {
   bool loginPasswordStorageUnavailable = false;
   bool loginPasswordMigrationPending = false;
   bool dockAutoHide = true;
+  double dockScale = 1.0;
   bool systemBarsVisible = false;
   bool trackpadMode = true;
   double trackpadSpeed = 1.35;
@@ -61,6 +63,7 @@ class SettingsStore extends ChangeNotifier {
         prefs.getString(_kTerminalProfile) ?? kDefaultTerminalProfile;
     userName = prefs.getString(_kUserName) ?? 'Misty OS User';
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
+    dockScale = (prefs.getDouble(_kDockScale) ?? 1.0).clamp(0.8, 1.2).toDouble();
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
     trackpadMode = prefs.getBool(_kTrackpadMode) ?? true;
@@ -156,6 +159,13 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kSystemBarsVisible, value);
+  }
+
+  Future<void> setDockScale(double value) async {
+    dockScale = value.clamp(0.8, 1.2).toDouble();
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kDockScale, dockScale);
   }
 
   Future<void> setDockAutoHide(bool value) async {
