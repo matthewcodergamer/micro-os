@@ -79,6 +79,9 @@ jobs:
           grep -q 'window-maximize' tool/setup.sh
           grep -q 'window-restore' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
+          grep -q 'websockify --host=127.0.0.1' tool/setup.sh
+          grep -q 'wait_for_novnc_http' tool/setup.sh
+          grep -q 'http://127.0.0.1:6080/vnc.html' tool/setup.sh
           grep -q 'openbox --sm-disable' tool/prebake_rootfs.sh
           grep -q '_NET_SUPPORTING_WM_CHECK' tool/prebake_rootfs.sh
           chmod +x tool/prebake_rootfs.sh
