@@ -126,6 +126,10 @@ jobs:
           grep -q 'setVolume' tool/bootstrap_android.sh
           grep -q 'AudioManager' tool/bootstrap_android.sh
           grep -q '_SystemControlSliders' lib/ui/control_center.dart
+          grep -q 'openNetworkSettings' lib/services/system_controls.dart
+          grep -q 'ACTION_INTERNET_CONNECTIVITY' tool/bootstrap_android.sh
+          grep -q 'AudioManager.STREAM_MUSIC' tool/bootstrap_android.sh
+          grep -q 'screenBrightness' tool/bootstrap_android.sh
           grep -q 'browserHomePage' lib/services/settings_store.dart
           grep -q 'setBrowserEngine' lib/services/settings_store.dart
           grep -q 'Default browser' lib/ui/apps/settings_app.dart
