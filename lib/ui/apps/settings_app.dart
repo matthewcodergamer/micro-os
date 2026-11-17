@@ -265,6 +265,13 @@ class _DesktopPage extends StatelessWidget {
           value: settings.dockAutoHide,
           onChanged: (v) => settings.setDockAutoHide(v),
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Magnify icons on hover', style: TextStyle(color: MicroColors.text)),
+          subtitle: const Text('Enlarge nearby Dock icons as the pointer moves across them.', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          value: settings.dockMagnification,
+          onChanged: (value) => settings.setDockMagnification(value),
+        ),
         const SizedBox(height: 12),
         Row(
           children: [
