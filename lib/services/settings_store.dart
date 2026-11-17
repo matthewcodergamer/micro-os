@@ -28,6 +28,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kWallpaper = 'desktop.wallpaper';
   static const _kAccentColor = 'appearance.accent_color';
   static const _kDisplayResolution = 'display.resolution';
+  static const _kScreenBrightness = 'display.brightness';
   static const _kTrackpadMode = 'desktop.trackpad_mode';
   static const _kTrackpadSpeed = 'desktop.trackpad_speed';
 
@@ -46,6 +47,7 @@ class SettingsStore extends ChangeNotifier {
   String wallpaper = kDefaultWallpaperId;
   int accentColorValue = 0xFF0A84FF;
   String displayResolution = '1280x720';
+  double screenBrightness = 0.75;
   Color get accentColor => Color(accentColorValue);
   String? loginPassword;
   bool loginPasswordStorageUnavailable = false;
@@ -84,6 +86,7 @@ class SettingsStore extends ChangeNotifier {
     accentColorValue = prefs.getInt(_kAccentColor) ?? 0xFF0A84FF;
     final savedResolution = prefs.getString(_kDisplayResolution) ?? '1280x720';
     displayResolution = const {'1024x768', '1280x720', '1600x900', '1920x1080'}.contains(savedResolution) ? savedResolution : '1280x720';
+    screenBrightness = (prefs.getDouble(_kScreenBrightness) ?? 0.75).clamp(0.05, 1.0).toDouble();
     trackpadMode = prefs.getBool(_kTrackpadMode) ?? true;
     trackpadSpeed = (prefs.getDouble(_kTrackpadSpeed) ?? 1.35).clamp(0.7, 2.2).toDouble();
 
@@ -228,6 +231,13 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kOpenCodeTheme, value);
+  }
+
+  Future<void> setScreenBrightness(double value) async {
+    screenBrightness = value.clamp(0.05, 1.0).toDouble();
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kScreenBrightness, screenBrightness);
   }
 
   Future<void> setDisplayResolution(String value) async {
