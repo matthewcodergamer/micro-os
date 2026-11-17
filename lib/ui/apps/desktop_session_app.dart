@@ -38,7 +38,10 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   bool _booting = false;
   int _attempts = 0;
   Timer? _vncRetryTimer;
+  Timer? _vncRecoveryTimer;
   int _vncRetryCount = 0;
+  int _vncRecoveryAttempts = 0;
+  bool _vncRecoveryInFlight = false;
   bool _vncRetryCheckInFlight = false;
   bool _trackpadMode = true;
   double _trackpadSpeed = 1.35;
@@ -103,6 +106,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (_) => _installTouchBridge(controller),
         onWebResourceError: (_) => _retryVncPage(controller),
+        onHttpError: (_) => _retryVncPage(controller),
       ))
       ..loadRequest(Uri.parse(_vncUrl));
 
@@ -133,6 +137,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             !pageText.contains('disconnected');
         if (connected) {
           timer.cancel();
+          _vncRecoveryAttempts = 0;
+          _vncRecoveryTimer?.cancel();
+          _vncRecoveryTimer = null;
           if (mounted) setState(() => _status = 'Connected');
           return;
         }
@@ -171,14 +178,48 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
 
   void _retryVncPage(WebViewController controller) {
     if (!mounted || !identical(_controller, controller)) return;
-    if (_vncRetryCount < 15) {
-      setState(() => _status = 'VNC connection interrupted; retrying…');
+    setState(() => _status = 'Desktop connection interrupted; repairing the display…');
+    _scheduleVncRecovery(controller);
+  }
+
+  void _scheduleVncRecovery(WebViewController controller) {
+    if (_vncRecoveryTimer != null ||
+        _vncRecoveryInFlight ||
+        _vncRecoveryAttempts >= 3) {
+      return;
     }
+    // Let a transient WebView/network hiccup settle before restarting X11.
+    _vncRecoveryTimer = Timer(const Duration(seconds: 5), () async {
+      _vncRecoveryTimer = null;
+      if (!mounted || !identical(_controller, controller)) return;
+      _vncRecoveryInFlight = true;
+      _vncRecoveryAttempts++;
+      if (mounted) {
+        setState(() => _status =
+            'Repairing Linux display… attempt $_vncRecoveryAttempts/3');
+      }
+      try {
+        final ready = await widget.runtime.ensureDisplay(restart: true);
+        if (!mounted || !identical(_controller, controller)) return;
+        if (ready) {
+          await controller.loadRequest(Uri.parse(_vncUrl));
+          setState(() => _status = 'Display restarted; reconnecting…');
+        } else {
+          setState(() => _status =
+              'Display repair failed. Check Settings → Runtime log and retry.');
+        }
+      } catch (error) {
+        if (mounted) setState(() => _status = 'Display repair error: $error');
+      } finally {
+        _vncRecoveryInFlight = false;
+      }
+    });
   }
 
   @override
   void dispose() {
     _vncRetryTimer?.cancel();
+    _vncRecoveryTimer?.cancel();
     super.dispose();
   }
 
