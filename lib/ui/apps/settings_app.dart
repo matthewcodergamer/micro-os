@@ -142,23 +142,81 @@ class _SettingsAppState extends State<SettingsApp> {
     // became unreachable.
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+          child: SizedBox(
+            height: 34,
+            child: TextField(
+              onChanged: (value) => setState(() => _search = value),
+              style: const TextStyle(color: Sequoia.label, fontSize: 12),
+              decoration: InputDecoration(
+                hintText: 'Search settings',
+                hintStyle: const TextStyle(
+                  color: Sequoia.labelTertiary,
+                  fontSize: 12,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 16,
+                  color: Sequoia.labelSecondary,
+                ),
+                suffixIcon: _search.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => setState(() => _search = ''),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 15,
+                          color: Sequoia.labelSecondary,
+                        ),
+                      ),
+                filled: true,
+                fillColor: Sequoia.sidebarTint.withValues(alpha: 0.62),
+                contentPadding: EdgeInsets.zero,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+        ),
         SizedBox(
           height: 44,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            children: [
-              for (final page in _visiblePages)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: _CompactPageTab(
-                    label: _title(page),
-                    selected: _page == page,
-                    onTap: () => setState(() => _page = page),
+          child: _visiblePages.isEmpty
+              ? const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'No matching settings',
+                      style: TextStyle(
+                        color: Sequoia.labelTertiary,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
+                )
+              : ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  children: [
+                    for (final page in _visiblePages)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: _CompactPageTab(
+                          label: _title(page),
+                          selected: _page == page,
+                          onTap: () => setState(() => _page = page),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
         ),
         const Divider(height: 1),
         Expanded(child: content),
