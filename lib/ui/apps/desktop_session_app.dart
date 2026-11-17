@@ -109,6 +109,8 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       _status = 'Starting Xvfb and the window manager…';
     });
 
+    final resolution = _settingsStore?.displayResolution;
+    if (resolution != null) await widget.runtime.setDisplayResolution(resolution);
     final up = await widget.runtime.ensureDisplay(restart: _attempts > 0);
     _attempts++;
     if (!mounted) return;
