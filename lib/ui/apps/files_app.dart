@@ -394,7 +394,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
         _sidebarItem('Phone', '/mnt/android', 'phone'),
         _sidebarItem('Linux', '/', 'drive'),
       ]))),
-      Container(width: 1, color: MicroColors.separator),
+      Container(width: 1, color: MicroColors.hairline),
       Expanded(child: Column(
       children: [
         Container(
@@ -535,7 +535,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
         onTap: () => setState(() => _columnSelection = _entryPath(e)),
         onLongPress: () => _showEntryActions(e),
       )).toList())),
-      Container(width: 1, color: MicroColors.separator),
+      Container(width: 1, color: MicroColors.hairline),
       Expanded(child: selected == null ? const Center(child: Text('Select an item', style: TextStyle(color: MicroColors.subtle))) :
         Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           FinderItemIcon(kind: selected.isDirectory ? 'folder' : selected.isLink ? 'link' : 'file', size: 52),
