@@ -25,6 +25,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
   static const _kWallpaper = 'desktop.wallpaper';
+  static const _kAccentColor = 'appearance.accent_color';
   static const _kTrackpadMode = 'desktop.trackpad_mode';
   static const _kTrackpadSpeed = 'desktop.trackpad_speed';
 
@@ -41,6 +42,8 @@ class SettingsStore extends ChangeNotifier {
   String terminalProfile = kDefaultTerminalProfile;
   String userName = 'Misty OS User';
   String wallpaper = kDefaultWallpaperId;
+  int accentColorValue = 0xFF0A84FF;
+  Color get accentColor => Color(accentColorValue);
   String? loginPassword;
   bool loginPasswordStorageUnavailable = false;
   bool loginPasswordMigrationPending = false;
@@ -75,6 +78,7 @@ class SettingsStore extends ChangeNotifier {
     dockMagnification = prefs.getBool(_kDockMagnification) ?? true;
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
+    accentColorValue = prefs.getInt(_kAccentColor) ?? 0xFF0A84FF;
     trackpadMode = prefs.getBool(_kTrackpadMode) ?? true;
     trackpadSpeed = (prefs.getDouble(_kTrackpadSpeed) ?? 1.35).clamp(0.7, 2.2).toDouble();
 
@@ -219,6 +223,13 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kOpenCodeTheme, value);
+  }
+
+  Future<void> setAccentColor(int value) async {
+    accentColorValue = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kAccentColor, value);
   }
 
   Future<void> setWallpaper(String value) async {
