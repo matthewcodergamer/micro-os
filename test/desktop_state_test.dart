@@ -68,7 +68,15 @@ void main() {
       desktop.focus(window.id);
       expect(window.minimized, isFalse);
       expect(window.rect, original);
-      expect(window.restoreRect, isNull);
+      expect(window.minimizedRestoreRect, isNull);
+
+      desktop.toggleMaximize(window.id, const Size(1200, 800));
+      final maximized = window.rect;
+      desktop.minimize(window.id);
+      desktop.focus(window.id);
+      expect(window.rect, maximized);
+      desktop.toggleMaximize(window.id, const Size(1200, 800));
+      expect(window.rect, original);
       desktop.dispose();
     });
 
