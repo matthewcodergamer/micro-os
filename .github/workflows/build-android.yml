@@ -121,6 +121,11 @@ jobs:
           grep -q '_DisplayPage' lib/ui/apps/settings_app.dart
           grep -q 'displayResolution' lib/services/settings_store.dart
           grep -q 'setDisplayResolution' lib/ui/apps/desktop_session_app.dart
+          grep -q 'microos/system_controls' lib/services/system_controls.dart
+          grep -q 'setBrightness' tool/bootstrap_android.sh
+          grep -q 'setVolume' tool/bootstrap_android.sh
+          grep -q 'AudioManager' tool/bootstrap_android.sh
+          grep -q '_SystemControlSliders' lib/ui/control_center.dart
           grep -q 'browserHomePage' lib/services/settings_store.dart
           grep -q 'setBrowserEngine' lib/services/settings_store.dart
           grep -q 'Default browser' lib/ui/apps/settings_app.dart
