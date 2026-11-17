@@ -30,6 +30,11 @@ class _FilesAppState extends State<FilesApp> {
   String _search = '';
   String? _error;
   int _request = 0;
+  final List<String> _history = <String>['/root'];
+  int _historyIndex = 0;
+  final Set<String> _selectedPaths = <String>{};
+  String? _columnSelection;
+
 
   static const _locations = <({String label, String path, String kind})>[
     (label: 'Home', path: '/root', kind: 'home'),
@@ -152,11 +157,17 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     return slash <= 0 ? '/' : normalized.substring(0, slash);
   }
 
-  void _navigate(String path) {
+  void _navigate(String path, {bool history = true}) {
     if (path == _path) return;
-    setState(() => _path = path);
+    setState(() {
+      _path = path; _selectedPaths.clear(); _columnSelection = null;
+      if (history) { _history.removeRange(_historyIndex + 1, _history.length); _history.add(path); _historyIndex = _history.length - 1; }
+    });
     _load();
   }
+  void _goBack() { if (_historyIndex == 0) return; setState(() { _historyIndex--; _path = _history[_historyIndex]; }); _load(); }
+  void _goForward() { if (_historyIndex >= _history.length - 1) return; setState(() { _historyIndex++; _path = _history[_historyIndex]; }); _load(); }
+  void _toggleSelection(_FileEntry entry) { final p = _entryPath(entry); setState(() { if (!_selectedPaths.add(p)) _selectedPaths.remove(p); }); }
 
   List<_FileEntry> get _visibleEntries {
     final query = _search.trim().toLowerCase();
@@ -365,6 +376,8 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
           color: MicroColors.sidebar,
           child: Row(
             children: [
+              IconButton(tooltip: 'Back', icon: const Icon(Icons.chevron_left_rounded), color: MicroColors.text, onPressed: _historyIndex > 0 ? _goBack : null),
+              IconButton(tooltip: 'Forward', icon: const Icon(Icons.chevron_right_rounded), color: MicroColors.text, onPressed: _historyIndex < _history.length - 1 ? _goForward : null),
               IconButton(
                 tooltip: 'Parent folder',
                 icon: const Icon(Icons.arrow_upward_rounded, size: 18),
@@ -390,11 +403,10 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                 color: MicroColors.text,
                 onPressed: _loading ? null : _load,
               ),
-              IconButton(
-                tooltip: _listView ? 'Grid view' : 'List view',
-                icon: Icon(_listView ? Icons.grid_view_rounded : Icons.view_list_rounded, size: 18),
-                color: MicroColors.text,
-                onPressed: () => setState(() => _listView = !_listView),
+              PopupMenuButton<String>(
+                tooltip: 'View options', icon: const Icon(Icons.view_column_rounded, size: 18, color: MicroColors.text),
+                onSelected: (v) => setState(() { _listView = v == 'list'; _columnSelection = v == 'columns' ? '' : null; }),
+                itemBuilder: (_) => const [PopupMenuItem(value: 'icons', child: Text('Icon View')), PopupMenuItem(value: 'list', child: Text('List View')), PopupMenuItem(value: 'columns', child: Text('Column View'))],
               ),
             ],
           ),
@@ -475,7 +487,9 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                             style: const TextStyle(color: MicroColors.subtle),
                           ),
                         )
-                      : _listView
+        : _columnSelection != null
+                          ? _columnView()
+                          : _listView
                           ? ListView.builder(
                               itemCount: _visibleEntries.length,
                               itemBuilder: (_, i) => _listTile(_visibleEntries[i]),
@@ -496,18 +510,42 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     );
   }
 
+  Widget _columnView() {
+    final selected = _visibleEntries.where((e) => _entryPath(e) == _columnSelection).firstOrNull;
+    return Row(children: [
+      SizedBox(width: 185, child: ListView(children: _visibleEntries.map((e) => ListTile(
+        dense: true, selected: _entryPath(e) == _columnSelection,
+        leading: FinderItemIcon(kind: e.isDirectory ? 'folder' : e.isLink ? 'link' : 'file', size: 23),
+        title: Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: MicroColors.text, fontSize: 12)),
+        trailing: e.isDirectory ? const Icon(Icons.chevron_right_rounded, size: 16) : null,
+        onTap: () => setState(() => _columnSelection = _entryPath(e)),
+        onLongPress: () => _showEntryActions(e),
+      )).toList())),
+      Container(width: 1, color: MicroColors.separator),
+      Expanded(child: selected == null ? const Center(child: Text('Select an item', style: TextStyle(color: MicroColors.subtle))) :
+        Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          FinderItemIcon(kind: selected.isDirectory ? 'folder' : selected.isLink ? 'link' : 'file', size: 52),
+          const SizedBox(height: 8), Padding(padding: const EdgeInsets.all(12), child: Text(selected.name, textAlign: TextAlign.center, style: const TextStyle(color: MicroColors.text))),
+          Text(selected.isDirectory ? 'Folder' : _formatSize(selected.size), style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
+          if (selected.isDirectory) TextButton.icon(onPressed: () => _navigate(_entryPath(selected)), icon: const Icon(Icons.folder_open_rounded), label: const Text('Open Folder')),
+        ])),
+    ]);
+  }
+
   Widget _listTile(_FileEntry entry) {
     final folder = entry.isDirectory;
+    final selected = _selectedPaths.contains(_entryPath(entry));
     return ListTile(
       dense: true,
+      selected: selected,
       leading: FinderItemIcon(
         kind: folder ? 'folder' : entry.isLink ? 'link' : 'file',
         size: 28,
       ),
       title: Text(entry.name, style: const TextStyle(color: MicroColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(folder ? 'Folder' : _formatSize(entry.size), style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
-      onTap: folder ? () => _navigate(_entryPath(entry)) : () => _showFileDetails(entry),
-      onLongPress: () => _showEntryActions(entry),
+      onTap: folder ? () => _navigate(_entryPath(entry)) : () { _toggleSelection(entry); _showFileDetails(entry); },
+      onLongPress: () { _toggleSelection(entry); _showEntryActions(entry); },
     );
   }
 
@@ -515,8 +553,9 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
     final folder = entry.isDirectory;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: folder ? () => _navigate(_entryPath(entry)) : () => _showFileDetails(entry),
-      onLongPress: () => _showEntryActions(entry),
+      onSecondaryTap: () { _toggleSelection(entry); _showEntryActions(entry); },
+      onTap: folder ? () => _navigate(_entryPath(entry)) : () { _toggleSelection(entry); _showFileDetails(entry); },
+      onLongPress: () { _toggleSelection(entry); _showEntryActions(entry); },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
