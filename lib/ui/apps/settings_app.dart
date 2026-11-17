@@ -265,6 +265,30 @@ class _DesktopPage extends StatelessWidget {
           value: settings.dockAutoHide,
           onChanged: (v) => settings.setDockAutoHide(v),
         ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Dock icon size', style: TextStyle(color: MicroColors.text, fontWeight: FontWeight.w600)),
+            ),
+            Text('${(settings.dockScale * 100).round()}%', style: const TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          ],
+        ),
+        Slider(
+          min: 0.8,
+          max: 1.2,
+          divisions: 8,
+          value: (settings.dockScale as double).clamp(0.8, 1.2).toDouble(),
+          label: '${(settings.dockScale * 100).round()}%',
+          onChanged: (value) => settings.setDockScale(value),
+        ),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Smaller', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+            Text('Larger', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+          ],
+        ),
         const Divider(height: 28),
         SwitchListTile(
           title: const Text(
