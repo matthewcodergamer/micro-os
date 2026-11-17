@@ -503,23 +503,6 @@ esac''',
     );
   }
 
-  void _showFileDetails(_FileEntry entry) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: MicroColors.panelSolid,
-        title: Text(entry.name, style: const TextStyle(color: MicroColors.text)),
-        content: Text(
-          '${entry.isLink ? 'Symbolic link' : 'File'} · ${_formatSize(entry.size)}\n\nPath: $_path/${entry.name}',
-          style: const TextStyle(color: MicroColors.subtle),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Row(children: [
@@ -751,7 +734,7 @@ esac''',
       ),
       title: Text(entry.name, style: const TextStyle(color: MicroColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(folder ? 'Folder' : _formatSize(entry.size), style: const TextStyle(color: MicroColors.subtle, fontSize: 11)),
-      onTap: folder ? () => _navigate(_entryPath(entry)) : () { _toggleSelection(entry); _showFileDetails(entry); },
+      onTap: folder ? () => _navigate(_entryPath(entry)) : () { _toggleSelection(entry); _previewEntry(entry); },
       onLongPress: () { _toggleSelection(entry); _showEntryActions(entry); },
     ));
   }
@@ -762,7 +745,7 @@ esac''',
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onSecondaryTap: () { _toggleSelection(entry); _showEntryActions(entry); },
-      onTap: folder ? () => _navigate(_entryPath(entry)) : () { _toggleSelection(entry); _showFileDetails(entry); },
+      onTap: folder ? () => _navigate(_entryPath(entry)) : () { _toggleSelection(entry); _previewEntry(entry); },
       onLongPress: () { _toggleSelection(entry); _showEntryActions(entry); },
       child: Container(
         decoration: BoxDecoration(
