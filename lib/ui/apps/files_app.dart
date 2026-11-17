@@ -495,7 +495,7 @@ done''', paths);
                 tooltip: 'View options', icon: const Icon(Icons.view_column_rounded, size: 18, color: MicroColors.text),
                 onSelected: (v) => setState(() {
                   if (v == 'select-all') {
-                    _selectAllVisible();
+                    _selectedPaths.addAll(_visibleEntries.map(_entryPath));
                   } else if (v == 'hidden') {
                     _showHiddenFiles = !_showHiddenFiles;
                   } else if (v == 'sort-name' || v == 'sort-size' || v == 'sort-kind') {
