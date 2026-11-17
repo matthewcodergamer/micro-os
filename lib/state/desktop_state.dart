@@ -283,6 +283,37 @@ class DesktopState extends ChangeNotifier {
     );
   }
 
+  void snapToHalf(int id, Size screen, {required bool left}) {
+    final w = windows.cast<ManagedWindow?>().firstWhere((x) => x!.id == id, orElse: () => null);
+    if (w == null) return;
+    final area = _area(screen);
+    w.restoreRect ??= w.rect;
+    w.maximized = false;
+    w.pinned = false;
+    final half = area.width / 2;
+    w.rect = Rect.fromLTWH(left ? area.left : area.left + half, area.top, half, area.height);
+    focus(id);
+  }
+
+  void centerWindow(int id, Size screen) {
+    final w = windows.cast<ManagedWindow?>().firstWhere((x) => x!.id == id, orElse: () => null);
+    if (w == null) return;
+    final area = _area(screen);
+    final target = w.restoreRect ?? appDefaultRect(w.app, screen);
+    final width = math.min(target.width, area.width);
+    final height = math.min(target.height, area.height);
+    w.rect = Rect.fromLTWH(
+      _clampD(target.left, area.left, area.right - width),
+      _clampD(target.top, area.top, area.bottom - height),
+      width,
+      height,
+    );
+    w.restoreRect = null;
+    w.maximized = false;
+    w.pinned = false;
+    focus(id);
+  }
+
   void move(int id, Offset delta, Size screen) {
     final w = windows.cast<ManagedWindow?>().firstWhere(
           (x) => x!.id == id,
