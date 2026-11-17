@@ -68,7 +68,7 @@ class _DockState extends State<Dock> {
     final iconSize = landscape
         ? (screen.height < 420 ? 30.0 : 36.0)
         : compact
-        ? (screen.width < 390 ? 30.0 : 36.0)
+        ? (screen.width < 390 ? 28.0 : 32.0)
         : 52.0;
     final maxScale = landscape
         ? 1.28
