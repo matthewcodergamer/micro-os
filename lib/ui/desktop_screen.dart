@@ -365,6 +365,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
           runtime: scope.runtime,
           launchBrowser: true,
           singleProcess: scope.settings.singleProcessBrowser,
+          url: scope.settings.browserHomePage,
         );
       case AppId.files:
         return FilesApp(
