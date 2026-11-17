@@ -48,6 +48,7 @@ class SettingsStore extends ChangeNotifier {
   int accentColorValue = 0xFF0A84FF;
   String displayResolution = '1280x720';
   double screenBrightness = 0.75;
+  bool screenBrightnessConfigured = false;
   Color get accentColor => Color(accentColorValue);
   String? loginPassword;
   bool loginPasswordStorageUnavailable = false;
@@ -86,6 +87,7 @@ class SettingsStore extends ChangeNotifier {
     accentColorValue = prefs.getInt(_kAccentColor) ?? 0xFF0A84FF;
     final savedResolution = prefs.getString(_kDisplayResolution) ?? '1280x720';
     displayResolution = const {'1024x768', '1280x720', '1600x900', '1920x1080'}.contains(savedResolution) ? savedResolution : '1280x720';
+    screenBrightnessConfigured = prefs.containsKey(_kScreenBrightness);
     screenBrightness = (prefs.getDouble(_kScreenBrightness) ?? 0.75).clamp(0.05, 1.0).toDouble();
     trackpadMode = prefs.getBool(_kTrackpadMode) ?? true;
     trackpadSpeed = (prefs.getDouble(_kTrackpadSpeed) ?? 1.35).clamp(0.7, 2.2).toDouble();
@@ -235,6 +237,7 @@ class SettingsStore extends ChangeNotifier {
 
   Future<void> setScreenBrightness(double value) async {
     screenBrightness = value.clamp(0.05, 1.0).toDouble();
+    screenBrightnessConfigured = true;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_kScreenBrightness, screenBrightness);
