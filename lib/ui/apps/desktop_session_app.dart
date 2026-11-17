@@ -265,7 +265,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   }
 
   Future<void> _launchSelectedBrowser() async {
-    final url = widget.url ?? 'https://www.google.com';
+    final url = widget.url ?? _settingsStore?.browserHomePage ?? 'https://www.google.com';
     if (!mounted) return;
     setState(() => _status =
         'Opening $url in ${_selectedBrowser == 'firefox' ? 'Firefox' : 'Chromium'}…');
@@ -280,6 +280,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   Future<void> _selectBrowser(String? browser) async {
     if (browser == null || browser == _selectedBrowser) return;
     setState(() => _selectedBrowser = browser);
+    await _settingsStore?.setBrowserEngine(browser);
     await _launchSelectedBrowser();
   }
 
