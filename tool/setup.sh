@@ -676,9 +676,30 @@ x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost \
 VNC_PID=$!
 if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then echo "[microos] ERROR: x11vnc failed to open port 5900" >&2; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
 if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client is missing" >&2; exit 1; fi
-websockify --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
+# Bind the HTTP/WebSocket bridge to loopback only. The Android WebView
+# connects through 127.0.0.1; exposing an unauthenticated VNC bridge to the
+# phone's Wi-Fi/LAN interfaces would let other devices control this desktop.
+websockify --host=127.0.0.1 --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
 WEBSOCKIFY_PID=$!
-if ! wait_for_port 6080 80 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then echo "[microos] ERROR: websockify failed to open port 6080" >&2; cat "$LOG/websockify.log" >&2 || true; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
+wait_for_novnc_http() {
+  for ((i=0;i<80;i++)); do
+    if python3 -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:6080/vnc.html", timeout=2).read(128)' >/dev/null 2>&1; then
+      return 0
+    fi
+    kill -0 "$WEBSOCKIFY_PID" 2>/dev/null || {
+      cat "$LOG/websockify.log" >&2 || true
+      return 1
+    }
+    sleep 0.25
+  done
+  return 1
+}
+if ! wait_for_port 6080 80 || ! wait_for_novnc_http || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then
+  echo "[microos] ERROR: noVNC HTTP bridge failed its 127.0.0.1:6080 health check" >&2
+  cat "$LOG/websockify.log" >&2 || true
+  cat "$LOG/x11vnc.log" >&2 || true
+  exit 1
+fi
 if ! pgrep -u microos-browser -f 'chromium|firefox' >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window chrome://newtab/ >"$LOG/chromium.log" 2>&1 & fi
 echo "[microos] display :1 ready (Xvfb 1280x720, Openbox, VNC 5900, noVNC 6080)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
