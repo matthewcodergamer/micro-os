@@ -115,6 +115,12 @@ jobs:
           grep -q 'displayResolution' lib/services/settings_store.dart
           grep -q 'setDisplayResolution' lib/services/linux_runtime.dart
           grep -q 'xrandr --display :1 --fb' tool/setup.sh
+          grep -q -- '--restore-last-session' tool/setup.sh
+          grep -q 'browser.sessionstore.resume_from_crash' tool/setup.sh
+          grep -q 'browser.startup.page", 3' tool/setup.sh
+          grep -q '_DisplayPage' lib/ui/apps/settings_app.dart
+          grep -q 'displayResolution' lib/services/settings_store.dart
+          grep -q 'setDisplayResolution' lib/ui/apps/desktop_session_app.dart
           grep -q 'browserHomePage' lib/services/settings_store.dart
           grep -q 'setBrowserEngine' lib/services/settings_store.dart
           grep -q 'Default browser' lib/ui/apps/settings_app.dart
