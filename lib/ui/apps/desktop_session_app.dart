@@ -63,6 +63,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     super.didChangeDependencies();
     if (_settingsInitialized) return;
     _settingsStore = AppScope.of(context).settings;
+    _selectedBrowser = _settingsStore!.browserEngine;
     _trackpadMode = _settingsStore!.trackpadMode;
     _trackpadSpeed = _settingsStore!.trackpadSpeed;
     _settingsStore!.addListener(_syncTrackpadSettings);
@@ -74,10 +75,12 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     if (settings == null || !mounted) return;
     final modeChanged = _trackpadMode != settings.trackpadMode;
     final speedChanged = _trackpadSpeed != settings.trackpadSpeed;
-    if (!modeChanged && !speedChanged) return;
+    final browserChanged = _selectedBrowser != settings.browserEngine;
+    if (!modeChanged && !speedChanged && !browserChanged) return;
     setState(() {
       _trackpadMode = settings.trackpadMode;
       _trackpadSpeed = settings.trackpadSpeed;
+      _selectedBrowser = settings.browserEngine;
     });
     final controller = _controller;
     if (controller != null) {
@@ -123,7 +126,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     if (widget.launchBrowser) {
       setState(() => _status = 'Launching the browser…');
       await widget.runtime.launchBrowser(
-        url: widget.url ?? 'https://www.google.com',
+        url: widget.url ?? _settingsStore?.browserHomePage ?? 'https://www.google.com',
         browser: _selectedBrowser,
         singleProcess: widget.singleProcess,
       );
