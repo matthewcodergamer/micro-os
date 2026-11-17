@@ -15,6 +15,10 @@ class SystemControls {
     };
   }
 
+  static Future<void> openNetworkSettings() async {
+    await _channel.invokeMethod<bool>('openNetworkSettings');
+  }
+
   static Future<double> setBrightness(double value) async {
     final applied = await _channel.invokeMethod<num>(
       'setBrightness',
