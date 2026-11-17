@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 const double kMenuBarHeight = 28;
 const double kStatusBarHeight = kMenuBarHeight; // legacy alias
 const double kCompactBreakpoint = 720;
-const double kDockHeight = 92; // legacy
-const double kDockReserved = 108; // legacy
+const double kDockHeight = 68; // compact floating portrait Dock
+const double kDockReserved = 76; // Dock plus breathing room
 
 /// macOS "Golden Gate" palette: dark chrome, Liquid-Glass translucency.
 class MicroColors {
