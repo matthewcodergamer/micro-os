@@ -10,6 +10,7 @@ import 'core/theme.dart';
 import 'services/github_auth.dart';
 import 'services/linux_runtime.dart';
 import 'services/settings_store.dart';
+import 'services/system_controls.dart';
 import 'services/system_stats.dart';
 import 'state/desktop_state.dart';
 import 'ui/desktop_screen.dart';
@@ -81,6 +82,7 @@ Future<void> main() async {
   final settings = SettingsStore();
 
   await settings.load();
+  await SystemControls.setBrightness(settings.screenBrightness);
   await SystemChrome.setEnabledSystemUIMode(
     settings.systemBarsVisible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
   );
