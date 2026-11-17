@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../core/format.dart';
@@ -65,7 +65,7 @@ class _StatusBarState extends State<StatusBar> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 390;
-          final showDate = constraints.maxWidth >= 340;
+          final showDate = constraints.maxWidth >= 400;
           return Container(
         height: widget.height,
         padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 12),
@@ -104,12 +104,16 @@ class _StatusBarState extends State<StatusBar> {
             ),
             const SizedBox(width: 6),
             // Focused app name
-            Text(
-              focused?.title ?? 'Finder',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                focused?.title ?? 'Finder',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const Spacer(),
