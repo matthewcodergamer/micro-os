@@ -21,12 +21,16 @@ class FilesApp extends StatefulWidget {
   State<FilesApp> createState() => _FilesAppState();
 }
 
+enum _FinderSort { name, size, kind }
+
 class _FilesAppState extends State<FilesApp> {
   String _path = '/root';
   List<_FileEntry> _entries = const [];
   bool _loading = true;
   bool _listView = false;
   bool _showHiddenFiles = false;
+  _FinderSort _sort = _FinderSort.name;
+  bool _ascending = true;
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
   String? _error;
@@ -172,10 +176,28 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
 
   List<_FileEntry> get _visibleEntries {
     final query = _search.trim().toLowerCase();
-    return _entries.where((entry) {
+    final entries = _entries.where((entry) {
       if (!_showHiddenFiles && entry.name.startsWith('.')) return false;
       return query.isEmpty || entry.name.toLowerCase().contains(query);
-    }).toList(growable: false);
+    }).toList();
+    entries.sort((a, b) {
+      final directoryOrder = a.isDirectory == b.isDirectory ? 0 : (a.isDirectory ? -1 : 1);
+      if (directoryOrder != 0) return directoryOrder;
+      final order = switch (_sort) {
+        _FinderSort.name => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        _FinderSort.size => a.size.compareTo(b.size),
+        _FinderSort.kind => _fileKind(a).compareTo(_fileKind(b)),
+      };
+      return _ascending ? order : -order;
+    });
+    return entries;
+  }
+
+  String _fileKind(_FileEntry entry) {
+    if (entry.isDirectory) return 'Folder';
+    if (entry.isLink) return 'Link';
+    final dot = entry.name.lastIndexOf('.');
+    return dot > 0 ? entry.name.substring(dot + 1).toLowerCase() : 'File';
   }
 
   String _formatSize(int bytes) {
@@ -414,13 +436,7 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                 color: MicroColors.text,
                 onPressed: _path == '/' ? null : () => _navigate(_parentPath),
               ),
-              Expanded(
-                child: Text(
-                  _path,
-                  style: const TextStyle(color: MicroColors.subtle, fontSize: 12),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              Expanded(child: _breadcrumbs()),
               IconButton(
                 tooltip: 'New folder',
                 icon: const Icon(Icons.create_new_folder_outlined, size: 18),
@@ -438,6 +454,10 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                 onSelected: (v) => setState(() {
                   if (v == 'hidden') {
                     _showHiddenFiles = !_showHiddenFiles;
+                  } else if (v == 'sort-name' || v == 'sort-size' || v == 'sort-kind') {
+                    _sort = v == 'sort-size' ? _FinderSort.size : v == 'sort-kind' ? _FinderSort.kind : _FinderSort.name;
+                  } else if (v == 'sort-direction') {
+                    _ascending = !_ascending;
                   } else {
                     _listView = v == 'list';
                     _columnSelection = v == 'columns' ? '' : null;
@@ -448,6 +468,11 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                   const PopupMenuItem(value: 'list', child: Text('List View')),
                   const PopupMenuItem(value: 'columns', child: Text('Column View')),
                   PopupMenuItem(value: 'hidden', child: Text(_showHiddenFiles ? 'Hide Hidden Files' : 'Show Hidden Files')),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(value: 'sort-name', child: Text('Sort by Name')),
+                  const PopupMenuItem(value: 'sort-size', child: Text('Sort by Size')),
+                  const PopupMenuItem(value: 'sort-kind', child: Text('Sort by Kind')),
+                  PopupMenuItem(value: 'sort-direction', child: Text(_ascending ? 'Sort Descending' : 'Sort Ascending')),
                 ],
               ),
             ],
@@ -532,6 +557,29 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
       ],
       )),
     ]);
+  }
+
+  Widget _breadcrumbs() {
+    final segments = _path.split('/').where((part) => part.isNotEmpty).toList();
+    final crumbs = <({String label, String path})>[(label: 'Macintosh HD', path: '/')];
+    var current = '';
+    for (final segment in segments) {
+      current += '/$segment';
+      crumbs.add((label: segment, path: current));
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        for (var i = 0; i < crumbs.length; i++) ...[
+          if (i > 0) const Icon(Icons.chevron_right_rounded, size: 15, color: MicroColors.subtle),
+          TextButton(
+            style: TextButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 5), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            onPressed: () => _navigate(crumbs[i].path),
+            child: Text(crumbs[i].label, style: TextStyle(color: i == crumbs.length - 1 ? MicroColors.text : MicroColors.subtle, fontSize: 12), overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ]),
+    );
   }
 
   Widget _sidebarItem(String label, String path, String kind) {
