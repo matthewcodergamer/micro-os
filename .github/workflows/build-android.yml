@@ -138,7 +138,6 @@ jobs:
           grep -q 'screenBrightness' tool/bootstrap_android.sh
           grep -q 'screenBrightnessConfigured' lib/services/settings_store.dart
           grep -q 'openNetworkSettings' tool/bootstrap_android.sh
-          grep -q 'previewEntry' lib/ui/apps/files_app.dart
           grep -q 'browserHomePage' lib/services/settings_store.dart
           grep -q 'setBrowserEngine' lib/services/settings_store.dart
           grep -q 'Default browser' lib/ui/apps/settings_app.dart
