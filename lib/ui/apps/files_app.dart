@@ -437,7 +437,7 @@ done''', paths);
       '/bin/bash', '-lc',
       r'''set -eu
 mime="$(python3 -c 'import mimetypes,sys; print(mimetypes.guess_type(sys.argv[1])[0] or "application/octet-stream")' "$1")"
-printf '%s\\0' "$mime"
+printf '%s\0' "$mime"
 case "$mime" in
   text/*|application/json|application/xml|application/javascript)
     head -c 16384 -- "$1"
@@ -457,7 +457,7 @@ esac''',
     try {
       final code = await pty.exitCode.timeout(const Duration(seconds: 10));
       final output = utf8.decode(bytes.takeBytes(), allowMalformed: true);
-      final separator = output.indexOf('\\u0000');
+      final separator = output.indexOf('\u0000');
       if (separator >= 0) {
         mime = output.substring(0, separator);
         payload = output.substring(separator + 1);
