@@ -368,7 +368,19 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(children: [
+      SizedBox(width: 132, child: Container(color: MicroColors.sidebar, child: ListView(padding: const EdgeInsets.all(8), children: [
+        const Padding(padding: EdgeInsets.all(8), child: Text('FAVORITES', style: TextStyle(color: MicroColors.subtle, fontSize: 10, fontWeight: FontWeight.w700))),
+        _sidebarItem('Home', '/root', 'home'),
+        _sidebarItem('Downloads', '/root/Downloads', 'downloads'),
+        _sidebarItem('Documents', '/root/Documents', 'documents'),
+        _sidebarItem('Desktop', '/root/Desktop', 'desktop'),
+        const Padding(padding: EdgeInsets.all(8), child: Text('LOCATIONS', style: TextStyle(color: MicroColors.subtle, fontSize: 10, fontWeight: FontWeight.w700))),
+        _sidebarItem('Phone', '/mnt/android', 'phone'),
+        _sidebarItem('Linux', '/', 'drive'),
+      ]))),
+      Container(width: 1, color: MicroColors.separator),
+      Expanded(child: Column(
       children: [
         Container(
           height: 46,
@@ -438,25 +450,6 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
             ),
           ),
         ),
-        SizedBox(
-          height: 42,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            children: [
-              for (final location in _locations)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ActionChip(
-                    avatar: FinderItemIcon(kind: location.kind, size: 18),
-                    label: Text(location.label),
-                    onPressed: () => _navigate(location.path),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-            ],
-          ),
-        ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -507,7 +500,13 @@ find -- "$1" -mindepth 1 -maxdepth 1 -printf '%y\0%s\0%f\0' 2>/dev/null
                             ),
         ),
       ],
-    );
+      )),
+    ]);
+  }
+
+  Widget _sidebarItem(String label, String path, String kind) {
+    final selected = _path == path || (path != '/' && _path.startsWith(path + '/'));
+    return ListTile(dense: true, selected: selected, contentPadding: const EdgeInsets.symmetric(horizontal: 7), leading: FinderItemIcon(kind: kind, size: 18), title: Text(label, style: const TextStyle(fontSize: 11, color: MicroColors.text)), onTap: () => _navigate(path));
   }
 
   Widget _columnView() {
