@@ -74,7 +74,7 @@ class ControlCenterOverlay extends StatelessWidget {
                     label: 'Wi-Fi',
                     value: stats.connection,
                     active: true,
-                    onTap: () { SystemControls.openNetworkSettings(); },
+                    onTap: () async { try { await SystemControls.openNetworkSettings(); } catch (_) {} },
                   ),
                   _Tile(
                     icon: Icons.battery_full_rounded,
@@ -209,7 +209,6 @@ class _SystemControlSlidersState extends State<_SystemControlSliders> {
 
   Future<void> _setBrightness(double value) async {
     setState(() => _brightness = value);
-    await widget.settings.setScreenBrightness(value);
     try { await SystemControls.setBrightness(value); } catch (_) {}
   }
 
@@ -231,7 +230,7 @@ class _SystemControlSlidersState extends State<_SystemControlSliders> {
           const Icon(Icons.brightness_6_rounded, color: Colors.white70, size: 17),
           const SizedBox(width: 8),
           const SizedBox(width: 70, child: Text('Brightness', style: TextStyle(color: Colors.white, fontSize: 12, decoration: TextDecoration.none))),
-          Expanded(child: Slider(min: 0.05, max: 1, value: _brightness.clamp(0.05, 1).toDouble(), onChanged: _setBrightness)),
+          Expanded(child: Slider(min: 0.05, max: 1, value: _brightness.clamp(0.05, 1).toDouble(), onChanged: _setBrightness, onChangeEnd: widget.settings.setScreenBrightness)),
         ]),
         Row(children: [
           const Icon(Icons.volume_up_rounded, color: Colors.white70, size: 17),
