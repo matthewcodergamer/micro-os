@@ -30,7 +30,9 @@ cat > "$MAIN_ACTIVITY" <<'KOTLIN'
 package com.matthewcodergamer.micro_os
 
 import android.content.Intent
+import android.media.AudioManager
 import android.os.Build
+import kotlin.math.roundToInt
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -79,6 +81,34 @@ class MainActivity : FlutterActivity() {
                             result.error("ASSET_COPY_FAILED", error.message, null)
                         }
                     }
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "microos/system_controls")
+            .setMethodCallHandler { call, result ->
+                val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+                when (call.method) {
+                    "getState" -> {
+                        val maxVolume = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                        val volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / maxVolume
+                        val currentBrightness = window.attributes.screenBrightness
+                        val brightness = if (currentBrightness < 0f) 0.75f else currentBrightness
+                        result.success(mapOf("brightness" to brightness.toDouble(), "volume" to volume))
+                    }
+                    "setBrightness" -> {
+                        val value = (call.argument<Double>("value") ?: 0.75).toFloat().coerceIn(0.05f, 1f)
+                        val attributes = window.attributes
+                        attributes.screenBrightness = value
+                        window.attributes = attributes
+                        result.success(value.toDouble())
+                    }
+                    "setVolume" -> {
+                        val value = (call.argument<Double>("value") ?: 0.5).coerceIn(0.0, 1.0)
+                        val maxVolume = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                        audio.setStreamVolume(AudioManager.STREAM_MUSIC, (value * maxVolume).roundToInt().coerceIn(0, maxVolume), 0)
+                        result.success(audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / maxVolume)
+                    }
+                    else -> result.notImplemented()
                 }
             }
 
