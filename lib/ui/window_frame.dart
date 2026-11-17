@@ -106,10 +106,18 @@ class _TitleBar extends StatelessWidget {
     );
     if (!context.mounted || action == null) return;
     switch (action) {
-      case 'left': desktop.snapToHalf(window.id, screen, left: true);
-      case 'right': desktop.snapToHalf(window.id, screen, left: false);
-      case 'center': desktop.centerWindow(window.id, screen);
-      case 'zoom': desktop.toggleMaximize(window.id, screen);
+      case 'left':
+        desktop.snapToHalf(window.id, screen, left: true);
+        break;
+      case 'right':
+        desktop.snapToHalf(window.id, screen, left: false);
+        break;
+      case 'center':
+        desktop.centerWindow(window.id, screen);
+        break;
+      case 'zoom':
+        desktop.toggleMaximize(window.id, screen);
+        break;
     }
   }
 
