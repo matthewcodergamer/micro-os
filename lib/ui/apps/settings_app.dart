@@ -14,6 +14,7 @@ import '../../services/settings_store.dart';
 
 enum _Page {
   appearance,
+  display,
   desktop,
   wallpaper,
   pointer,
@@ -42,6 +43,7 @@ class _SettingsAppState extends State<SettingsApp> {
 
   IconData _icon(_Page page) => switch (page) {
     _Page.appearance => Icons.palette_rounded,
+    _Page.display => Icons.monitor_rounded,
     _Page.desktop => Icons.display_settings_rounded,
     _Page.wallpaper => Icons.wallpaper_rounded,
     _Page.pointer => Icons.mouse_rounded,
@@ -71,6 +73,7 @@ class _SettingsAppState extends State<SettingsApp> {
       builder: (context, _) {
         return switch (_page) {
           _Page.appearance => _AppearancePage(settings: settings),
+          _Page.display => _DisplayPage(settings: settings, runtime: runtime),
           _Page.desktop => _DesktopPage(settings: settings),
           _Page.wallpaper => _WallpaperPage(settings: settings),
           _Page.pointer => _PointerPage(settings: settings),
@@ -229,6 +232,7 @@ class _SettingsAppState extends State<SettingsApp> {
 
   String _title(_Page p) => switch (p) {
     _Page.appearance => 'Appearance',
+    _Page.display => 'Displays',
     _Page.desktop => 'Desktop & Dock',
     _Page.wallpaper => 'Wallpaper',
     _Page.pointer => 'Trackpad & Pointer',
@@ -241,6 +245,37 @@ class _SettingsAppState extends State<SettingsApp> {
     _Page.login => 'Users & Login',
     _Page.about => 'About',
   };
+}
+
+class _DisplayPage extends StatelessWidget {
+  const _DisplayPage({required this.settings, required this.runtime});
+  final dynamic settings;
+  final LinuxRuntime runtime;
+  static const _resolutions = ['1024x768', '1280x720', '1600x900', '1920x1080'];
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(padding: const EdgeInsets.all(24), children: [
+      const Text('Displays', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      const Text('Choose the virtual Linux desktop framebuffer size. Larger sizes provide more workspace but use more memory and rendering bandwidth.', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+      const SizedBox(height: 20),
+      DropdownButtonFormField<String>(
+        value: settings.displayResolution as String,
+        decoration: const InputDecoration(labelText: 'Desktop resolution'),
+        items: [for (final value in _resolutions) DropdownMenuItem(value: value, child: Text(value))],
+        onChanged: (value) async {
+          if (value == null) return;
+          await settings.setDisplayResolution(value);
+          final applied = await runtime.setDisplayResolution(value);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(applied ? 'Desktop resolution changed to $value.' : 'Saved $value. It will apply when the Linux desktop starts.')));
+        },
+      ),
+      const SizedBox(height: 12),
+      const Text('The setting is saved on this device and restored when the Linux desktop session starts.', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+    ]);
+  }
 }
 
 class _AppearancePage extends StatelessWidget {
