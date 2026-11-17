@@ -88,6 +88,8 @@ jobs:
           grep -q 'setTrackpadMode' lib/services/settings_store.dart
           grep -q 'setTrackpadSpeed' lib/services/settings_store.dart
           grep -q '_syncTrackpadSettings' lib/ui/apps/desktop_session_app.dart
+          grep -q 'ResizeObserver' lib/ui/apps/desktop_session_app.dart
+          grep -q 'visualViewport' lib/ui/apps/desktop_session_app.dart
           grep -q '_visiblePages' lib/ui/apps/settings_app.dart
           grep -q 'Clear search' lib/ui/apps/settings_app.dart
           grep -q 'No matching settings' lib/ui/apps/settings_app.dart
