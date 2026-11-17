@@ -81,6 +81,9 @@ jobs:
           grep -q 'start-desktop.sh' tool/setup.sh
           grep -q '_sidebarItem' lib/ui/apps/files_app.dart
           grep -q 'Search settings' lib/ui/apps/settings_app.dart
+          grep -q '_WallpaperPage' lib/ui/apps/settings_app.dart
+          grep -q 'settings.setWallpaper(wallpaper.id)' lib/ui/apps/settings_app.dart
+          grep -q 'wallpaperById' lib/core/wallpapers.dart
           grep -q '_visiblePages' lib/ui/apps/settings_app.dart
           grep -q 'Icons.display_settings_rounded' lib/ui/apps/settings_app.dart
           grep -q '_goBack' lib/ui/apps/files_app.dart
