@@ -700,7 +700,9 @@ if ! wait_for_port 6080 80 || ! wait_for_novnc_http || ! kill -0 "$WEBSOCKIFY_PI
   cat "$LOG/x11vnc.log" >&2 || true
   exit 1
 fi
-if ! pgrep -u microos-browser -f 'chromium|firefox' >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window chrome://newtab/ >"$LOG/chromium.log" 2>&1 & fi
+# Do not launch Chromium as a side effect of starting the desktop service.
+# The Browser app launches it on explicit user tap; this prevents duplicate
+# windows when the user opens Finder/Desktop before opening Browser.
 echo "[microos] display :1 ready (Xvfb 1280x720, Openbox, VNC 5900, noVNC 6080)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
 echo "[microos] ERROR: X11/VNC/noVNC process exited; inspect $LOG/*.log" >&2
