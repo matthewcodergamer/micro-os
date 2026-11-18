@@ -350,7 +350,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           }
           window.addEventListener('resize',resizePointer,{passive:true});
           window.visualViewport?.addEventListener('resize',resizePointer,{passive:true});
-          const moveCursor=(dx,dy)=>{cursorX+=dx*sensitivity;cursorY+=dy*sensitivity;clampCursor();mouse('mousemove',cursorX,cursorY,-1,0);};
+          const moveCursor=(dx,dy,buttons=0)=>{cursorX+=dx*sensitivity;cursorY+=dy*sensitivity;clampCursor();mouse('mousemove',cursorX,cursorY,-1,buttons);};
           const setMode=enabled=>{
             trackpad=!!enabled;
             cursor.style.display=trackpad?'block':'none';
@@ -390,8 +390,11 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             mode='pending';startX=lastX=p.x;startY=lastY=p.y;moved=false;clear();
             timer=setTimeout(()=>{
               if(mode==='pending'&&!moved){
-                mode='right';
-                clickAt(trackpad?cursorX:startX,trackpad?cursorY:startY,2);
+                // Long-press enters a real left-button drag. Moving after the
+                // hold selects text in terminals/editors and drags desktop items.
+                mode='drag';
+                const x=trackpad?cursorX:startX,y=trackpad?cursorY:startY;
+                mouse('mousedown',x,y,0,1);
               }
             },500);
           },{passive:false});
@@ -405,7 +408,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
               }));
               lastX=x;lastY=y;return;
             }
-            if((mode==='pending'||mode==='move')&&e.touches.length===1){
+            if((mode==='pending'||mode==='move'||mode==='drag')&&e.touches.length===1){
               e.preventDefault();const p=point(e.touches[0]);
               if(mode==='pending'&&Math.hypot(p.x-startX,p.y-startY)>8){
                 clear();moved=true;mode='move';
@@ -413,6 +416,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
               }
               if(mode==='move'){
                 if(trackpad)moveCursor(p.x-lastX,p.y-lastY);
+                else mouse('mousemove',p.x,p.y,-1,1);
+              } else if(mode==='drag'){
+                if(trackpad)moveCursor(p.x-lastX,p.y-lastY,1);
                 else mouse('mousemove',p.x,p.y,-1,1);
               }
               lastX=p.x;lastY=p.y;
@@ -424,7 +430,11 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             if((!e || e.type!=='touchcancel')&&mode==='pending'&&!moved){
               clickAt(trackpad?cursorX:startX,trackpad?cursorY:startY,0);
             }
-            if(mode==='move'&&!trackpad)mouse('mouseup',lastX,lastY,0,0);
+            if(mode==='drag'){
+              mouse('mouseup',trackpad?cursorX:lastX,trackpad?cursorY:lastY,0,0);
+            } else if(mode==='move'&&!trackpad){
+              mouse('mouseup',lastX,lastY,0,0);
+            }
             mode='idle';
           };
           target.addEventListener('touchend',finish,{passive:false});
