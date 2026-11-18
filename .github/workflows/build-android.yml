@@ -159,6 +159,10 @@ jobs:
           grep -q 'http://127.0.0.1:6080/vnc.html' tool/setup.sh
           grep -q 'http://127.0.0.1:6080/vnc.html' lib/services/linux_runtime.dart
           grep -q 'ensureDisplay(restart: true)' lib/ui/apps/desktop_session_app.dart
+          grep -q "mode='drag'" lib/ui/apps/desktop_session_app.dart
+          grep -q "moveCursor(p.x-lastX,p.y-lastY,1)" lib/ui/apps/desktop_session_app.dart
+          grep -q "mouse('mouseup',trackpad?cursorX:lastX,trackpad?cursorY:lastY,0,0)" lib/ui/apps/desktop_session_app.dart
+          grep -q "mode==='scroll'&&e.touches.length>=2" lib/ui/apps/desktop_session_app.dart
           grep -q 'openbox --sm-disable' tool/prebake_rootfs.sh
           grep -q '_NET_SUPPORTING_WM_CHECK' tool/prebake_rootfs.sh
           chmod +x tool/prebake_rootfs.sh
