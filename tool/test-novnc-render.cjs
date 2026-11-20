@@ -45,7 +45,7 @@ async function main() {
 
     log("opening " + url);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await page.waitForSelector("#noVNC_container canvas", { timeout: 15000 });
+    await page.waitForSelector("#noVNC_container canvas", { state: "attached", timeout: 15000 });
 
     const sample = async () => page.evaluate(() => {
       const canvas = document.querySelector("#noVNC_container canvas");
