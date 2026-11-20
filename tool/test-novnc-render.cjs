@@ -45,10 +45,10 @@ async function main() {
 
     log("opening " + url);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await page.waitForSelector("#noVNC_canvas", { timeout: 15000 });
+    await page.waitForSelector("#noVNC_container canvas", { timeout: 15000 });
 
     const sample = async () => page.evaluate(() => {
-      const canvas = document.getElementById("noVNC_canvas");
+      const canvas = document.querySelector("#noVNC_container canvas");
       if (!canvas || canvas.width < 2 || canvas.height < 2) {
         return { exists: !!canvas, width: canvas?.width || 0, height: canvas?.height || 0 };
       }
@@ -69,7 +69,7 @@ async function main() {
     });
 
     const first = await page.waitForFunction((target) => {
-      const canvas = document.getElementById("noVNC_canvas");
+      const canvas = document.querySelector("#noVNC_container canvas");
       if (!canvas || canvas.width < 2 || canvas.height < 2) return false;
       try {
         const p = canvas.getContext("2d").getImageData(
@@ -86,7 +86,7 @@ async function main() {
 
     setDesktopColor("#d14b2a");
     const second = await page.waitForFunction((target) => {
-      const canvas = document.getElementById("noVNC_canvas");
+      const canvas = document.querySelector("#noVNC_container canvas");
       if (!canvas || canvas.width < 2 || canvas.height < 2) return false;
       try {
         const p = canvas.getContext("2d").getImageData(
@@ -109,7 +109,7 @@ async function main() {
     if (page) {
       try {
         const state = await page.evaluate(() => {
-          const c = document.getElementById("noVNC_canvas");
+          const c = document.querySelector("#noVNC_container canvas");
           return {
             exists: !!c,
             width: c?.width || 0,
