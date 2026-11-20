@@ -7,7 +7,7 @@ const { execFileSync } = require("node:child_process");
 const display = process.env.DISPLAY || ":100";
 const url = process.env.MICROOS_NOVNC_URL ||
   "http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale&path=websockify&quality=6&compression=2";
-let websocketOpened = false;
+let websocketCreated = false;
 let websocketFrames = 0;
 
 function log(message) {
@@ -36,11 +36,8 @@ async function main() {
     page.on("pageerror", (error) => log("browser pageerror: " + (error.stack || error.message)));
     page.on("requestfailed", (request) => log("request failed: " + request.url() + " " + (request.failure()?.errorText || "")));
     page.on("websocket", (socket) => {
+      websocketCreated = true;
       log("WebSocket created: " + socket.url());
-      socket.on("open", () => {
-        websocketOpened = true;
-        log("WebSocket OPEN");
-      });
       socket.on("socketerror", (error) => log("WebSocket ERROR: " + error));
       socket.on("close", () => log("WebSocket CLOSED"));
       socket.on("framereceived", () => { websocketFrames += 1; });
@@ -102,7 +99,7 @@ async function main() {
     }, [209, 75, 42], { timeout: 15000 }).then(() => sample());
 
     log("changed framebuffer color rendered: " + JSON.stringify(second));
-    if (!websocketOpened) log("NOTE: Playwright did not emit a WebSocket open event; pixel assertions passed");
+    if (!websocketCreated) throw new Error("noVNC did not create a WebSocket connection");
     log("WebSocket frames received by browser: " + websocketFrames);
     if (websocketFrames < 1) throw new Error("WebSocket carried no received frames");
     await page.screenshot({ path: "/tmp/microos-novnc-render.png" });
