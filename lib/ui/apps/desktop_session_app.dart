@@ -319,6 +319,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
         }
 
         const rfb = ui.rfb;
+        let rfbConnected = false;
         if (!rfb) {
           send('rfb-error', {message: 'UI.connect did not create UI.rfb'});
         } else {
@@ -328,8 +329,10 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           ]) {
             rfb.addEventListener(eventName, event => {
               const detail = event?.detail || {};
+              if (eventName === 'connect') rfbConnected = true;
+              if (eventName === 'disconnect') rfbConnected = false;
               send('rfb-' + eventName, {
-                state: rfb._rfbConnectionState || 'unknown',
+                state: rfbConnected ? 'connected' : (rfb._rfbConnectionState || 'unknown'),
                 clean: detail.clean,
                 reason: detail.reason,
                 name: detail.name,
@@ -347,7 +350,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
         let lastReport = 0;
         const sampleFramebuffer = () => {
           const canvas = document.getElementById('noVNC_canvas');
-          const state = window.UI?.rfb?._rfbConnectionState || 'unavailable';
+          const state = rfbConnected ? 'connected' : (window.UI?.rfb?._rfbConnectionState || 'unavailable');
           let width = canvas?.width || 0;
           let height = canvas?.height || 0;
           let nonBlackPixels = 0;
@@ -375,7 +378,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
               sampleError = String(error);
             }
           }
-          const connected = state === 'connected';
+          const connected = rfbConnected || state === 'connected';
           const canvasReady = width > 0 && height > 0;
           const healthy = connected && canvasReady && nonBlackPixels > 0;
           window.__microOsVncHealth = {
