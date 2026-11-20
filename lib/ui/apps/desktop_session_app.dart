@@ -144,6 +144,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0B0E14))
+      ..setOnConsoleMessage((message) => widget.runtime.logDiagnostic(
+            'console ${message.level}: ${message.message}',
+          ))
       ..addJavaScriptChannel(
         'MicroOSDiagnostics',
         onMessageReceived: _onVncDiagnosticMessage,
