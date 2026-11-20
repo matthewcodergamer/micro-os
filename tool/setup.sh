@@ -259,18 +259,27 @@ MICROOS_NOVNC_DIAGNOSTICS
   python3 - <<'PATCH_NOVNC'
 from pathlib import Path
 
-page = Path("/usr/share/novnc/vnc.html")
-source = page.read_text(encoding="utf-8")
-needle = '        import UI from "./app/ui.js";'
-addition = needle + '\n        import { installMicroOSDiagnostics } from "./app/microos-diagnostics.js";\n        installMicroOSDiagnostics(UI);'
-if "microos-diagnostics.js" not in source:
-    if needle not in source:
-        raise SystemExit("noVNC vnc.html import layout was not recognized; refusing an unsafe patch")
-    source = source.replace(needle, addition, 1)
-    page.write_text(source, encoding="utf-8")
+ui_file = Path("/usr/share/novnc/app/ui.js")
+source = ui_file.read_text(encoding="utf-8")
+import_anchor = 'import * as WebUtil from "./webutil.js";'
+import_line = 'import { installMicroOSDiagnostics } from "./microos-diagnostics.js";'
+hook = "window.UI = UI;\ninstallMicroOSDiagnostics(UI);\n"
+if "installMicroOSDiagnostics" not in source:
+    if import_anchor not in source:
+        raise SystemExit("noVNC app/ui.js import layout was not recognized")
+    source = source.replace(import_anchor, import_anchor + "\n" + import_line, 1)
+    if "// Set up translations" in source:
+        source = source.replace("// Set up translations", hook + "\n// Set up translations", 1)
+    elif "export default UI;" in source:
+        source = source.replace("export default UI;", hook + "\nexport default UI;", 1)
+    else:
+        raise SystemExit("noVNC app/ui.js startup location was not recognized")
+    ui_file.write_text(source, encoding="utf-8")
+elif "window.UI = UI;" not in source:
+    raise SystemExit("noVNC diagnostics import exists without the UI exposure hook")
 PATCH_NOVNC
   if [ "$?" -ne 0 ]; then
-    warn "noVNC vnc.html import layout was not recognized; refusing an uninstrumented browser image"
+    warn "noVNC app/ui.js layout was not recognized; refusing an uninstrumented browser image"
     exit 1
   fi
   log "noVNC WebSocket/RFB instrumentation installed"
