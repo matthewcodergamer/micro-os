@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -143,10 +144,33 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0B0E14))
+      ..addJavaScriptChannel(
+        'MicroOSDiagnostics',
+        onMessageReceived: _onVncDiagnosticMessage,
+      )
       ..setNavigationDelegate(NavigationDelegate(
-        onPageFinished: (_) => _installTouchBridge(controller),
-        onWebResourceError: (_) => _retryVncPage(controller),
-        onHttpError: (_) => _retryVncPage(controller),
+        onPageStarted: (url) =>
+            widget.runtime.logDiagnostic('page started: $url'),
+        onPageFinished: (url) async {
+          widget.runtime.logDiagnostic('page finished: $url');
+          await _installVncDiagnostics(controller);
+          await _installTouchBridge(controller);
+        },
+        onWebResourceError: (error) {
+          widget.runtime.logDiagnostic(
+            'WebResourceError code=${error.errorCode} type=${error.errorType} '
+            'mainFrame=${error.isForMainFrame} url=${error.url} '
+            'description=${error.description}',
+          );
+          if (error.isForMainFrame) _retryVncPage(controller);
+        },
+        onHttpError: (error) {
+          widget.runtime.logDiagnostic(
+            'HttpError status=${error.response?.statusCode} '
+            'url=${error.request.uri}',
+          );
+          _retryVncPage(controller);
+        },
       ))
       ..loadRequest(Uri.parse(_vncUrl));
 
@@ -169,51 +193,190 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       if (_vncRetryCheckInFlight) return;
       _vncRetryCheckInFlight = true;
       try {
+        // The health signal is produced from the actual noVNC canvas and RFB
+        // connection state. Page text such as "Connected" is not evidence that
+        // the remote framebuffer has painted any pixels.
         final result = await controller.runJavaScriptReturningResult(
-          "document.body ? document.body.innerText : ''",
+          'window.__microOsVncHealth?.healthy === true',
         );
-        final pageText = result.toString().toLowerCase();
-        final connected = pageText.contains('connected') &&
-            !pageText.contains('disconnected');
-        if (connected) {
+        if (result == true || result.toString() == 'true') {
           timer.cancel();
           _vncRecoveryAttempts = 0;
           _vncRecoveryTimer?.cancel();
           _vncRecoveryTimer = null;
-          if (mounted) setState(() => _status = 'Connected');
+          if (mounted) setState(() => _status = 'Connected — framebuffer active');
           return;
         }
 
         _vncRetryCount++;
+        if (_vncRetryCount == 5 && mounted) {
+          setState(() => _status = 'VNC connected; waiting for visible framebuffer pixels…');
+        }
         if (_vncRetryCount >= 15) {
           _vncRetryCount = 0;
-          if (mounted) setState(() => _status = 'Still waiting for the display… reconnecting');
-          await controller.reload();
-          return;
-        }
-
-        final failed = pageText.contains('failed to connect') ||
-            pageText.contains('connection failed');
-        if (failed || _vncRetryCount % 3 == 0) {
+          widget.runtime.logDiagnostic(
+            'canvas health timeout; reloading noVNC page after 15 seconds without visible pixels',
+          );
           if (mounted) {
-            setState(() => _status =
-                'Waiting for the VNC server… retry $_vncRetryCount/15');
+            setState(() => _status = 'No framebuffer pixels yet; reconnecting…');
           }
           await controller.reload();
         }
-      } catch (_) {
+      } catch (error) {
         _vncRetryCount++;
+        widget.runtime.logDiagnostic('canvas health poll failed: $error');
         if (_vncRetryCount >= 15) {
           _vncRetryCount = 0;
-          if (mounted) setState(() => _status = 'Still waiting for the display… reconnecting');
-          await controller.reload();
-        } else if (_vncRetryCount % 3 == 0) {
           await controller.reload();
         }
       } finally {
         _vncRetryCheckInFlight = false;
       }
     });
+  }
+
+  void _onVncDiagnosticMessage(JavaScriptMessage message) {
+    widget.runtime.logDiagnostic(message.message);
+    try {
+      final decoded = jsonDecode(message.message);
+      if (decoded is Map<String, dynamic> &&
+          decoded['kind'] == 'framebuffer' &&
+          decoded['healthy'] == true &&
+          mounted) {
+        setState(() => _status = 'Connected — framebuffer active');
+      }
+    } catch (_) {
+      // Preserve raw diagnostic text in the Runtime Log even if malformed.
+    }
+  }
+
+  Future<void> _installVncDiagnostics(WebViewController controller) async {
+    await controller.runJavaScript(r"""
+      (() => {
+        if (window.__microOsVncDiagnosticsInstalled) return;
+        window.__microOsVncDiagnosticsInstalled = true;
+        const send = (kind, detail={}) => {
+          try {
+            window.MicroOSDiagnostics?.postMessage(JSON.stringify({
+              kind, timestamp: new Date().toISOString(), ...detail
+            }));
+          } catch (_) {}
+        };
+
+        // Install before UI.connect() so the actual noVNC WebSocket handshake
+        // (including browser-level errors and close codes) is observable.
+        const OriginalWebSocket = window.WebSocket;
+        function DiagnosticWebSocket(url, protocols) {
+          const socket = protocols === undefined
+            ? new OriginalWebSocket(url)
+            : new OriginalWebSocket(url, protocols);
+          send('websocket-created', {url: String(url)});
+          socket.addEventListener('open', () => send('websocket-open', {url: String(url)}));
+          socket.addEventListener('error', () => send('websocket-error', {url: String(url)}));
+          socket.addEventListener('close', event => send('websocket-close', {
+            url: String(url), code: event.code, reason: event.reason,
+            wasClean: event.wasClean
+          }));
+          return socket;
+        }
+        DiagnosticWebSocket.prototype = OriginalWebSocket.prototype;
+        Object.setPrototypeOf(DiagnosticWebSocket, OriginalWebSocket);
+        window.WebSocket = DiagnosticWebSocket;
+
+        const ui = window.UI;
+        if (!ui || typeof ui.connect !== 'function') {
+          send('novnc-ui-error', {message: 'window.UI.connect is unavailable'});
+          return;
+        }
+        try {
+          ui.connect();
+          send('novnc-connect-requested', {});
+        } catch (error) {
+          send('novnc-connect-threw', {message: String(error), stack: error?.stack || ''});
+        }
+
+        const rfb = ui.rfb;
+        if (!rfb) {
+          send('rfb-error', {message: 'UI.connect did not create UI.rfb'});
+        } else {
+          for (const eventName of [
+            'connect', 'disconnect', 'securityfailure', 'credentialsrequired',
+            'desktopname', 'capabilities'
+          ]) {
+            rfb.addEventListener(eventName, event => {
+              const detail = event?.detail || {};
+              send('rfb-' + eventName, {
+                state: rfb._rfbConnectionState || 'unknown',
+                clean: detail.clean,
+                reason: detail.reason,
+                name: detail.name,
+                capabilities: detail.capabilities
+              });
+            });
+          }
+          send('rfb-initial-state', {
+            state: rfb._rfbConnectionState || 'unknown'
+          });
+        }
+
+        let previousSignature = '';
+        let previousHealthy = false;
+        let lastReport = 0;
+        const sampleFramebuffer = () => {
+          const canvas = document.getElementById('noVNC_canvas');
+          const state = window.UI?.rfb?._rfbConnectionState || 'unavailable';
+          let width = canvas?.width || 0;
+          let height = canvas?.height || 0;
+          let nonBlackPixels = 0;
+          let signature = '';
+          let sampleError = '';
+          if (canvas && width > 0 && height > 0) {
+            try {
+              const context = canvas.getContext('2d', {willReadFrequently:true});
+              const points = [
+                [0.2,0.2],[0.5,0.2],[0.8,0.2],
+                [0.2,0.5],[0.5,0.5],[0.8,0.5],
+                [0.2,0.8],[0.5,0.8],[0.8,0.8]
+              ];
+              const values = [];
+              for (const point of points) {
+                const x = Math.min(width-1, Math.floor(width*point[0]));
+                const y = Math.min(height-1, Math.floor(height*point[1]));
+                const pixel = context.getImageData(x,y,1,1).data;
+                const r=pixel[0],g=pixel[1],b=pixel[2],a=pixel[3];
+                if (a > 0 && (r+g+b) > 24) nonBlackPixels++;
+                values.push(r,g,b,a);
+              }
+              signature = values.join(',');
+            } catch (error) {
+              sampleError = String(error);
+            }
+          }
+          const connected = state === 'connected';
+          const canvasReady = width > 0 && height > 0;
+          const healthy = connected && canvasReady && nonBlackPixels > 0;
+          window.__microOsVncHealth = {
+            connected, canvasReady, healthy, width, height,
+            nonBlackPixels, signature, state, sampleError
+          };
+          const now = Date.now();
+          if (signature !== previousSignature ||
+              healthy !== previousHealthy ||
+              now - lastReport > 5000) {
+            send('framebuffer', {
+              connected, canvasReady, healthy, width, height,
+              nonBlackPixels, signature, state, sampleError
+            });
+            previousSignature = signature;
+            previousHealthy = healthy;
+            lastReport = now;
+          }
+        };
+        sampleFramebuffer();
+        window.__microOsVncSampler = window.setInterval(sampleFramebuffer, 1000);
+        send('diagnostics-installed', {autoconnect: false});
+      })();
+    """);
   }
 
   void _retryVncPage(WebViewController controller) {
@@ -464,7 +627,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   String get _vncUrl {
     final base = 'http://127.0.0.1:6080/vnc.html';
     final query = <String>[
-      'autoconnect=1',
+      'autoconnect=0',
       'resize=scale',
       'reconnect=1',
       'reconnect_delay=1500',
