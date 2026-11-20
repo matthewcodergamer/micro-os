@@ -299,7 +299,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
         let previousHealthy = false;
         let lastReport = 0;
         const sampleFramebuffer = () => {
-          const canvas = document.getElementById('noVNC_canvas');
+          const canvas = document.querySelector('#noVNC_container canvas');
           const rfb = window.UI?.rfb;
           const state = rfb?._rfbConnectionState || 'unavailable';
           const connected = window.__microOsRfbConnected === true ||
@@ -452,10 +452,10 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     await controller.runJavaScript(r"""
       (() => {
         if (window.__microOsTouchBridgeV2Installed) return;
-        const canvas = document.getElementById('noVNC_canvas');
+        const canvas = document.querySelector('#noVNC_container canvas');
         if (!canvas) {
           const observer = new MutationObserver(() => {
-            const found = document.getElementById('noVNC_canvas');
+            const found = document.querySelector('#noVNC_container canvas');
             if (found) { observer.disconnect(); install(found); }
           });
           observer.observe(document.documentElement, {childList:true,subtree:true});
