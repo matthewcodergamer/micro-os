@@ -154,6 +154,16 @@ jobs:
           grep -q 'Duplicate' lib/ui/apps/files_app.dart
           grep -q 'Do not launch Chromium as a side effect' tool/setup.sh
           ! grep -q "start-browser.sh --new-window chrome://newtab/" tool/setup.sh
+          grep -q 'dump_diagnostics' tool/setup.sh
+          grep -q 'Openbox did not publish its EWMH' tool/setup.sh
+          grep -q 'websockify --verbose' tool/setup.sh
+          grep -q 'noVNC HTTP status' tool/setup.sh
+          grep -q 'test-novnc-render.cjs' tool/prebake_rootfs.sh
+          grep -q 'window.__microOsVncHealth?.healthy === true' lib/ui/apps/desktop_session_app.dart
+          grep -q 'setOnConsoleMessage' lib/ui/apps/desktop_session_app.dart
+          grep -q 'websocket-error' lib/ui/apps/desktop_session_app.dart
+          ! grep -q 'document.body ? document.body.innerText' lib/ui/apps/desktop_session_app.dart
+          node --check tool/test-novnc-render.cjs
           grep -q 'websockify --host=127.0.0.1' tool/setup.sh
           grep -q 'wait_for_novnc_http' tool/setup.sh
           grep -q 'http://127.0.0.1:6080/vnc.html' tool/setup.sh
