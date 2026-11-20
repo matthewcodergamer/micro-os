@@ -158,6 +158,122 @@ apt-get install "${APT_OPTS[@]}" \
   fonts-dejavu-core fonts-liberation \
   || warn "some X11 packages failed to install"
 
+# Expose noVNC's UI object and instrument its real connect path before UI.start()
+# can auto-connect. This is a small MicroOS-owned adapter, not copied noVNC code.
+if [ -f /usr/share/novnc/vnc.html ] && [ -f /usr/share/novnc/app/ui.js ]; then
+  cat > /usr/share/novnc/app/microos-diagnostics.js <<'MICROOS_NOVNC_DIAGNOSTICS'
+export function installMicroOSDiagnostics(UI) {
+    window.UI = UI;
+    window.__microOsRfbConnected = false;
+    const attachedRfb = new WeakSet();
+    const emit = (kind, detail = {}) => {
+        const payload = JSON.stringify({
+            kind,
+            timestamp: new Date().toISOString(),
+            ...detail,
+        });
+        try {
+            if (window.MicroOSDiagnostics?.postMessage) {
+                window.MicroOSDiagnostics.postMessage(payload);
+            } else {
+                console.debug("[MicroOS VNC] " + payload);
+            }
+        } catch (_) {}
+    };
+
+    if (!window.__microOsWebSocketInstrumented) {
+        window.__microOsWebSocketInstrumented = true;
+        const NativeWebSocket = window.WebSocket;
+        function DiagnosticWebSocket(url, protocols) {
+            const socket = protocols === undefined
+                ? new NativeWebSocket(url)
+                : new NativeWebSocket(url, protocols);
+            const socketUrl = String(url);
+            emit("websocket-created", { url: socketUrl });
+            socket.addEventListener("open", () => emit("websocket-open", { url: socketUrl }));
+            socket.addEventListener("error", () => emit("websocket-error", { url: socketUrl }));
+            socket.addEventListener("close", (event) => emit("websocket-close", {
+                url: socketUrl,
+                code: event.code,
+                reason: event.reason,
+                wasClean: event.wasClean,
+            }));
+            return socket;
+        }
+        DiagnosticWebSocket.prototype = NativeWebSocket.prototype;
+        Object.setPrototypeOf(DiagnosticWebSocket, NativeWebSocket);
+        window.WebSocket = DiagnosticWebSocket;
+    }
+
+    const attachRfb = (rfb) => {
+        if (!rfb || attachedRfb.has(rfb)) return;
+        attachedRfb.add(rfb);
+        for (const eventName of [
+            "connect",
+            "disconnect",
+            "securityfailure",
+            "credentialsrequired",
+            "desktopname",
+            "capabilities",
+        ]) {
+            rfb.addEventListener(eventName, (event) => {
+                const detail = event?.detail || {};
+                if (eventName === "connect") window.__microOsRfbConnected = true;
+                if (eventName === "disconnect") window.__microOsRfbConnected = false;
+                emit("rfb-" + eventName, {
+                    connected: window.__microOsRfbConnected,
+                    state: rfb._rfbConnectionState || "unknown",
+                    clean: detail.clean,
+                    reason: detail.reason,
+                    name: detail.name,
+                    types: detail.types,
+                    capabilities: detail.capabilities,
+                });
+            });
+        }
+        emit("rfb-created", {
+            state: rfb._rfbConnectionState || "unknown",
+        });
+    };
+
+    const originalConnect = UI.connect.bind(UI);
+    UI.connect = (...args) => {
+        emit("novnc-connect-requested", {});
+        try {
+            const result = originalConnect(...args);
+            attachRfb(UI.rfb);
+            return result;
+        } catch (error) {
+            emit("novnc-connect-threw", {
+                message: String(error),
+                stack: error?.stack || "",
+            });
+            throw error;
+        }
+    };
+
+    emit("novnc-diagnostics-installed", {});
+}
+MICROOS_NOVNC_DIAGNOSTICS
+
+  python3 - <<'PATCH_NOVNC'
+from pathlib import Path
+
+page = Path("/usr/share/novnc/vnc.html")
+source = page.read_text(encoding="utf-8")
+needle = '        import UI from "./app/ui.js";'
+addition = needle + '\n        import { installMicroOSDiagnostics } from "./app/microos-diagnostics.js";\n        installMicroOSDiagnostics(UI);'
+if "microos-diagnostics.js" not in source:
+    if needle not in source:
+        raise SystemExit("noVNC vnc.html import layout was not recognized; refusing an unsafe patch")
+    source = source.replace(needle, addition, 1)
+    page.write_text(source, encoding="utf-8")
+PATCH_NOVNC
+  log "noVNC WebSocket/RFB instrumentation installed"
+else
+  warn "noVNC UI files are missing; browser diagnostics will report the missing adapter"
+fi
+
 # macOS-inspired X11 pointer theme (WhiteSur Cursors, upstream GPL-3.0).
 # This affects X11 applications in the VNC desktop; it does not change the
 # Android host pointer or create a pointer overlay for touch-only screens.
