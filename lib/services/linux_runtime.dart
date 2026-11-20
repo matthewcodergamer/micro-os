@@ -30,7 +30,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '13';
+  static const String _rootfsVersion = '14';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -709,6 +709,13 @@ fi''',
     final code = await pty.exitCode;
     _appendLog('[microos] package repair exited with code $code');
     return code;
+  }
+
+  /// Appends diagnostics emitted by the embedded noVNC WebView to the
+  /// Runtime Log. Messages are bounded so a noisy browser cannot grow the log.
+  void logDiagnostic(String message) {
+    final safe = message.replaceAll(RegExp(r'[\\r\\n]+'), ' ');
+    _appendLog('[microos:webview] ${safe.length > 700 ? safe.substring(0, 700) : safe}');
   }
 
   // --------------------------------------------------------------- credentials
