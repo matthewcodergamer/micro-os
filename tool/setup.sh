@@ -269,6 +269,10 @@ if "microos-diagnostics.js" not in source:
     source = source.replace(needle, addition, 1)
     page.write_text(source, encoding="utf-8")
 PATCH_NOVNC
+  if [ "$?" -ne 0 ]; then
+    warn "noVNC vnc.html import layout was not recognized; refusing an uninstrumented browser image"
+    exit 1
+  fi
   log "noVNC WebSocket/RFB instrumentation installed"
 else
   warn "noVNC UI files are missing; browser diagnostics will report the missing adapter"
