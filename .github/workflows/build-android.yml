@@ -158,6 +158,9 @@ jobs:
           grep -q 'Openbox did not publish its EWMH' tool/setup.sh
           grep -q 'websockify --verbose' tool/setup.sh
           grep -q 'noVNC HTTP status' tool/setup.sh
+          grep -q 'installMicroOSDiagnostics(UI)' tool/setup.sh
+          grep -q 'microos-diagnostics.js' tool/setup.sh
+          grep -q 'autoconnect=1' lib/ui/apps/desktop_session_app.dart
           grep -q 'test-novnc-render.cjs' tool/prebake_rootfs.sh
           grep -q 'window.__microOsVncHealth?.healthy === true' lib/ui/apps/desktop_session_app.dart
           grep -q 'setOnConsoleMessage' lib/ui/apps/desktop_session_app.dart
