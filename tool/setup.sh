@@ -647,18 +647,70 @@ set -Eeuo pipefail
 export DISPLAY=:1 XCURSOR_THEME=WhiteSur-cursors XCURSOR_SIZE=24
 export XDG_RUNTIME_DIR=/tmp/microos-runtime
 RESOLUTION="$(cat /root/.microos/display-resolution 2>/dev/null || printf '1280x720')"
-GEOMETRY="${RESOLUTION}x24"
+GEOMETRY="$RESOLUTION"x24
 LOG=/tmp/.microos
+XVFB_PID=""
+OPENBOX_PID=""
+VNC_PID=""
+WEBSOCKIFY_PID=""
 mkdir -p "$LOG" "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
+log() { printf '[microos:display] %s\n' "$*"; }
+process_status() {
+  local name="$1" pid="$2"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then log "$name: RUNNING pid=$pid"; else log "$name: NOT RUNNING"; fi
+}
+dump_diagnostics() {
+  log "---- display diagnostics ----"
+  process_status "Xvfb :1" "$XVFB_PID"
+  process_status "Openbox" "$OPENBOX_PID"
+  process_status "x11vnc :5900" "$VNC_PID"
+  process_status "websockify :6080" "$WEBSOCKIFY_PID"
+  if xset -display :1 q >/dev/null 2>&1; then
+    log "X11 probe: PASS (xset :1)"
+    xdpyinfo -display :1 2>&1 | sed -n '1,18p' || true
+  else
+    log "X11 probe: FAIL (xset :1)"
+  fi
+  xprop -display :1 -root _NET_SUPPORTING_WM_CHECK 2>&1 || true
+  for port in 5900 6080; do
+    if (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1; then log "TCP 127.0.0.1:$port: OPEN"; else log "TCP 127.0.0.1:$port: CLOSED"; fi
+  done
+  curl -sS -o /dev/null -w 'noVNC HTTP status: %{http_code} bytes: %{size_download}\n' --max-time 3 http://127.0.0.1:6080/vnc.html || true
+  for name in xvfb openbox x11vnc websockify; do
+    if [ -s "$LOG/$name.log" ]; then log "---- $name.log (last 40 lines) ----"; tail -n 40 "$LOG/$name.log" || true; else log "$name.log: empty or missing"; fi
+  done
+  log "---- end diagnostics ----"
+}
 for process in websockify x11vnc openbox Xvfb; do pkill -9 -x "$process" 2>/dev/null || true; done
 sleep 0.5
+: > "$LOG/xvfb.log"
 Xvfb :1 -screen 0 "$GEOMETRY" -nolisten tcp -ac -noreset -dpi 96 >"$LOG/xvfb.log" 2>&1 &
 XVFB_PID=$!
-cleanup() { kill "${WEBSOCKIFY_PID:-}" "${VNC_PID:-}" "${OPENBOX_PID:-}" "$XVFB_PID" 2>/dev/null || true; }
+cleanup() {
+  [ -z "$WEBSOCKIFY_PID" ] || kill "$WEBSOCKIFY_PID" 2>/dev/null || true
+  [ -z "$VNC_PID" ] || kill "$VNC_PID" 2>/dev/null || true
+  [ -z "$OPENBOX_PID" ] || kill "$OPENBOX_PID" 2>/dev/null || true
+  [ -z "$XVFB_PID" ] || kill "$XVFB_PID" 2>/dev/null || true
+}
 trap cleanup EXIT INT TERM
-wait_for_x() { for _ in $(seq 1 60); do xset -display :1 q >/dev/null 2>&1 && return 0; kill -0 "$XVFB_PID" 2>/dev/null || { cat "$LOG/xvfb.log" >&2 || true; return 1; }; sleep 0.2; done; return 1; }
-wait_for_port() { local port="$1" attempts="$2"; for ((i=0;i<attempts;i++)); do (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && return 0; sleep 0.25; done; return 1; }
-if ! wait_for_x; then echo "[microos] ERROR: Xvfb :1 did not become usable" >&2; exit 1; fi
+wait_for_x() {
+  for _ in $(seq 1 60); do
+    if xset -display :1 q >/dev/null 2>&1; then return 0; fi
+    if ! kill -0 "$XVFB_PID" 2>/dev/null; then cat "$LOG/xvfb.log" >&2 || true; return 1; fi
+    sleep 0.2
+  done
+  return 1
+}
+wait_for_port() {
+  local port="$1" attempts="$2"
+  for ((i=0;i<attempts;i++)); do
+    (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && return 0
+    sleep 0.25
+  done
+  return 1
+}
+if ! wait_for_x; then log "ERROR: Xvfb :1 did not become usable"; dump_diagnostics; exit 1; fi
+log "Xvfb :1 ready; geometry=$GEOMETRY pid=$XVFB_PID"
 xrdb -merge /root/.Xresources 2>/dev/null || true
 xsetroot -solid '#0f131b' -cursor_name left_ptr 2>/dev/null || true
 mkdir -p /root/.config/openbox
@@ -669,48 +721,43 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 <item label="Terminal"><action name="Execute"><command>xterm -fa Monospace -fs 10</command></action></item>
 </menu></openbox_menu>
 MENU
+: > "$LOG/openbox.log"
 openbox --display :1 >"$LOG/openbox.log" 2>&1 &
 OPENBOX_PID=$!
-# Keep the RFB listener loopback-only: websockify is the only exposed bridge.
-# Use low defer/wait for interactive latency and the LAN profile because the
-# VNC client and server are on the same device (Starlink does not carry VNC).
-# ncache is bounded to 10 framebuffer rows and is verified in the X11 smoke test.
+OPENBOX_READY=0
+for _ in $(seq 1 40); do
+  if xprop -display :1 -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q 'window id'; then OPENBOX_READY=1; break; fi
+  if ! kill -0 "$OPENBOX_PID" 2>/dev/null; then break; fi
+  sleep 0.25
+done
+if [ "$OPENBOX_READY" -ne 1 ]; then log "ERROR: Openbox did not publish its EWMH window-manager handshake"; dump_diagnostics; exit 1; fi
+log "Openbox ready; pid=$OPENBOX_PID"
+: > "$LOG/x11vnc.log"
 x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost \
   -noxdamage -noshm -repeat -ncache 10 -ncache_cr \
   -wait 1 -defer 1 -speeds 6,5000,1 >"$LOG/x11vnc.log" 2>&1 &
 VNC_PID=$!
-if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then echo "[microos] ERROR: x11vnc failed to open port 5900" >&2; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
-if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client is missing" >&2; exit 1; fi
-# Bind the HTTP/WebSocket bridge to loopback only. The Android WebView
-# connects through 127.0.0.1; exposing an unauthenticated VNC bridge to the
-# phone's Wi-Fi/LAN interfaces would let other devices control this desktop.
-websockify --host=127.0.0.1 --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
+if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then log "ERROR: x11vnc failed to open port 5900"; dump_diagnostics; exit 1; fi
+log "x11vnc ready; pid=$VNC_PID port=5900 (loopback only)"
+if [ ! -f /usr/share/novnc/vnc.html ]; then log "ERROR: noVNC client is missing at /usr/share/novnc/vnc.html"; dump_diagnostics; exit 1; fi
+: > "$LOG/websockify.log"
+websockify --verbose --host=127.0.0.1 --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
 WEBSOCKIFY_PID=$!
 wait_for_novnc_http() {
   for ((i=0;i<80;i++)); do
-    if python3 -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:6080/vnc.html", timeout=2).read(128)' >/dev/null 2>&1; then
-      return 0
-    fi
-    kill -0 "$WEBSOCKIFY_PID" 2>/dev/null || {
-      cat "$LOG/websockify.log" >&2 || true
-      return 1
-    }
+    if curl -fsS --max-time 2 http://127.0.0.1:6080/vnc.html -o /dev/null 2>/dev/null; then return 0; fi
+    if ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then cat "$LOG/websockify.log" >&2 || true; return 1; fi
     sleep 0.25
   done
   return 1
 }
-if ! wait_for_port 6080 80 || ! wait_for_novnc_http || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then
-  echo "[microos] ERROR: noVNC HTTP bridge failed its 127.0.0.1:6080 health check" >&2
-  cat "$LOG/websockify.log" >&2 || true
-  cat "$LOG/x11vnc.log" >&2 || true
-  exit 1
-fi
-# Do not launch Chromium as a side effect of starting the desktop service.
-# The Browser app launches it on explicit user tap; this prevents duplicate
-# windows when the user opens Finder/Desktop before opening Browser.
-echo "[microos] display :1 ready (Xvfb 1280x720, Openbox, VNC 5900, noVNC 6080)"
+if ! wait_for_port 6080 80 || ! wait_for_novnc_http || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then log "ERROR: noVNC HTTP bridge failed its 127.0.0.1:6080 health check"; dump_diagnostics; exit 1; fi
+log "websockify/noVNC HTTP ready; pid=$WEBSOCKIFY_PID port=6080 -> localhost:5900"
+dump_diagnostics
+log "display :1 READY (Xvfb, Openbox, x11vnc/RFB, websockify/noVNC HTTP)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
-echo "[microos] ERROR: X11/VNC/noVNC process exited; inspect $LOG/*.log" >&2
+log "ERROR: one or more display services exited unexpectedly"
+dump_diagnostics
 exit 1
 EOF
 chmod 755 /root/.microos/start-gui.sh
