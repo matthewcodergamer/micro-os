@@ -658,6 +658,13 @@ done
 echo "[microos:display] X11 probe:"
 xset -display :1 q >/dev/null 2>&1 && echo "X11 :1 responds" || echo "X11 :1 unavailable"
 xprop -display :1 -root _NET_SUPPORTING_WM_CHECK 2>&1 || true
+echo "[microos:display] Chromium process state:"
+pgrep -a -u microos-browser -f "chromium|chrome" || true
+echo "[microos:display] visible browser windows:"
+for window_id in $(xdotool search --onlyvisible --class "chromium|Chromium|chrome|Chrome" 2>/dev/null || true); do
+  xwininfo -display :1 -id "$window_id" 2>&1 | sed -n '1,18p' || true
+  xprop -display :1 -id "$window_id" WM_NAME _NET_WM_STATE 2>&1 || true
+done
 echo "[microos:display] socket probes:"
 for port in 5900 6080; do
   (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && echo "$port OPEN" || echo "$port CLOSED"
