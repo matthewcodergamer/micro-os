@@ -289,14 +289,22 @@ PLAYWRIGHT_SMOKE
       echo "websockify did not serve noVNC on port 6081" >&2
       exit 1
     }
-    DISPLAY=:100 MICROOS_NOVNC_URL="http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale&path=websockify&quality=6&compression=2" \
+    if ! DISPLAY=:100 MICROOS_NOVNC_URL="http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale&path=websockify&quality=6&compression=2" \
       PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright NODE_PATH=/opt/node-global \
-      timeout 60 node /tmp/test-novnc-render.cjs
+      timeout 60 node /tmp/test-novnc-render.cjs; then
+      echo "noVNC framebuffer test failed; service logs follow" >&2
+      cat /tmp/microos-novnc-xvfb.log /tmp/microos-novnc-openbox.log \
+        /tmp/microos-novnc-x11vnc.log /tmp/microos-novnc-websockify.log >&2 || true
+      exit 1
+    fi
     test -s /tmp/microos-novnc-render.png
     echo "==> noVNC canvas received two distinct X11 framebuffer updates"
     cleanup_novnc_smoke
     trap - EXIT
-    export DISPLAY=:0
+    rm -f /tmp/microos-novnc-render.png /tmp/microos-novnc-render-failure.png \
+      /tmp/microos-novnc-xvfb.log /tmp/microos-novnc-openbox.log \
+      /tmp/microos-novnc-x11vnc.log /tmp/microos-novnc-websockify.log
+    unset DISPLAY
 
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
