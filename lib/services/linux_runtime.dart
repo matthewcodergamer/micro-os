@@ -640,6 +640,39 @@ fi''',
     }
   }
 
+  /// Captures the live X11/VNC/noVNC process state and recent service logs.
+  /// Output is streamed into the Runtime Log so WebView failures can be
+  /// correlated with the guest-side WebSocket/RFB bridge.
+  void collectDisplayDiagnostics({String reason = 'requested'}) {
+    if (!isReady) return;
+    runDetached(<String>[
+      '/bin/bash',
+      '-lc',
+      r'''set +e
+echo "[microos:display] diagnostic snapshot: $1"
+echo "[microos:display] process table:"
+for service in Xvfb openbox x11vnc websockify; do
+  printf '%s: ' "$service"
+  pgrep -a -x "$service" || true
+done
+echo "[microos:display] X11 probe:"
+xset -display :1 q >/dev/null 2>&1 && echo "X11 :1 responds" || echo "X11 :1 unavailable"
+xprop -display :1 -root _NET_SUPPORTING_WM_CHECK 2>&1 || true
+echo "[microos:display] socket probes:"
+for port in 5900 6080; do
+  (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && echo "$port OPEN" || echo "$port CLOSED"
+done
+curl -sS -o /dev/null -w "noVNC HTTP %{http_code}, %{size_download} bytes\n" --max-time 3 http://127.0.0.1:6080/vnc.html || true
+for file in /tmp/.microos/xvfb.log /tmp/.microos/openbox.log /tmp/.microos/x11vnc.log /tmp/.microos/websockify.log; do
+  echo "[microos:display] ---- $file (last 100 lines) ----"
+  tail -n 100 "$file" 2>&1 || true
+done
+''',
+      'microos-display-diagnostics',
+      reason,
+    ]);
+  }
+
   /// Launches the desktop browser inside the guest.
   ///
   /// Launches the native Linux browser as a normal X11 desktop window.
