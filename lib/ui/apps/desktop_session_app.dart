@@ -286,62 +286,12 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           } catch (_) {}
         };
 
-        // Install before UI.connect() so the actual noVNC WebSocket handshake
-        // (including browser-level errors and close codes) is observable.
-        const OriginalWebSocket = window.WebSocket;
-        function DiagnosticWebSocket(url, protocols) {
-          const socket = protocols === undefined
-            ? new OriginalWebSocket(url)
-            : new OriginalWebSocket(url, protocols);
-          send('websocket-created', {url: String(url)});
-          socket.addEventListener('open', () => send('websocket-open', {url: String(url)}));
-          socket.addEventListener('error', () => send('websocket-error', {url: String(url)}));
-          socket.addEventListener('close', event => send('websocket-close', {
-            url: String(url), code: event.code, reason: event.reason,
-            wasClean: event.wasClean
-          }));
-          return socket;
-        }
-        DiagnosticWebSocket.prototype = OriginalWebSocket.prototype;
-        Object.setPrototypeOf(DiagnosticWebSocket, OriginalWebSocket);
-        window.WebSocket = DiagnosticWebSocket;
-
+        // The rootfs-installed noVNC adapter exposes UI and instruments
+        // WebSocket/RFB before UI.start() performs its automatic connection.
         const ui = window.UI;
-        if (!ui || typeof ui.connect !== 'function') {
-          send('novnc-ui-error', {message: 'window.UI.connect is unavailable'});
-          return;
-        }
-        try {
-          ui.connect();
-          send('novnc-connect-requested', {});
-        } catch (error) {
-          send('novnc-connect-threw', {message: String(error), stack: error?.stack || ''});
-        }
-
-        const rfb = ui.rfb;
-        let rfbConnected = false;
-        if (!rfb) {
-          send('rfb-error', {message: 'UI.connect did not create UI.rfb'});
-        } else {
-          for (const eventName of [
-            'connect', 'disconnect', 'securityfailure', 'credentialsrequired',
-            'desktopname', 'capabilities'
-          ]) {
-            rfb.addEventListener(eventName, event => {
-              const detail = event?.detail || {};
-              if (eventName === 'connect') rfbConnected = true;
-              if (eventName === 'disconnect') rfbConnected = false;
-              send('rfb-' + eventName, {
-                state: rfbConnected ? 'connected' : (rfb._rfbConnectionState || 'unknown'),
-                clean: detail.clean,
-                reason: detail.reason,
-                name: detail.name,
-                capabilities: detail.capabilities
-              });
-            });
-          }
-          send('rfb-initial-state', {
-            state: rfb._rfbConnectionState || 'unknown'
+        if (!ui) {
+          send('novnc-ui-error', {
+            message: 'window.UI is unavailable; noVNC adapter did not load'
           });
         }
 
@@ -350,9 +300,12 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
         let lastReport = 0;
         const sampleFramebuffer = () => {
           const canvas = document.getElementById('noVNC_canvas');
-          const state = rfbConnected ? 'connected' : (window.UI?.rfb?._rfbConnectionState || 'unavailable');
-          let width = canvas?.width || 0;
-          let height = canvas?.height || 0;
+          const rfb = window.UI?.rfb;
+          const state = rfb?._rfbConnectionState || 'unavailable';
+          const connected = window.__microOsRfbConnected === true ||
+            state === 'connected';
+          const width = canvas?.width || 0;
+          const height = canvas?.height || 0;
           let nonBlackPixels = 0;
           let signature = '';
           let sampleError = '';
@@ -378,7 +331,6 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
               sampleError = String(error);
             }
           }
-          const connected = rfbConnected || state === 'connected';
           const canvasReady = width > 0 && height > 0;
           const healthy = connected && canvasReady && nonBlackPixels > 0;
           window.__microOsVncHealth = {
@@ -400,7 +352,10 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
         };
         sampleFramebuffer();
         window.__microOsVncSampler = window.setInterval(sampleFramebuffer, 1000);
-        send('diagnostics-installed', {autoconnect: false});
+        send('diagnostics-installed', {
+          adapter: !!ui,
+          autoconnect: true
+        });
       })();
     """);
   }
@@ -653,7 +608,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   String get _vncUrl {
     final base = 'http://127.0.0.1:6080/vnc.html';
     final query = <String>[
-      'autoconnect=0',
+      'autoconnect=1',
       'resize=scale',
       'reconnect=1',
       'reconnect_delay=1500',
