@@ -747,7 +747,7 @@ done
   /// Appends diagnostics emitted by the embedded noVNC WebView to the
   /// Runtime Log. Messages are bounded so a noisy browser cannot grow the log.
   void logDiagnostic(String message) {
-    final safe = message.replaceAll(RegExp(r'[\\r\\n]+'), ' ');
+    final safe = message.replaceAll(RegExp(r'[\r\n]+'), ' ');
     _appendLog('[microos:webview] ${safe.length > 700 ? safe.substring(0, 700) : safe}');
   }
 
