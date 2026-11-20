@@ -47,6 +47,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   int _vncRecoveryAttempts = 0;
   bool _vncRecoveryInFlight = false;
   bool _vncRetryCheckInFlight = false;
+  bool _displayDiagnosticsRequested = false;
   bool _trackpadMode = true;
   double _trackpadSpeed = 1.35;
   SettingsStore? _settingsStore;
@@ -165,13 +166,17 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             'mainFrame=${error.isForMainFrame} url=${error.url} '
             'description=${error.description}',
           );
-          if (error.isForMainFrame) _retryVncPage(controller);
+          if (error.isForMainFrame) {
+            _requestDisplayDiagnostics('main-frame WebResourceError: ${error.description}');
+            _retryVncPage(controller);
+          }
         },
         onHttpError: (error) {
           widget.runtime.logDiagnostic(
             'HttpError status=${error.response?.statusCode} '
             'url=${error.request.uri}',
           );
+          _requestDisplayDiagnostics('HTTP error: ${error.response?.statusCode} ${error.request.uri}');
           _retryVncPage(controller);
         },
       ))
@@ -220,6 +225,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           widget.runtime.logDiagnostic(
             'canvas health timeout; reloading noVNC page after 15 seconds without visible pixels',
           );
+          _requestDisplayDiagnostics('noVNC canvas health timeout');
           if (mounted) {
             setState(() => _status = 'No framebuffer pixels yet; reconnecting…');
           }
@@ -238,15 +244,29 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     });
   }
 
+  void _requestDisplayDiagnostics(String reason) {
+    if (_displayDiagnosticsRequested) return;
+    _displayDiagnosticsRequested = true;
+    widget.runtime.collectDisplayDiagnostics(reason: reason);
+  }
+
   void _onVncDiagnosticMessage(JavaScriptMessage message) {
     widget.runtime.logDiagnostic(message.message);
     try {
       final decoded = jsonDecode(message.message);
-      if (decoded is Map<String, dynamic> &&
-          decoded['kind'] == 'framebuffer' &&
-          decoded['healthy'] == true &&
-          mounted) {
-        setState(() => _status = 'Connected — framebuffer active');
+      if (decoded is! Map<String, dynamic>) return;
+      final kind = decoded['kind']?.toString() ?? 'unknown';
+      final failedHandshake = kind == 'websocket-error' ||
+          kind == 'rfb-securityfailure' ||
+          kind == 'novnc-ui-error' ||
+          kind == 'rfb-error' ||
+          (kind == 'rfb-disconnect' && decoded['clean'] != true);
+      if (failedHandshake) {
+        _requestDisplayDiagnostics('WebView reported ' + kind + ': ' + message.message);
+      }
+      if (kind == 'framebuffer' && decoded['healthy'] == true) {
+        _displayDiagnosticsRequested = false;
+        if (mounted) setState(() => _status = 'Connected — framebuffer active');
       }
     } catch (_) {
       // Preserve raw diagnostic text in the Runtime Log even if malformed.
