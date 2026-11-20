@@ -258,8 +258,11 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
       final kind = decoded['kind']?.toString() ?? 'unknown';
       final failedHandshake = kind == 'websocket-error' ||
           kind == 'rfb-securityfailure' ||
+          kind == 'rfb-serververification' ||
           kind == 'novnc-ui-error' ||
+          kind == 'novnc-connect-threw' ||
           kind == 'rfb-error' ||
+          (kind == 'websocket-close' && decoded['wasClean'] != true) ||
           (kind == 'rfb-disconnect' && decoded['clean'] != true);
       if (failedHandshake) {
         _requestDisplayDiagnostics('WebView reported ' + kind + ': ' + message.message);
