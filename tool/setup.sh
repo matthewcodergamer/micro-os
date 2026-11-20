@@ -754,6 +754,7 @@ wait_for_novnc_http() {
 if ! wait_for_port 6080 80 || ! wait_for_novnc_http || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then log "ERROR: noVNC HTTP bridge failed its 127.0.0.1:6080 health check"; dump_diagnostics; exit 1; fi
 log "websockify/noVNC HTTP ready; pid=$WEBSOCKIFY_PID port=6080 -> localhost:5900"
 dump_diagnostics
+# Do not launch Chromium as a side effect of starting the desktop service.
 log "display :1 READY (Xvfb, Openbox, x11vnc/RFB, websockify/noVNC HTTP)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
 log "ERROR: one or more display services exited unexpectedly"
