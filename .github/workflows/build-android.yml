@@ -161,6 +161,8 @@ jobs:
           grep -q 'installMicroOSDiagnostics(UI)' tool/setup.sh
           grep -q 'microos-diagnostics.js' tool/setup.sh
           grep -q 'autoconnect=1' lib/ui/apps/desktop_session_app.dart
+          grep -q 'noVNC_container canvas' lib/ui/apps/desktop_session_app.dart
+          grep -q 'noVNC_container canvas' tool/test-novnc-render.cjs
           grep -q 'test-novnc-render.cjs' tool/prebake_rootfs.sh
           grep -q 'window.__microOsVncHealth?.healthy === true' lib/ui/apps/desktop_session_app.dart
           grep -q 'setOnConsoleMessage' lib/ui/apps/desktop_session_app.dart
