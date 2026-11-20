@@ -18,6 +18,7 @@ command -v zstd >/dev/null 2>&1 || {
 echo "==> Provisioning Ubuntu 24.04 ARM64 in Docker"
 docker run --platform linux/arm64 --name "$NAME" \
   -v "$ROOT/tool/setup.sh:/tmp/microos-setup.sh:ro" \
+  -v "$ROOT/tool/test-novnc-render.cjs:/tmp/test-novnc-render.cjs:ro" \
   ubuntu:24.04 /bin/bash -lc '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
@@ -211,6 +212,92 @@ PLAYWRIGHT_SMOKE
     cleanup_x11_smoke
     trap - EXIT
 
+    # Verify the full X11 -> x11vnc -> websockify -> noVNC canvas path.
+    # A changing, known root-window color must arrive as real canvas pixels.
+    echo "==> Testing noVNC WebSocket/RFB framebuffer updates"
+    MICROOS_VNC_XVFB_PID=""
+    MICROOS_VNC_OPENBOX_PID=""
+    MICROOS_VNC_PID=""
+    MICROOS_WEBSOCKIFY_PID=""
+    cleanup_novnc_smoke() {
+      [ -z "$MICROOS_WEBSOCKIFY_PID" ] || kill "$MICROOS_WEBSOCKIFY_PID" 2>/dev/null || true
+      [ -z "$MICROOS_VNC_PID" ] || kill "$MICROOS_VNC_PID" 2>/dev/null || true
+      [ -z "$MICROOS_VNC_OPENBOX_PID" ] || kill "$MICROOS_VNC_OPENBOX_PID" 2>/dev/null || true
+      [ -z "$MICROOS_VNC_XVFB_PID" ] || kill "$MICROOS_VNC_XVFB_PID" 2>/dev/null || true
+      pkill -x websockify 2>/dev/null || true
+      pkill -x x11vnc 2>/dev/null || true
+    }
+    trap cleanup_novnc_smoke EXIT
+    Xvfb :100 -screen 0 1280x720x24 -nolisten tcp -ac -noreset > /tmp/microos-novnc-xvfb.log 2>&1 &
+    MICROOS_VNC_XVFB_PID=$!
+    export DISPLAY=:100
+    for attempt in $(seq 1 40); do
+      if xset -display :100 q >/dev/null 2>&1; then break; fi
+      kill -0 "$MICROOS_VNC_XVFB_PID" 2>/dev/null || {
+        cat /tmp/microos-novnc-xvfb.log >&2 || true
+        exit 1
+      }
+      sleep 0.25
+    done
+    xset -display :100 q >/dev/null
+    xsetroot -display :100 -solid "#123456"
+    openbox --display :100 > /tmp/microos-novnc-openbox.log 2>&1 &
+    MICROOS_VNC_OPENBOX_PID=$!
+    WM_READY=0
+    for attempt in $(seq 1 40); do
+      if xprop -display :100 -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "window id"; then
+        WM_READY=1
+        break
+      fi
+      kill -0 "$MICROOS_VNC_OPENBOX_PID" 2>/dev/null || break
+      sleep 0.25
+    done
+    if [ "$WM_READY" -ne 1 ]; then
+      cat /tmp/microos-novnc-openbox.log >&2 || true
+      echo "Openbox did not start for noVNC framebuffer test" >&2
+      exit 1
+    fi
+    x11vnc -display :100 -forever -shared -nopw -rfbport 5901 -localhost \
+      -noxdamage -noshm -wait 1 -defer 1 > /tmp/microos-novnc-x11vnc.log 2>&1 &
+    MICROOS_VNC_PID=$!
+    for attempt in $(seq 1 40); do
+      if (echo >/dev/tcp/127.0.0.1/5901) >/dev/null 2>&1; then break; fi
+      kill -0 "$MICROOS_VNC_PID" 2>/dev/null || {
+        cat /tmp/microos-novnc-x11vnc.log >&2 || true
+        exit 1
+      }
+      sleep 0.25
+    done
+    (echo >/dev/tcp/127.0.0.1/5901) >/dev/null 2>&1 || {
+      cat /tmp/microos-novnc-x11vnc.log >&2 || true
+      echo "x11vnc did not open port 5901" >&2
+      exit 1
+    }
+    websockify --verbose --host=127.0.0.1 --web /usr/share/novnc 6081 localhost:5901 \
+      > /tmp/microos-novnc-websockify.log 2>&1 &
+    MICROOS_WEBSOCKIFY_PID=$!
+    for attempt in $(seq 1 40); do
+      if curl -fsS --max-time 2 http://127.0.0.1:6081/vnc.html -o /dev/null 2>/dev/null; then break; fi
+      kill -0 "$MICROOS_WEBSOCKIFY_PID" 2>/dev/null || {
+        cat /tmp/microos-novnc-websockify.log >&2 || true
+        exit 1
+      }
+      sleep 0.25
+    done
+    curl -fsS --max-time 2 http://127.0.0.1:6081/vnc.html -o /dev/null || {
+      cat /tmp/microos-novnc-websockify.log >&2 || true
+      echo "websockify did not serve noVNC on port 6081" >&2
+      exit 1
+    }
+    DISPLAY=:100 MICROOS_NOVNC_URL="http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale&path=websockify&quality=6&compression=2" \
+      PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright NODE_PATH=/opt/node-global \
+      timeout 60 node /tmp/test-novnc-render.cjs
+    test -s /tmp/microos-novnc-render.png
+    echo "==> noVNC canvas received two distinct X11 framebuffer updates"
+    cleanup_novnc_smoke
+    trap - EXIT
+    export DISPLAY=:0
+
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
     apt-get install -y --no-install-recommends \
@@ -268,7 +355,7 @@ PLAYWRIGHT_SMOKE
     rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "13\\n" > /root/.microos/image-version
+    printf "14\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
