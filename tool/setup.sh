@@ -169,13 +169,26 @@ if [ ! -x "$SECURITY_VENV/bin/python" ]; then
   python3 -m venv "$SECURITY_VENV" || warn "could not create security-tools virtualenv"
 fi
 if [ -x "$SECURITY_VENV/bin/pip" ]; then
-  "$SECURITY_VENV/bin/pip" install --disable-pip-version-check --no-cache-dir \\
-    frida-tools objection apkid || warn "one or more Python security tools failed to install"
+  # Install independently so one optional wheel failure cannot roll back all
+  # three tools. The release-rootfs verifier below still requires every CLI.
+  for python_package in frida-tools objection apkid; do
+    "$SECURITY_VENV/bin/pip" install --disable-pip-version-check --no-cache-dir "$python_package" || warn "$python_package installation failed"
+  done
   for command_name in frida frida-ps frida-ls-devices objection apkid; do
     if [ -x "$SECURITY_VENV/bin/$command_name" ]; then
       ln -sfn "$SECURITY_VENV/bin/$command_name" "/usr/local/bin/$command_name"
     fi
   done
+  # Preserve the familiar pip3 install workflow while keeping Ubuntu's
+  # externally-managed system Python untouched.
+  cat > /usr/local/bin/pip3 <<'PIP3'
+#!/usr/bin/env bash
+exec /opt/microos-security-tools/bin/pip "$@"
+PIP3
+  chmod 755 /usr/local/bin/pip3
+  cat > /etc/profile.d/microos-python-tools.sh <<'PYTHON_PATH'
+export PATH="/opt/microos-security-tools/bin:$PATH"
+PYTHON_PATH
 fi
 
 # Burp Suite Community has a native Linux ARM64 installer. Pin the verified
