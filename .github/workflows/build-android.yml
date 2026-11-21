@@ -197,8 +197,8 @@ jobs:
           zstd -dc "$ROOTFS" | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
-          grep -qxE '(\\./)?usr/bin/google-chrome-stable' /tmp/rootfs-archive.list
-          grep -qxE '(\\./)?opt/google/chrome/chrome' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/google-chrome-stable' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/google/chrome/chrome' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-browser.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-firefox.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browser-control' /tmp/rootfs-archive.list
