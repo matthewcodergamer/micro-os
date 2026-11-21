@@ -41,7 +41,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     # secure storage. Do not persist access tokens in the rootfs or shell files.
 
     echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop adb fastboot jadx apktool mitmproxy blender frida objection apkid google-chrome-stable; do
+    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop adb fastboot jadx apktool mitmproxy blender frida objection apkid google-chrome-stable zsh fzf rg fdfind batcat htop tree nvim; do
       command -v "$tool" >/dev/null 2>&1 || {
         echo "Required pre-baked tool is missing: $tool" >&2
         exit 1
@@ -429,6 +429,15 @@ require_archive_path() {
 # Keep this list in sync with the APK workflow's transfer validation.
 require_archive_path 'root/\.microos/ready'
 require_archive_path 'root/\.microos/image-version'
+require_archive_path 'usr/bin/zsh'
+require_archive_path 'usr/bin/fzf'
+require_archive_path 'usr/bin/rg'
+require_archive_path 'usr/bin/fdfind'
+require_archive_path 'usr/bin/batcat'
+require_archive_path 'usr/bin/htop'
+require_archive_path 'usr/bin/tree'
+require_archive_path 'usr/bin/nvim'
+require_archive_path 'root/.zshrc'
 require_archive_path 'usr/bin/adb'
 require_archive_path 'usr/bin/fastboot'
 require_archive_path 'usr/bin/apktool'
