@@ -59,7 +59,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     OPENCODE_VERSION_FILE=/usr/local/share/microos/opencode-version
     test -s "$OPENCODE_VERSION_FILE" || { echo "OpenCode release version manifest missing" >&2; exit 1; }
     EXPECTED_OPENCODE_VERSION="$(cat "$OPENCODE_VERSION_FILE")"
-    ACTUAL_OPENCODE_VERSION="$(timeout 30 "$OPENCODE_BIN" --version | head -n 1 | tr -d '\\r')"
+    ACTUAL_OPENCODE_VERSION="$(timeout 30 "$OPENCODE_BIN" --version | head -n 1 | tr -d '\r')"
     test "$ACTUAL_OPENCODE_VERSION" = "$EXPECTED_OPENCODE_VERSION" || {
       echo "OpenCode version mismatch: expected $EXPECTED_OPENCODE_VERSION, got $ACTUAL_OPENCODE_VERSION" >&2
       exit 1
