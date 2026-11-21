@@ -241,7 +241,7 @@ PLAYWRIGHT_SMOKE
     done
     xset -display :100 q >/dev/null
     xsetroot -display :100 -solid "#123456"
-    openbox --display :100 > /tmp/microos-novnc-openbox.log 2>&1 &
+    DISPLAY=:100 openbox > /tmp/microos-novnc-openbox.log 2>&1 &
     MICROOS_VNC_OPENBOX_PID=$!
     WM_READY=0
     for attempt in $(seq 1 40); do
