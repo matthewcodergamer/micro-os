@@ -117,11 +117,62 @@ stage 63 "Installing core toolchain"
 apt-get install "${APT_OPTS[@]}" \
   ca-certificates curl wget gnupg apt-utils locales \
   git git-lfs openssh-client \
-  build-essential pkg-config make cmake openjdk-21-jdk-headless \
+  build-essential pkg-config make cmake openjdk-17-jdk-headless openjdk-21-jdk-headless \
   python3 python3-pip python3-venv python3-dev \
   unzip zip xz-utils tar less nano vim-tiny \
   procps file jq tmux sudo \
   || warn "some core packages failed to install"
+
+# Android reverse engineering, traffic inspection and creative workstation tools.
+# Keep these in the ARM64 Ubuntu guest so commands work from every terminal session.
+stage 66 "Installing Android and security toolchain"
+SECURITY_APT_PACKAGES=(
+  android-tools-adb android-tools-fastboot jadx apktool mitmproxy blender
+)
+AVAILABLE_SECURITY_PACKAGES=()
+for package in "${SECURITY_APT_PACKAGES[@]}"; do
+  if apt-cache show "$package" >/dev/null 2>&1; then
+    AVAILABLE_SECURITY_PACKAGES+=("$package")
+  else
+    warn "$package is not available for this Ubuntu ARM64 repository snapshot"
+  fi
+done
+if [ "${#AVAILABLE_SECURITY_PACKAGES[@]}" -gt 0 ]; then
+  apt-get install "${APT_OPTS[@]}" "${AVAILABLE_SECURITY_PACKAGES[@]}" || warn "some Android/security/creative packages failed to install"
+fi
+
+# PEP 668-safe Python tools: never modify Ubuntu's externally-managed Python.
+SECURITY_VENV=/opt/microos-security-tools
+if [ ! -x "$SECURITY_VENV/bin/python" ]; then
+  python3 -m venv "$SECURITY_VENV" || warn "could not create security-tools virtualenv"
+fi
+if [ -x "$SECURITY_VENV/bin/pip" ]; then
+  "$SECURITY_VENV/bin/pip" install --disable-pip-version-check --no-cache-dir \\
+    frida-tools objection apkid || warn "one or more Python security tools failed to install"
+  for command_name in frida frida-ps frida-ls-devices objection apkid; do
+    if [ -x "$SECURITY_VENV/bin/$command_name" ]; then
+      ln -sfn "$SECURITY_VENV/bin/$command_name" "/usr/local/bin/$command_name"
+    fi
+  done
+fi
+
+# Burp Suite Community has a native Linux ARM64 installer. Pin the verified
+# release/checksum so a changed upstream download can never be installed silently.
+stage 68 "Installing Burp Suite Community (ARM64)"
+if [ "$(dpkg --print-architecture 2>/dev/null || true)" = arm64 ]; then
+  BURP_INSTALLER=/tmp/burpsuite_community_arm64.sh
+  if curl -fL --connect-timeout 20 --max-time 600 \\
+      "https://portswigger.net/burp/releases/download?product=community&type=LinuxArm64" \\
+      -o "$BURP_INSTALLER"; then
+    echo "6ddcd34bf055693106d8e624f1341ef61e00e86d3d950dcf136b43578caf55f3  $BURP_INSTALLER" | sha256sum -c - && \\
+      chmod +x "$BURP_INSTALLER" && \\
+      timeout 600 "$BURP_INSTALLER" -q -Dinstall4j.suppressUnattendedReboot=true || \\
+      warn "Burp Suite ARM64 installer failed checksum or installation; see setup log"
+  else
+    warn "Burp Suite ARM64 download failed; other workstation tools remain available"
+  fi
+  rm -f "$BURP_INSTALLER"
+fi
 
 # Generate the UTF-8 locale explicitly; merely exporting LANG does not create it.
 if [ -f /etc/locale.gen ]; then
@@ -610,8 +661,10 @@ mkdir -p "$TMPDIR"
 chmod 1777 "$TMPDIR"
 update-ca-certificates || true
 
-if ! command -v opencode >/dev/null 2>&1 && [ ! -x /root/.opencode/bin/opencode ]; then
-  installed=0
+# Refresh OpenCode on every full workstation setup so existing rootfs images do
+# not keep an obsolete CLI indefinitely. If the network is unavailable, the
+# already-installed executable is left in place.
+installed=0
   for attempt in 1 2 3; do
     log "OpenCode installer download attempt $attempt/3"
     rm -f /tmp/opencode-install.sh
@@ -635,9 +688,8 @@ if ! command -v opencode >/dev/null 2>&1 && [ ! -x /root/.opencode/bin/opencode 
     fi
     sleep $((attempt * 5))
   done
-  if [ "$installed" -ne 1 ]; then
-    warn "OpenCode not installed. Skipping npm fallback to avoid exhausting phone RAM; Linux remains usable."
-  fi
+if [ "$installed" -ne 1 ]; then
+  warn "OpenCode update did not complete. Keeping any existing executable; skipping npm fallback to avoid exhausting phone RAM."
 fi
 
 # Verify the binary exists; a successful download attempt alone is not proof.
