@@ -683,16 +683,16 @@ done
   /// Launches the desktop browser inside the guest.
   ///
   /// Launches the native Linux browser as a normal X11 desktop window.
-  /// Chromium/Firefox own their tabs, address bars, bookmarks and window chrome;
+  /// Google Chrome/Firefox own their tabs, address bars, bookmarks and window chrome;
   /// Flutter only provides compact touch controls around the VNC desktop.
   Future<void> launchBrowser({
     String? url,
-    String browser = 'chromium',
+    String browser = 'chrome',
     bool singleProcess = false,
   }) async {
     if (!isReady) return;
-    if (browser != 'chromium' && browser != 'firefox') {
-      throw ArgumentError.value(browser, 'browser', 'Use chromium or firefox');
+    if (browser != 'chrome' && browser != 'chromium' && browser != 'firefox') {
+      throw ArgumentError.value(browser, 'browser', 'Use chrome or firefox');
     }
     final displayUp = await ensureDisplay();
     if (!displayUp) {
