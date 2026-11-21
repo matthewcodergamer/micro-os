@@ -37,7 +37,7 @@ The Ubuntu provisioning step installs the exact ARM64 package names and verifies
 - Traffic inspection: `mitmproxy`.
 - 3D creation: `blender`.
 - Web testing: `curl`, `wget`, Playwright and its headless Chromium runtime.
-- AI coding: the official OpenCode installer is rerun during release-rootfs provisioning; the release build fails rather than shipping an old CLI if the update cannot complete.
+- AI coding: the latest GitHub release for `anomalyco/opencode` is resolved during provisioning; the official Linux ARM64 archive is downloaded and checked against GitHub's published SHA-256 asset digest. The installed `--version` must exactly match the release tag. Release-rootfs creation fails closed if metadata, download, checksum, executable, or version verification fails.
 - Burp Suite Community: native Linux ARM64 installer, downloaded with a pinned SHA-256 check before silent installation.
 
 Python security utilities are installed into `/opt/microos-security-tools` rather than Ubuntu's externally managed system Python. This avoids `pip` breaking distro-managed Python packages.
@@ -55,7 +55,7 @@ Copying a protected path under `/data/app` may still be denied by Android's app 
 
 ## OpenCode sessions
 
-The Terminal app supports multiple independent terminal tabs. OpenCode also has its own persistent session manager: use `/new` to start a separate conversation and `/sessions` to list and resume saved conversations. Its TUI also supports session tabs and switching shortcuts; those are OpenCode features, separate from the OS terminal tabs.
+The Terminal app supports multiple independent terminal tabs. OpenCode has its own persistent session manager: use `/new` to start a separate conversation and `/sessions` to list and resume saved conversations. Its TUI session tabs are separate from OS terminal tabs. A graphical OpenCode session switcher is still a distinct UI task; do not describe terminal tabs as OpenCode session management.
 
 ## Performance and device constraints
 
