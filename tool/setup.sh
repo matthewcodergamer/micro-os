@@ -387,11 +387,15 @@ cat > /usr/local/bin/start-browser.sh <<'BROWSER'
 set -euo pipefail
 export DISPLAY="${DISPLAY:-:1}"
 BROWSER_HOME=/home/microos-browser
-CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || true)"
-if [ -z "$CHROMIUM_BIN" ]; then echo "[microos] Chromium .deb is not installed" >&2; exit 127; fi
-install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.config/chromium" "$BROWSER_HOME/.config/chromium/Default" "$BROWSER_HOME/.cache"
-CHROMIUM_PREFS="$BROWSER_HOME/.config/chromium/Default/Preferences"
-python3 - "$CHROMIUM_PREFS" <<'CHROMIUM_PREFS'
+BROWSER_BIN="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+if [ -z "$BROWSER_BIN" ]; then echo "[microos] Google Chrome ARM64 (or Chromium fallback) is not installed" >&2; exit 127; fi
+case "$(basename "$BROWSER_BIN")" in
+  google-chrome*) BROWSER_PROFILE="$BROWSER_HOME/.config/google-chrome" ;;
+  *) BROWSER_PROFILE="$BROWSER_HOME/.config/chromium" ;;
+esac
+install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_PROFILE" "$BROWSER_PROFILE/Default" "$BROWSER_HOME/.cache"
+BROWSER_PREFS="$BROWSER_PROFILE/Default/Preferences"
+python3 - "$BROWSER_PREFS" <<'BROWSER_PREFS'
 import json
 import os
 import sys
@@ -425,12 +429,12 @@ if changed or not os.path.exists(path):
     with open(temporary, "w", encoding="utf-8") as target:
         json.dump(preferences, target, separators=(",", ":"))
     os.replace(temporary, path)
-CHROMIUM_PREFS
-chown microos-browser:microos-browser "$CHROMIUM_PREFS"
+BROWSER_PREFS
+chown microos-browser:microos-browser "$BROWSER_PREFS"
 
 # Seed a useful native Chromium bookmarks bar once. Never replace a user's
 # existing Bookmarks database after their first browser launch.
-BOOKMARKS_FILE="$BROWSER_HOME/.config/chromium/Default/Bookmarks"
+BOOKMARKS_FILE="$BROWSER_PROFILE/Default/Bookmarks"
 if [ ! -s "$BOOKMARKS_FILE" ]; then
   cat > "$BOOKMARKS_FILE" <<'BOOKMARKS'
 {
@@ -459,21 +463,21 @@ fi
 # Ensure the shared X11 session has only one browser engine at a time.
 pkill -u microos-browser -f '[f]irefox' 2>/dev/null || true
 sleep 0.4
-CHROMIUM_EXTRA_ARGS=(
+BROWSER_EXTRA_ARGS=(
   --ignore-gpu-blocklist
   --canvas-oop-rasterization
 )
 if [ "${MICROOS_DISABLE_GPU:-0}" = "1" ]; then
   # Used only by the CI Xvfb window test. Phone launches keep acceleration enabled.
-  CHROMIUM_EXTRA_ARGS+=(--disable-gpu)
+  BROWSER_EXTRA_ARGS+=(--disable-gpu)
 fi
 if [ "${MICROOS_HARDWARE_GPU_ONLY:-0}" = "1" ]; then
   # Opt-in only: disabling SwiftShader/software fallback can blank rendering on
   # devices where PRoot cannot expose a usable host GPU. Enable after device test.
-  CHROMIUM_EXTRA_ARGS+=(--disable-software-rasterizer)
+  BROWSER_EXTRA_ARGS+=(--disable-software-rasterizer)
 fi
-exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
-  "${CHROMIUM_EXTRA_ARGS[@]}" \
+exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$BROWSER_BIN" \
+  "${BROWSER_EXTRA_ARGS[@]}" \
   --no-sandbox \
   --disable-gpu-sandbox \
   --process-per-site \
@@ -486,7 +490,7 @@ exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" X
   --disk-cache-size=67108864 --media-cache-size=16777216 \
   --start-maximized \
   --restore-last-session \
-  --user-data-dir="$BROWSER_HOME/.config/chromium" "$@"
+  --user-data-dir="$BROWSER_PROFILE" "$@"
 BROWSER
 chmod 755 /usr/local/bin/start-browser.sh
 
