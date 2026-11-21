@@ -1045,7 +1045,7 @@ if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then log "ERROR:
 log "x11vnc ready; pid=$VNC_PID port=5900 (loopback only)"
 if [ ! -f /usr/share/novnc/vnc.html ]; then log "ERROR: noVNC client is missing at /usr/share/novnc/vnc.html"; dump_diagnostics; exit 1; fi
 : > "$LOG/websockify.log"
-websockify --verbose --host=127.0.0.1 --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
+websockify --verbose --web /usr/share/novnc 127.0.0.1:6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
 WEBSOCKIFY_PID=$!
 wait_for_novnc_http() {
   for ((i=0;i<80;i++)); do
