@@ -152,7 +152,7 @@ jobs:
           grep -q '_columnView' lib/ui/apps/files_app.dart
           grep -q 'Move to Trash' lib/ui/apps/files_app.dart
           grep -q 'Duplicate' lib/ui/apps/files_app.dart
-          grep -q 'Do not launch Chromium as a side effect' tool/setup.sh
+          grep -q 'Do not launch Google Chrome as a side effect' tool/setup.sh
           ! grep -q "start-browser.sh --new-window chrome://newtab/" tool/setup.sh
           grep -q 'dump_diagnostics' tool/setup.sh
           grep -q 'Openbox did not publish its EWMH' tool/setup.sh
