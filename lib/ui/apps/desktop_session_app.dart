@@ -497,11 +497,22 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           }
           window.addEventListener('resize',resizePointer,{passive:true});
           window.visualViewport?.addEventListener('resize',resizePointer,{passive:true});
-          const moveCursor=(dx,dy,buttons=0)=>{cursorX+=dx*sensitivity;cursorY+=dy*sensitivity;clampCursor();mouse('mousemove',cursorX,cursorY,-1,buttons);};
+          const moveCursor=(dx,dy,buttons=0)=>{
+            cursorX+=dx*sensitivity;cursorY+=dy*sensitivity;clampCursor();
+            cursor.style.display='block';target.style.cursor='none';
+            mouse('mousemove',cursorX,cursorY,-1,buttons);
+          };
+          // A real Bluetooth/USB mouse must keep its native pointer. The
+          // custom overlay is only for finger-driven relative trackpad motion.
+          target.addEventListener('mousemove',e=>{
+            if(!e.isTrusted)return;
+            cursorX=e.clientX;cursorY=e.clientY;
+            cursor.style.display='none';target.style.cursor='default';
+          },{passive:true});
           const setMode=enabled=>{
             trackpad=!!enabled;
-            cursor.style.display=trackpad?'block':'none';
-            target.style.cursor=trackpad?'none':'default';
+            cursor.style.display='none';
+            target.style.cursor='default';
             if(trackpad&&cursorX===0&&cursorY===0){
               const r=bounds();cursorX=r.left+r.width/2;cursorY=r.top+r.height/2;
             }
@@ -527,6 +538,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
           const point=t=>({x:t.clientX,y:t.clientY});
           const clear=()=>{if(timer)clearTimeout(timer);timer=null;};
           target.addEventListener('touchstart',e=>{
+            if(trackpad){cursor.style.display='block';target.style.cursor='none';}
             if(e.touches.length===2){
               clear();mode='scroll';
               const a=point(e.touches[0]),b=point(e.touches[1]);
