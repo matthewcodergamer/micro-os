@@ -196,12 +196,12 @@ fi
 stage 68 "Installing Burp Suite Community (ARM64)"
 if [ "$(dpkg --print-architecture 2>/dev/null || true)" = arm64 ]; then
   BURP_INSTALLER=/tmp/burpsuite_community_arm64.sh
-  if curl -fL --connect-timeout 20 --max-time 600 \\
-      "https://portswigger.net/burp/releases/download?product=community&type=LinuxArm64" \\
+  if curl -fL --connect-timeout 20 --max-time 600 \
+      "https://portswigger.net/burp/releases/download?product=community&type=LinuxArm64" \
       -o "$BURP_INSTALLER"; then
-    echo "6ddcd34bf055693106d8e624f1341ef61e00e86d3d950dcf136b43578caf55f3  $BURP_INSTALLER" | sha256sum -c - && \\
-      chmod +x "$BURP_INSTALLER" && \\
-      timeout 600 "$BURP_INSTALLER" -q -Dinstall4j.suppressUnattendedReboot=true || \\
+    echo "6ddcd34bf055693106d8e624f1341ef61e00e86d3d950dcf136b43578caf55f3  $BURP_INSTALLER" | sha256sum -c - && \
+      chmod +x "$BURP_INSTALLER" && \
+      timeout 600 "$BURP_INSTALLER" -q -Dinstall4j.suppressUnattendedReboot=true || \
       warn "Burp Suite ARM64 installer failed checksum or installation; see setup log"
   else
     warn "Burp Suite ARM64 download failed; other workstation tools remain available"
