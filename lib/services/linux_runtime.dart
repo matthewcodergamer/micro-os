@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -25,6 +26,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.zst';
   static const String _rootfsSizeAsset = 'assets/rootfs/rootfs.tar.size';
   static const int _rootfsChunkBytes = 8 * 1024 * 1024;
+  static const int _storageHeadroomBytes = 768 * 1024 * 1024;
   static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
@@ -276,50 +278,133 @@ class LinuxRuntime extends ChangeNotifier {
     if (target.existsSync()) await target.delete(recursive: true);
     await target.create(recursive: true);
 
-    final archive = File(p.join(base.path, 'rootfs.tar.zst'));
-    if (archive.existsSync()) await archive.delete();
-    if (!archive.existsSync() || archive.lengthSync() < 1024 * 1024) {
-      // AssetManager copies the compressed asset on a native worker thread.
-      // Never materialize the multi-hundred-megabyte asset in the Dart heap.
-      await _rootfsChannel.invokeMethod<int>('copyAssetToFile', <String, Object>{
-        'assetPath': _rootfsAsset,
-        'destinationPath': archive.path,
-      });
-    }
-
     final totalExtractBytes = int.parse(
       (await rootBundle.loadString(_rootfsSizeAsset)).trim(),
     );
-    await _extractZstdWithSystemTar(
-      archive.path,
-      target.path,
-      totalBytes: totalExtractBytes,
-      onProgress: (extractedBytes) {
-        final fraction = totalExtractBytes == 0
-            ? 0.0
-            : (extractedBytes / totalExtractBytes).clamp(0.0, 1.0).toDouble();
-        progress = fraction;
-        stage = 'Unpacking Linux workstation · ${(fraction * 100).round()}%';
-        _notify();
-      },
-    );
+
+    // The installed APK already holds the compressed image. First-run
+    // unpacking therefore only needs room for the expanded image plus a small
+    // working margin, not a second copy of the archive.
+    final freeBytes = await _availableBytes();
+    final requiredBytes = totalExtractBytes + _storageHeadroomBytes;
+    if (freeBytes > 0 && freeBytes < requiredBytes) {
+      final missing = requiredBytes - freeBytes;
+      throw StateError(
+        'Not enough free storage to unpack Misty OS. This build needs '
+        '${_formatBytes(requiredBytes)} free, but only '
+        '${_formatBytes(freeBytes)} is available. Free up at least '
+        '${_formatBytes(missing)} (clear downloads or old APKs), then tap Retry.',
+      );
+    }
+
+    RandomAccessFile? input;
+    var inputLength = 0;
+    File? copiedArchive;
+    try {
+      // The rootfs asset is stored uncompressed, so Android can expose its
+      // exact byte range inside the installed APK. Read that range directly
+      // instead of writing a second multi-gigabyte archive to app storage.
+      Map<String, dynamic>? range;
+      try {
+        range = await _rootfsChannel
+            .invokeMapMethod<String, dynamic>('getAssetRange', <String, Object>{
+          'assetPath': _rootfsAsset,
+        });
+      } catch (_) {
+        // Older APKs and compressed assets do not expose a file range.
+        range = null;
+      }
+      final apkPath = range?['path'] as String?;
+      final offset = (range?['offset'] as num?)?.toInt() ?? -1;
+      final length = (range?['length'] as num?)?.toInt() ?? -1;
+      if (apkPath != null && apkPath.isNotEmpty && offset >= 0 && length > 0) {
+        input = await File(apkPath).open();
+        await input.setPosition(offset);
+        inputLength = length;
+        _appendLog(
+          '[microos] streaming rootfs from the installed APK '
+          '(${_formatBytes(length)})',
+        );
+      } else {
+        final archive = File(p.join(base.path, 'rootfs.tar.zst'));
+        if (archive.existsSync()) await archive.delete();
+        // AssetManager copies the compressed asset on a native worker thread.
+        // Never materialize the multi-hundred-megabyte asset in the Dart heap.
+        await _rootfsChannel.invokeMethod<int>('copyAssetToFile', <String, Object>{
+          'assetPath': _rootfsAsset,
+          'destinationPath': archive.path,
+        });
+        copiedArchive = archive;
+        input = await archive.open();
+        inputLength = await input.length();
+      }
+
+      final source = input;
+      if (source == null) {
+        throw StateError('Could not open the bundled rootfs image');
+      }
+      await _extractZstdWithSystemTar(
+        input: source,
+        inputLength: inputLength,
+        destination: target.path,
+        totalBytes: totalExtractBytes,
+        onProgress: (extractedBytes) {
+          final fraction = totalExtractBytes == 0
+              ? 0.0
+              : (extractedBytes / totalExtractBytes).clamp(0.0, 1.0).toDouble();
+          progress = fraction;
+          stage = 'Unpacking Linux workstation · ${(fraction * 100).round()}%';
+          _notify();
+        },
+      );
+    } finally {
+      await input?.close();
+      if (copiedArchive != null) {
+        try {
+          await copiedArchive.delete();
+        } catch (_) {
+          // Not fatal; the next install can reuse or replace this cached archive.
+        }
+      }
+    }
+
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');
     }
+  }
 
+  Future<int> _availableBytes() async {
     try {
-      await archive.delete();
+      final value = await _rootfsChannel.invokeMethod<int>(
+        'getFreeBytes',
+        <String, Object>{'path': base.path},
+      );
+      return value ?? 0;
     } catch (_) {
-      // Not fatal; the next install can reuse or replace this cached archive.
+      // A missing platform method should not block installation; the caller
+      // treats 0 as "unknown" and skips the preflight check.
+      return 0;
     }
   }
 
+  static String _formatBytes(int bytes) {
+    const int gib = 1024 * 1024 * 1024;
+    const int mib = 1024 * 1024;
+    if (bytes >= gib) {
+      return '${(bytes / gib).toStringAsFixed(1)} GB';
+    }
+    return '${(bytes / mib).toStringAsFixed(0)} MB';
+  }
+
   /// Decompress zstd in bounded 8 MiB chunks and pipe tar directly into
-  /// Android tar. Neither the compressed asset nor the expanded tar is loaded
-  /// wholesale into memory or written as a second giant temporary file.
-  Future<void> _extractZstdWithSystemTar(
-    String archivePath,
-    String destination, {
+  /// Android tar. The compressed frame is read straight from the installed
+  /// APK when possible, so no giant temporary archive is written to the
+  /// device. Neither the compressed image nor the expanded tar is loaded
+  /// wholesale into memory.
+  Future<void> _extractZstdWithSystemTar({
+    required RandomAccessFile input,
+    required int inputLength,
+    required String destination,
     required int totalBytes,
     required ValueChanged<int> onProgress,
   }) async {
@@ -334,15 +419,16 @@ class LinuxRuntime extends ChangeNotifier {
     final decoder = ZstdStreamDecoder(
       maxDecompressedMessageSize: 128 * 1024 * 1024,
     );
-    RandomAccessFile? input;
     var extractedBytes = 0;
+    var remaining = inputLength;
 
     try {
-      input = await File(archivePath).open();
       final buffer = Uint8List(_rootfsChunkBytes);
-      while (true) {
-        final count = await input.readInto(buffer);
+      while (remaining > 0) {
+        final wanted = math.min(buffer.length, remaining);
+        final count = await input.readInto(buffer, 0, wanted);
         if (count == 0) break;
+        remaining -= count;
 
         final decoded = decoder.feed(Uint8List.sublistView(buffer, 0, count));
         if (decoded.isNotEmpty) {
@@ -353,6 +439,13 @@ class LinuxRuntime extends ChangeNotifier {
           extractedBytes += decoded.length;
           onProgress(extractedBytes.clamp(0, totalBytes).toInt());
         }
+      }
+
+      if (remaining != 0) {
+        throw StateError(
+          'The rootfs archive ended early: read '
+          '${inputLength - remaining} of $inputLength bytes.',
+        );
       }
 
       decoder.finish();
@@ -375,7 +468,6 @@ class LinuxRuntime extends ChangeNotifier {
       tar.kill();
       rethrow;
     } finally {
-      await input?.close();
       decoder.dispose();
       await stderrSubscription.cancel();
       await stdoutSubscription.cancel();

@@ -32,6 +32,7 @@ package com.matthewcodergamer.micro_os
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Build
+import android.os.StatFs
 import android.provider.Settings
 import kotlin.math.roundToInt
 import android.os.Bundle
@@ -49,39 +50,73 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "microos/rootfs")
             .setMethodCallHandler { call, result ->
-                if (call.method != "copyAssetToFile") {
-                    result.notImplemented()
-                    return@setMethodCallHandler
-                }
+                when (call.method) {
+                    "copyAssetToFile" -> {
+                        val assetPath = call.argument<String>("assetPath")
+                        val destinationPath = call.argument<String>("destinationPath")
+                        if (assetPath.isNullOrBlank() || destinationPath.isNullOrBlank()) {
+                            result.error("INVALID_ARGUMENT", "assetPath and destinationPath are required", null)
+                            return@setMethodCallHandler
+                        }
 
-                val assetPath = call.argument<String>("assetPath")
-                val destinationPath = call.argument<String>("destinationPath")
-                if (assetPath.isNullOrBlank() || destinationPath.isNullOrBlank()) {
-                    result.error("INVALID_ARGUMENT", "assetPath and destinationPath are required", null)
-                    return@setMethodCallHandler
-                }
-
-                assetCopyExecutor.execute {
-                    try {
-                        val destination = File(destinationPath)
-                        destination.parentFile?.mkdirs()
-                        assets.open(assetPath).use { input ->
-                            FileOutputStream(destination).use { output ->
-                                val buffer = ByteArray(64 * 1024)
-                                while (true) {
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    output.write(buffer, 0, count)
+                        assetCopyExecutor.execute {
+                            try {
+                                val destination = File(destinationPath)
+                                destination.parentFile?.mkdirs()
+                                assets.open(assetPath).use { input ->
+                                    FileOutputStream(destination).use { output ->
+                                        val buffer = ByteArray(64 * 1024)
+                                        while (true) {
+                                            val count = input.read(buffer)
+                                            if (count < 0) break
+                                            output.write(buffer, 0, count)
+                                        }
+                                        output.fd.sync()
+                                    }
                                 }
-                                output.fd.sync()
+                                runOnUiThread { result.success(destination.length()) }
+                            } catch (error: Exception) {
+                                runOnUiThread {
+                                    result.error("ASSET_COPY_FAILED", error.message, null)
+                                }
                             }
                         }
-                        runOnUiThread { result.success(destination.length()) }
-                    } catch (error: Exception) {
-                        runOnUiThread {
-                            result.error("ASSET_COPY_FAILED", error.message, null)
+                    }
+                    "getAssetRange" -> {
+                        val assetPath = call.argument<String>("assetPath")
+                        if (assetPath.isNullOrBlank()) {
+                            result.error("INVALID_ARGUMENT", "assetPath is required", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            assets.openFd(assetPath).use { descriptor ->
+                                if (descriptor.startOffset < 0 || descriptor.length < 0) {
+                                    result.success(null)
+                                } else {
+                                    result.success(
+                                        mapOf(
+                                            "path" to applicationInfo.sourceDir,
+                                            "offset" to descriptor.startOffset,
+                                            "length" to descriptor.length,
+                                        )
+                                    )
+                                }
+                            }
+                        } catch (error: Exception) {
+                            // Compressed assets have no stable file range. The
+                            // Dart installer falls back to copyAssetToFile.
+                            result.success(null)
                         }
                     }
+                    "getFreeBytes" -> {
+                        val path = call.argument<String>("path") ?: filesDir.absolutePath
+                        try {
+                            result.success(StatFs(path).availableBytes)
+                        } catch (error: Exception) {
+                            result.error("STATFS_FAILED", error.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
                 }
             }
 
@@ -375,8 +410,49 @@ if "ndkVersion" not in g:
     g = re.sub(r"(compileSdkVersion\s+flutter\.compileSdkVersion)",
                r"\1\n    ndkVersion \"28.2.13676358\"", g, count=1)
 
-# Release builds already use the debug signing key in the Flutter template,
-# which is exactly what a sideload-only APK needs.
+# ---- Stable sideload signing + uncompressed rootfs asset --------------------
+# Android refuses to update an app signed with a different key. CI runners
+# generate a fresh debug key on every run, so pin the sideload key shipped in
+# the repository. This key is public and only exists to keep sideload updates
+# installable; it must never be used for a store listing.
+keystore = os.path.join(root, "tool/misty-sideload.keystore")
+if not os.path.isfile(keystore):
+    raise SystemExit("Missing tool/misty-sideload.keystore")
+
+if target.endswith(".kts"):
+    extra = '''
+    androidResources {
+        noCompress += "zst"
+    }
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../../tool/misty-sideload.keystore")
+            storePassword = "mistyos-sideload"
+            keyAlias = "misty"
+            keyPassword = "mistyos-sideload"
+        }
+    }
+'''
+else:
+    extra = '''
+    aaptOptions {
+        noCompress 'zst'
+    }
+    signingConfigs {
+        debug {
+            storeFile file("../../tool/misty-sideload.keystore")
+            storePassword "mistyos-sideload"
+            keyAlias "misty"
+            keyPassword "mistyos-sideload"
+        }
+    }
+'''
+if "misty-sideload.keystore" not in g:
+    if "android {" not in g:
+        raise SystemExit("could not find the android block in the Gradle script")
+    g = g.replace("android {", "android {" + extra, 1)
+if "noCompress" not in g:
+    raise SystemExit("rootfs noCompress rule was not applied")
 
 
 # targetSdk 28 is required by the current proot execution model. Suppress only
@@ -404,5 +480,9 @@ PY
 
 grep -q "targetSdk = 28\|targetSdkVersion 28" android/app/build.gradle.kts android/app/build.gradle 2>/dev/null \
   || { echo "!! could not patch targetSdk, inspect android/app/build.gradle*"; exit 1; }
+grep -q "misty-sideload.keystore" android/app/build.gradle.kts android/app/build.gradle 2>/dev/null \
+  || { echo "!! could not apply the stable sideload signing key"; exit 1; }
+grep -q "noCompress" android/app/build.gradle.kts android/app/build.gradle 2>/dev/null \
+  || { echo "!! could not mark the rootfs asset as uncompressed"; exit 1; }
 
 echo "==> android project ready"

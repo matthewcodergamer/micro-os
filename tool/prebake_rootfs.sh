@@ -410,8 +410,10 @@ PY
 
 # Keep ownership metadata and ordinary files instead of hard-link records.
 # Stream the tar directly into zstd so no second uncompressed archive is written.
+# Level 19 keeps the sideload APK comfortably below Android's practical 2 GB
+# package limit while decompression stays fast on the phone.
 tar --hard-dereference --numeric-owner --owner=0 --group=0 \
-  -cf - -C "$TMP/rootfs" . | zstd -T0 -10 -f -o "$OUT"
+  -cf - -C "$TMP/rootfs" . | zstd -T0 -19 -f -o "$OUT"
 
 zstd -t "$OUT"
 # Store the exact uncompressed tar-stream size so the Android installer can
