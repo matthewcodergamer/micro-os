@@ -28,16 +28,16 @@ Browser rendering, VNC transport and network throughput are measured separately.
 
 ## Preinstalled developer and reverse-engineering tools
 
-The Ubuntu provisioning step installs available ARM64 packages for:
+The Ubuntu provisioning step installs the exact ARM64 package names and verifies every required command before the rootfs can be exported:
 
 - Java 17 and Java 21, Python 3, Git, unzip, wget, build tools, Node.js and Rust.
-- Android platform tools: `adb`, `fastboot`.
-- APK inspection: `jadx`, `apktool`, `apkid`.
+- Android platform tools: Ubuntu Noble's real package names `adb` and `fastboot` (not the virtual `android-tools-adb` / `android-tools-fastboot` names).
+- APK inspection: `jadx` 1.5.7 from the official upstream release ZIP with SHA-256 verification, Ubuntu `apktool`, and Python `apkid`.
 - Dynamic analysis: `frida`, `frida-ps`, `frida-ls-devices`, `objection`.
 - Traffic inspection: `mitmproxy`.
 - 3D creation: `blender`.
 - Web testing: `curl`, `wget`, Playwright and its headless Chromium runtime.
-- AI coding: the official OpenCode installer is rerun during provisioning to refresh an existing installation; the existing binary is retained if the network is unavailable.
+- AI coding: the official OpenCode installer is rerun during release-rootfs provisioning; the release build fails rather than shipping an old CLI if the update cannot complete.
 - Burp Suite Community: native Linux ARM64 installer, downloaded with a pinned SHA-256 check before silent installation.
 
 Python security utilities are installed into `/opt/microos-security-tools` rather than Ubuntu's externally managed system Python. This avoids `pip` breaking distro-managed Python packages.
