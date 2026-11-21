@@ -40,7 +40,7 @@ The Ubuntu provisioning step installs the exact ARM64 package names and verifies
 - AI coding: the latest GitHub release for `anomalyco/opencode` is resolved during provisioning; the official Linux ARM64 archive is downloaded and checked against GitHub's published SHA-256 asset digest. The installed `--version` must exactly match the release tag. Release-rootfs creation fails closed if metadata, download, checksum, executable, or version verification fails.
 - Burp Suite Community: native Linux ARM64 installer, downloaded with a pinned SHA-256 check before silent installation.
 
-Python security utilities are installed into `/opt/microos-security-tools` rather than Ubuntu's externally managed system Python. This avoids `pip` breaking distro-managed Python packages.
+Python security utilities are installed into `/opt/microos-security-tools` rather than Ubuntu's externally managed system Python. The bundled `pip3` wrapper routes `pip3 install ...` into that isolated environment, and the environment is added to login-shell `PATH`; this preserves the familiar command without breaking distro-managed Python packages.
 
 ### Android host commands versus guest commands
 
