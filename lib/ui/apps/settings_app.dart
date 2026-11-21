@@ -1092,7 +1092,7 @@ class _BrowserPage extends StatelessWidget {
           value: settings.browserEngine as String,
           decoration: const InputDecoration(labelText: 'Browser engine'),
           items: const [
-            DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
+            DropdownMenuItem(value: 'chromium', child: Text('Google Chrome')),
             DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
           ],
           onChanged: (value) { if (value != null) settings.setBrowserEngine(value); },
