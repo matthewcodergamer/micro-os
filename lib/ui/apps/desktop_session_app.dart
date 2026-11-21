@@ -760,7 +760,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                         fontWeight: FontWeight.w600,
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
+                        DropdownMenuItem(value: 'chrome', child: Text('Google Chrome')),
                         DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
                       ],
                       onChanged: controller == null ? null : _selectBrowser,
@@ -780,6 +780,13 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                   ),
                 ),
                 if (controller != null) ...[
+                  if (_settingsStore?.experienceMode == ExperienceMode.mobileDesktop)
+                    IconButton(
+                      tooltip: 'Show Android keyboard',
+                      onPressed: _showRemoteKeyboard,
+                      icon: const Icon(Icons.keyboard_rounded, size: 19),
+                      color: MicroColors.accent,
+                    ),
                   IconButton(
                     tooltip: _trackpadMode
                         ? 'Trackpad cursor enabled'
