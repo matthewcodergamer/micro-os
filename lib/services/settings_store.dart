@@ -39,7 +39,7 @@ class SettingsStore extends ChangeNotifier {
   );
 
   bool singleProcessBrowser = false;
-  String browserEngine = 'chromium';
+  String browserEngine = 'chrome';
   String browserHomePage = 'https://www.google.com';
   String? installedAt;
   String openCodeTheme = 'light';
@@ -73,7 +73,7 @@ class SettingsStore extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     singleProcessBrowser = prefs.getBool(_kSingleProcess) ?? false;
-    browserEngine = prefs.getString(_kBrowserEngine) == 'firefox' ? 'firefox' : 'chromium';
+    browserEngine = prefs.getString(_kBrowserEngine) == 'firefox' ? 'firefox' : 'chrome';
     browserHomePage = _validHomePage(prefs.getString(_kBrowserHomePage)) ?? 'https://www.google.com';
     installedAt = prefs.getString(_kInstalledAt);
     openCodeTheme = prefs.getString(_kOpenCodeTheme) ?? 'light';
@@ -143,7 +143,7 @@ class SettingsStore extends ChangeNotifier {
   }
 
   Future<void> setBrowserEngine(String value) async {
-    browserEngine = value == 'firefox' ? 'firefox' : 'chromium';
+    browserEngine = value == 'firefox' ? 'firefox' : 'chrome';
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kBrowserEngine, browserEngine);
