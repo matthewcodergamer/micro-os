@@ -26,7 +26,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.zst';
   static const String _rootfsSizeAsset = 'assets/rootfs/rootfs.tar.size';
   static const int _rootfsChunkBytes = 8 * 1024 * 1024;
-  static const int _storageHeadroomBytes = 768 * 1024 * 1024;
+  static const int _storageHeadroomBytes = 1024 * 1024 * 1024;
   static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
