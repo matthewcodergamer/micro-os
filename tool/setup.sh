@@ -191,6 +191,59 @@ export PATH="/opt/microos-security-tools/bin:$PATH"
 PYTHON_PATH
 fi
 
+# A fast, macOS-inspired interactive shell without a heavy framework.
+stage 69 "Installing the Misty terminal experience"
+SHELL_APT_PACKAGES=(
+  zsh zsh-autosuggestions zsh-syntax-highlighting
+  fzf ripgrep fd-find bat htop tree neovim
+)
+AVAILABLE_SHELL_PACKAGES=()
+for package in "${SHELL_APT_PACKAGES[@]}"; do
+  if apt-cache show "$package" 2>/dev/null | grep -q "^Package: $package$"; then
+    AVAILABLE_SHELL_PACKAGES+=("$package")
+  else
+    warn "$package is not available for this Ubuntu ARM64 repository snapshot"
+  fi
+done
+if [ "${#AVAILABLE_SHELL_PACKAGES[@]}" -gt 0 ]; then
+  apt-get install "${APT_OPTS[@]}" "${AVAILABLE_SHELL_PACKAGES[@]}" || warn "some interactive shell packages failed to install"
+fi
+if command -v fdfind >/dev/null 2>&1; then ln -sfn "$(command -v fdfind)" /usr/local/bin/fd; fi
+if command -v batcat >/dev/null 2>&1; then ln -sfn "$(command -v batcat)" /usr/local/bin/bat; fi
+if command -v zsh >/dev/null 2>&1; then
+  cat > /root/.zshrc <<'ZSHRC'
+export TERM="${TERM:-xterm-256color}"
+export EDITOR=nvim
+export VISUAL=nvim
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=20000
+SAVEHIST=20000
+setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_ALL_DUPS HIST_REDUCE_BLANKS
+setopt AUTO_CD AUTO_PUSHD PUSHD_IGNORE_DUPS INTERACTIVE_COMMENTS NO_BEEP
+autoload -Uz compinit && compinit -C
+bindkey '^[[A' history-search-backward
+bindkey '^[[B' history-search-forward
+alias ll='ls -lah --color=auto'
+alias la='ls -A'
+alias grep='grep --color=auto'
+alias cls='clear'
+alias c='clear'
+_misty_git_branch() {
+  command git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return
+  local branch
+  branch="$(command git branch --show-current 2>/dev/null)"
+  [[ -n "$branch" ]] && print -n " %F{magenta}git:$branch%f"
+}
+setopt PROMPT_SUBST
+PROMPT='%F{green}%n%f@%F{cyan}%m%f %F{blue}%~%f$(_misty_git_branch)\n%F{magenta}❯%f '
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
+[[ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+[[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]] && source /usr/share/doc/fzf/examples/key-bindings.zsh
+[[ -f /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+ZSHRC
+  chmod 644 /root/.zshrc
+fi
+
 # Burp Suite Community has a native Linux ARM64 installer. Pin the verified
 # release/checksum so a changed upstream download can never be installed silently.
 stage 68 "Installing Burp Suite Community (ARM64)"
