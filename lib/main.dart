@@ -10,6 +10,7 @@ import 'core/theme.dart';
 import 'services/github_auth.dart';
 import 'services/linux_runtime.dart';
 import 'services/settings_store.dart';
+import 'services/system_controls.dart';
 import 'services/system_stats.dart';
 import 'state/desktop_state.dart';
 import 'ui/desktop_screen.dart';
@@ -81,6 +82,13 @@ Future<void> main() async {
   final settings = SettingsStore();
 
   await settings.load();
+  if (settings.screenBrightnessConfigured) {
+    try {
+      await SystemControls.setBrightness(settings.screenBrightness);
+    } catch (_) {
+      // Non-Android builds may not provide the native display-controls channel.
+    }
+  }
   await SystemChrome.setEnabledSystemUIMode(
     settings.systemBarsVisible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
   );
@@ -148,10 +156,12 @@ class _MistyOSAppState extends State<MistyOSApp> {
       stats: widget.stats,
       auth: widget.auth,
       settings: widget.settings,
-      child: MaterialApp(
+      child: AnimatedBuilder(
+        animation: widget.settings,
+        builder: (context, _) => MaterialApp(
         title: 'Misty OS',
         debugShowCheckedModeBanner: false,
-        theme: buildMicroTheme(),
+        theme: buildMicroTheme(accentColor: widget.settings.accentColor),
         builder: (context, child) {
           final media = MediaQuery.of(context);
           // Keep the desktop chrome from exploding on phones with huge
@@ -169,6 +179,7 @@ class _MistyOSAppState extends State<MistyOSApp> {
           );
         },
         home: const DesktopScreen(),
+        ),
       ),
     );
   }

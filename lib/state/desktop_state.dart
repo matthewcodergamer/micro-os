@@ -93,6 +93,15 @@ class DesktopState extends ChangeNotifier {
     return Rect.fromLTRB(0, topReserve, screen.width, bottom);
   }
 
+  /// Where a minimized window animates while remaining mounted. Keeping its
+  /// child alive preserves browser/WebView and terminal sessions across restore.
+  Rect _minimizedRect(Size screen, Rect saved) => Rect.fromLTWH(
+        saved.left,
+        screen.height + 40,
+        saved.width,
+        saved.height,
+      );
+
   /// Where a maximized window sits. On phones the Dock is hidden while a
   /// window is maximized, so it runs to the bottom edge.
   Rect _maxRect(Size screen) {
@@ -125,7 +134,16 @@ class DesktopState extends ChangeNotifier {
       // Keep every window inside the usable area when the keyboard,
       // orientation or Dock changes. Maximized windows are glued to it.
       for (final w in windows) {
-        if (w.maximized || w.pinned) {
+        if (w.minimized) {
+          final saved = w.minimizedRestoreRect ?? w.rect;
+          final width = math.min(saved.width, _area(screen).width);
+          final height = math.min(saved.height, _area(screen).height);
+          final area = _area(screen);
+          final left = _clampD(saved.left, area.left, area.right - width);
+          final top = _clampD(saved.top, area.top, area.bottom - height);
+          w.minimizedRestoreRect = Rect.fromLTWH(left, top, width, height);
+          w.rect = _minimizedRect(screen, w.minimizedRestoreRect!);
+        } else if (w.maximized || w.pinned) {
           w.rect = _maxRect(screen);
         } else {
           final area = _area(screen);
@@ -158,9 +176,6 @@ class DesktopState extends ChangeNotifier {
     if (!newWindow) {
       final existing = windowFor(app);
       if (existing != null) {
-        if (existing.minimized) {
-          existing.minimized = false;
-        }
         focus(existing.id);
         return existing;
       }
@@ -221,7 +236,11 @@ class DesktopState extends ChangeNotifier {
           orElse: () => null,
         );
     if (w == null) return;
-    if (w.minimized) w.minimized = false;
+    if (w.minimized) {
+      w.minimized = false;
+      if (w.minimizedRestoreRect != null) w.rect = w.minimizedRestoreRect!;
+      w.minimizedRestoreRect = null;
+    }
     w.zIndex = ++_zCounter;
     notifyListeners();
   }
@@ -237,7 +256,10 @@ class DesktopState extends ChangeNotifier {
           orElse: () => null,
         );
     if (w == null) return;
+    if (w.minimized) return;
+    w.minimizedRestoreRect = w.rect;
     w.minimized = true;
+    w.rect = _minimizedRect(_screen.isEmpty ? const Size(1080, 1920) : _screen, w.minimizedRestoreRect!);
     notifyListeners();
   }
 
@@ -264,7 +286,7 @@ class DesktopState extends ChangeNotifier {
       w.rect = w.restoreRect ?? appDefaultRect(w.app, screen);
       w.restoreRect = null;
     } else {
-      w.restoreRect = w.rect;
+      w.restoreRect ??= w.rect;
       w.maximized = true;
       w.pinned = _compactFor(screen);
       w.rect = _maxRect(screen);
@@ -281,6 +303,37 @@ class DesktopState extends ChangeNotifier {
       size.width,
       size.height,
     );
+  }
+
+  void snapToHalf(int id, Size screen, {required bool left}) {
+    final w = windows.cast<ManagedWindow?>().firstWhere((x) => x!.id == id, orElse: () => null);
+    if (w == null) return;
+    final area = _area(screen);
+    w.restoreRect ??= w.rect;
+    w.maximized = false;
+    w.pinned = false;
+    final half = area.width / 2;
+    w.rect = Rect.fromLTWH(left ? area.left : area.left + half, area.top, half, area.height);
+    focus(id);
+  }
+
+  void centerWindow(int id, Size screen) {
+    final w = windows.cast<ManagedWindow?>().firstWhere((x) => x!.id == id, orElse: () => null);
+    if (w == null) return;
+    final area = _area(screen);
+    final target = w.restoreRect ?? appDefaultRect(w.app, screen);
+    final width = math.min(target.width, area.width);
+    final height = math.min(target.height, area.height);
+    w.rect = Rect.fromLTWH(
+      _clampD(target.left, area.left, area.right - width),
+      _clampD(target.top, area.top, area.bottom - height),
+      width,
+      height,
+    );
+    w.restoreRect = null;
+    w.maximized = false;
+    w.pinned = false;
+    focus(id);
   }
 
   void move(int id, Offset delta, Size screen) {

@@ -65,11 +65,12 @@ class _DockState extends State<Dock> {
         : Dock._apps;
     // Landscape has very little vertical room; keep the Dock visually
     // secondary while preserving comfortable touch targets in portrait.
-    final iconSize = landscape
+    final settings = AppScope.of(context).settings;
+    final iconSize = (landscape
         ? (screen.height < 420 ? 30.0 : 36.0)
         : compact
-        ? (screen.width < 390 ? 30.0 : 36.0)
-        : 52.0;
+        ? (screen.width < 390 ? 28.0 : 32.0)
+        : 52.0) * settings.dockScale;
     final maxScale = landscape
         ? 1.28
         : smallerDimension < 480
@@ -91,7 +92,7 @@ class _DockState extends State<Dock> {
 
     final scales = List<double>.generate(dockApps.length, (index) {
       final pointer = _pointerX;
-      if (pointer == null || effectWidth <= 0) return 1;
+      if (!settings.dockMagnification || pointer == null || effectWidth <= 0) return 1;
       final iconCenter = index * (iconSize + spacing) + iconSize / 2;
       final minX = pointer - effectWidth / 2;
       final maxX = pointer + effectWidth / 2;

@@ -36,8 +36,8 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
 
   List<AppId> get _results {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return AppId.values;
-    return AppId.values
+    if (q.isEmpty) return kAvailableApps;
+    return kAvailableApps
         .where(
           (a) =>
               a.title.toLowerCase().contains(q) ||
@@ -237,7 +237,7 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
   @override
   Widget build(BuildContext context) {
     final query = _search.text.trim().toLowerCase();
-    final apps = AppId.values
+    final apps = kAvailableApps
         .where(
           (app) =>
               query.isEmpty ||

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -25,12 +26,13 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _rootfsAsset = 'flutter_assets/assets/rootfs/rootfs.tar.zst';
   static const String _rootfsSizeAsset = 'assets/rootfs/rootfs.tar.size';
   static const int _rootfsChunkBytes = 8 * 1024 * 1024;
+  static const int _storageHeadroomBytes = 1024 * 1024 * 1024;
   static const MethodChannel _rootfsChannel = MethodChannel('microos/rootfs');
   static const String _setupAsset = 'tool/setup.sh';
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '12';
+  static const String _rootfsVersion = '15';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -276,50 +278,133 @@ class LinuxRuntime extends ChangeNotifier {
     if (target.existsSync()) await target.delete(recursive: true);
     await target.create(recursive: true);
 
-    final archive = File(p.join(base.path, 'rootfs.tar.zst'));
-    if (archive.existsSync()) await archive.delete();
-    if (!archive.existsSync() || archive.lengthSync() < 1024 * 1024) {
-      // AssetManager copies the compressed asset on a native worker thread.
-      // Never materialize the multi-hundred-megabyte asset in the Dart heap.
-      await _rootfsChannel.invokeMethod<int>('copyAssetToFile', <String, Object>{
-        'assetPath': _rootfsAsset,
-        'destinationPath': archive.path,
-      });
-    }
-
     final totalExtractBytes = int.parse(
       (await rootBundle.loadString(_rootfsSizeAsset)).trim(),
     );
-    await _extractZstdWithSystemTar(
-      archive.path,
-      target.path,
-      totalBytes: totalExtractBytes,
-      onProgress: (extractedBytes) {
-        final fraction = totalExtractBytes == 0
-            ? 0.0
-            : (extractedBytes / totalExtractBytes).clamp(0.0, 1.0).toDouble();
-        progress = fraction;
-        stage = 'Unpacking Linux workstation · ${(fraction * 100).round()}%';
-        _notify();
-      },
-    );
+
+    // The installed APK already holds the compressed image. First-run
+    // unpacking therefore only needs room for the expanded image plus a small
+    // working margin, not a second copy of the archive.
+    final freeBytes = await _availableBytes();
+    final requiredBytes = totalExtractBytes + _storageHeadroomBytes;
+    if (freeBytes > 0 && freeBytes < requiredBytes) {
+      final missing = requiredBytes - freeBytes;
+      throw StateError(
+        'Not enough free storage to unpack Misty OS. This build needs '
+        '${_formatBytes(requiredBytes)} free, but only '
+        '${_formatBytes(freeBytes)} is available. Free up at least '
+        '${_formatBytes(missing)} (clear downloads or old APKs), then tap Retry.',
+      );
+    }
+
+    RandomAccessFile? input;
+    var inputLength = 0;
+    File? copiedArchive;
+    try {
+      // The rootfs asset is stored uncompressed, so Android can expose its
+      // exact byte range inside the installed APK. Read that range directly
+      // instead of writing a second multi-gigabyte archive to app storage.
+      Map<String, dynamic>? range;
+      try {
+        range = await _rootfsChannel
+            .invokeMapMethod<String, dynamic>('getAssetRange', <String, Object>{
+          'assetPath': _rootfsAsset,
+        });
+      } catch (_) {
+        // Older APKs and compressed assets do not expose a file range.
+        range = null;
+      }
+      final apkPath = range?['path'] as String?;
+      final offset = (range?['offset'] as num?)?.toInt() ?? -1;
+      final length = (range?['length'] as num?)?.toInt() ?? -1;
+      if (apkPath != null && apkPath.isNotEmpty && offset >= 0 && length > 0) {
+        input = await File(apkPath).open();
+        await input.setPosition(offset);
+        inputLength = length;
+        _appendLog(
+          '[microos] streaming rootfs from the installed APK '
+          '(${_formatBytes(length)})',
+        );
+      } else {
+        final archive = File(p.join(base.path, 'rootfs.tar.zst'));
+        if (archive.existsSync()) await archive.delete();
+        // AssetManager copies the compressed asset on a native worker thread.
+        // Never materialize the multi-hundred-megabyte asset in the Dart heap.
+        await _rootfsChannel.invokeMethod<int>('copyAssetToFile', <String, Object>{
+          'assetPath': _rootfsAsset,
+          'destinationPath': archive.path,
+        });
+        copiedArchive = archive;
+        input = await archive.open();
+        inputLength = await input.length();
+      }
+
+      final source = input;
+      if (source == null) {
+        throw StateError('Could not open the bundled rootfs image');
+      }
+      await _extractZstdWithSystemTar(
+        input: source,
+        inputLength: inputLength,
+        destination: target.path,
+        totalBytes: totalExtractBytes,
+        onProgress: (extractedBytes) {
+          final fraction = totalExtractBytes == 0
+              ? 0.0
+              : (extractedBytes / totalExtractBytes).clamp(0.0, 1.0).toDouble();
+          progress = fraction;
+          stage = 'Unpacking Linux workstation · ${(fraction * 100).round()}%';
+          _notify();
+        },
+      );
+    } finally {
+      await input?.close();
+      if (copiedArchive != null) {
+        try {
+          await copiedArchive.delete();
+        } catch (_) {
+          // Not fatal; the next install can reuse or replace this cached archive.
+        }
+      }
+    }
+
     if (!File(p.join(rootfsPath, 'etc/os-release')).existsSync()) {
       throw StateError('rootfs extraction produced no /etc/os-release');
     }
+  }
 
+  Future<int> _availableBytes() async {
     try {
-      await archive.delete();
+      final value = await _rootfsChannel.invokeMethod<int>(
+        'getFreeBytes',
+        <String, Object>{'path': base.path},
+      );
+      return value ?? 0;
     } catch (_) {
-      // Not fatal; the next install can reuse or replace this cached archive.
+      // A missing platform method should not block installation; the caller
+      // treats 0 as "unknown" and skips the preflight check.
+      return 0;
     }
   }
 
+  static String _formatBytes(int bytes) {
+    const int gib = 1024 * 1024 * 1024;
+    const int mib = 1024 * 1024;
+    if (bytes >= gib) {
+      return '${(bytes / gib).toStringAsFixed(1)} GB';
+    }
+    return '${(bytes / mib).toStringAsFixed(0)} MB';
+  }
+
   /// Decompress zstd in bounded 8 MiB chunks and pipe tar directly into
-  /// Android tar. Neither the compressed asset nor the expanded tar is loaded
-  /// wholesale into memory or written as a second giant temporary file.
-  Future<void> _extractZstdWithSystemTar(
-    String archivePath,
-    String destination, {
+  /// Android tar. The compressed frame is read straight from the installed
+  /// APK when possible, so no giant temporary archive is written to the
+  /// device. Neither the compressed image nor the expanded tar is loaded
+  /// wholesale into memory.
+  Future<void> _extractZstdWithSystemTar({
+    required RandomAccessFile input,
+    required int inputLength,
+    required String destination,
     required int totalBytes,
     required ValueChanged<int> onProgress,
   }) async {
@@ -334,15 +419,16 @@ class LinuxRuntime extends ChangeNotifier {
     final decoder = ZstdStreamDecoder(
       maxDecompressedMessageSize: 128 * 1024 * 1024,
     );
-    RandomAccessFile? input;
     var extractedBytes = 0;
+    var remaining = inputLength;
 
     try {
-      input = await File(archivePath).open();
       final buffer = Uint8List(_rootfsChunkBytes);
-      while (true) {
-        final count = await input.readInto(buffer);
+      while (remaining > 0) {
+        final wanted = math.min(buffer.length, remaining);
+        final count = await input.readInto(buffer, 0, wanted);
         if (count == 0) break;
+        remaining -= count;
 
         final decoded = decoder.feed(Uint8List.sublistView(buffer, 0, count));
         if (decoded.isNotEmpty) {
@@ -353,6 +439,13 @@ class LinuxRuntime extends ChangeNotifier {
           extractedBytes += decoded.length;
           onProgress(extractedBytes.clamp(0, totalBytes).toInt());
         }
+      }
+
+      if (remaining != 0) {
+        throw StateError(
+          'The rootfs archive ended early: read '
+          '${inputLength - remaining} of $inputLength bytes.',
+        );
       }
 
       decoder.finish();
@@ -375,7 +468,6 @@ class LinuxRuntime extends ChangeNotifier {
       tar.kill();
       rethrow;
     } finally {
-      await input?.close();
       decoder.dispose();
       await stderrSubscription.cancel();
       await stdoutSubscription.cancel();
@@ -479,6 +571,30 @@ class LinuxRuntime extends ChangeNotifier {
   }
 
   /// Starts an interactive shell (or [argv]) inside the guest.
+  /// Saves the Xvfb framebuffer size and applies it to a running display.
+  /// The saved value is read by start-gui.sh on the next session as well.
+  Future<bool> setDisplayResolution(String resolution) async {
+    const supported = {'1024x768', '1280x720', '1600x900', '1920x1080'};
+    if (!supported.contains(resolution) || !isReady) return false;
+    final pty = startShell(argv: <String>[
+      '/bin/bash', '-lc',
+      r'''set -eu
+mkdir -p /root/.microos
+printf '%s\n' "$1" > /root/.microos/display-resolution
+if [ -S /tmp/.X11-unix/X1 ]; then
+  xrandr --display :1 --fb "$1"
+fi''',
+      'microos-display', resolution,
+    ]);
+    try {
+      return await pty.exitCode.timeout(const Duration(seconds: 8)) == 0;
+    } catch (_) {
+      return false;
+    } finally {
+      pty.kill();
+    }
+  }
+
   Pty startShell({List<String>? argv}) {
     unawaited(_ensureBackgroundSession());
     final pty = Pty.start(
@@ -574,11 +690,32 @@ class LinuxRuntime extends ChangeNotifier {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       final vnc = await _isPortOpen(5900);
-      final bridge = vnc && await _isPortOpen(6080);
+      // A listening socket alone can be stale or belong to the wrong service.
+      // Require the actual noVNC page to be served before attaching a WebView.
+      final bridge = vnc && await _isNoVncHttpReady();
       if (vnc && bridge) return true;
       await Future<void>.delayed(const Duration(milliseconds: 350));
     }
     return false;
+  }
+
+  Future<bool> _isNoVncHttpReady() async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 2);
+    try {
+      final request = await client
+          .getUrl(Uri.parse('http://127.0.0.1:6080/vnc.html'))
+          .timeout(const Duration(seconds: 2));
+      final response = await request.close().timeout(
+        const Duration(seconds: 2),
+      );
+      await response.drain<void>();
+      return response.statusCode == HttpStatus.ok;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
   }
 
   Future<bool> _isPortOpen(int port) async {
@@ -595,19 +732,59 @@ class LinuxRuntime extends ChangeNotifier {
     }
   }
 
+  /// Captures the live X11/VNC/noVNC process state and recent service logs.
+  /// Output is streamed into the Runtime Log so WebView failures can be
+  /// correlated with the guest-side WebSocket/RFB bridge.
+  void collectDisplayDiagnostics({String reason = 'requested'}) {
+    if (!isReady) return;
+    runDetached(<String>[
+      '/bin/bash',
+      '-lc',
+      r'''set +e
+echo "[microos:display] diagnostic snapshot: $1"
+echo "[microos:display] process table:"
+for service in Xvfb openbox x11vnc websockify; do
+  printf '%s: ' "$service"
+  pgrep -a -x "$service" || true
+done
+echo "[microos:display] X11 probe:"
+xset -display :1 q >/dev/null 2>&1 && echo "X11 :1 responds" || echo "X11 :1 unavailable"
+xprop -display :1 -root _NET_SUPPORTING_WM_CHECK 2>&1 || true
+echo "[microos:display] Chromium process state:"
+pgrep -a -u microos-browser -f "chromium|chrome" || true
+echo "[microos:display] visible browser windows:"
+for window_id in $(xdotool search --onlyvisible --class "chromium|Chromium|chrome|Chrome" 2>/dev/null || true); do
+  xwininfo -display :1 -id "$window_id" 2>&1 | sed -n '1,18p' || true
+  xprop -display :1 -id "$window_id" WM_NAME _NET_WM_STATE 2>&1 || true
+done
+echo "[microos:display] socket probes:"
+for port in 5900 6080; do
+  (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && echo "$port OPEN" || echo "$port CLOSED"
+done
+curl -sS -o /dev/null -w "noVNC HTTP %{http_code}, %{size_download} bytes\n" --max-time 3 http://127.0.0.1:6080/vnc.html || true
+for file in /tmp/.microos/xvfb.log /tmp/.microos/openbox.log /tmp/.microos/x11vnc.log /tmp/.microos/websockify.log; do
+  echo "[microos:display] ---- $file (last 100 lines) ----"
+  tail -n 100 "$file" 2>&1 || true
+done
+''',
+      'microos-display-diagnostics',
+      reason,
+    ]);
+  }
+
   /// Launches the desktop browser inside the guest.
   ///
   /// Launches the native Linux browser as a normal X11 desktop window.
-  /// Chromium/Firefox own their tabs, address bars, bookmarks and window chrome;
+  /// Google Chrome/Firefox own their tabs, address bars, bookmarks and window chrome;
   /// Flutter only provides compact touch controls around the VNC desktop.
   Future<void> launchBrowser({
     String? url,
-    String browser = 'chromium',
+    String browser = 'chrome',
     bool singleProcess = false,
   }) async {
     if (!isReady) return;
-    if (browser != 'chromium' && browser != 'firefox') {
-      throw ArgumentError.value(browser, 'browser', 'Use chromium or firefox');
+    if (browser != 'chrome' && browser != 'chromium' && browser != 'firefox') {
+      throw ArgumentError.value(browser, 'browser', 'Use chrome or firefox');
     }
     final displayUp = await ensureDisplay();
     if (!displayUp) {
@@ -664,6 +841,15 @@ class LinuxRuntime extends ChangeNotifier {
     final code = await pty.exitCode;
     _appendLog('[microos] package repair exited with code $code');
     return code;
+  }
+
+  /// Appends diagnostics emitted by the embedded noVNC WebView to the
+  /// Runtime Log. Messages are bounded so a noisy browser cannot grow the log.
+  void logDiagnostic(String message) {
+    final safe = message.replaceAll(RegExp(r'[\r\n]+'), ' ');
+    final line = '[microos:webview] ${safe.length > 700 ? safe.substring(0, 700) : safe}';
+    debugPrint(line);
+    _appendLog(line);
   }
 
   // --------------------------------------------------------------- credentials

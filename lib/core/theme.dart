@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 const double kMenuBarHeight = 28;
 const double kStatusBarHeight = kMenuBarHeight; // legacy alias
 const double kCompactBreakpoint = 720;
-const double kDockHeight = 92; // legacy
-const double kDockReserved = 108; // legacy
+const double kDockHeight = 68; // compact floating portrait Dock
+const double kDockReserved = 76; // Dock plus breathing room
 
 /// macOS "Golden Gate" palette: dark chrome, Liquid-Glass translucency.
 class MicroColors {
@@ -52,9 +52,9 @@ BoxDecoration glassDecoration({
   );
 }
 
-ThemeData buildMicroTheme() {
+ThemeData buildMicroTheme({Color accentColor = MicroColors.accent}) {
   final scheme = ColorScheme.fromSeed(
-    seedColor: MicroColors.accent,
+    seedColor: accentColor,
     brightness: Brightness.dark,
   );
 
@@ -93,8 +93,8 @@ ThemeData buildMicroTheme() {
       }),
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
     ),
-    sliderTheme: const SliderThemeData(
-      activeTrackColor: MicroColors.accent,
+    sliderTheme: SliderThemeData(
+      activeTrackColor: accentColor,
       thumbColor: Colors.white,
       inactiveTrackColor: Color(0xFF48484C),
     ),
@@ -113,12 +113,12 @@ ThemeData buildMicroTheme() {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: MicroColors.accent, width: 1.4),
+        borderSide: BorderSide(color: accentColor, width: 1.4),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: MicroColors.accent,
+        backgroundColor: accentColor,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         shape: const StadiumBorder(),
@@ -132,7 +132,7 @@ ThemeData buildMicroTheme() {
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: MicroColors.accent),
+      style: TextButton.styleFrom(foregroundColor: accentColor),
     ),
     dividerColor: MicroColors.hairline,
     progressIndicatorTheme: const ProgressIndicatorThemeData(

@@ -79,6 +79,105 @@ jobs:
           grep -q 'window-maximize' tool/setup.sh
           grep -q 'window-restore' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
+          grep -q '_sidebarItem' lib/ui/apps/files_app.dart
+          grep -q 'Search settings' lib/ui/apps/settings_app.dart
+          grep -q '_WallpaperPage' lib/ui/apps/settings_app.dart
+          grep -q 'settings.setWallpaper(wallpaper.id)' lib/ui/apps/settings_app.dart
+          grep -q 'wallpaperById' lib/core/wallpapers.dart
+          grep -q '_PointerPage' lib/ui/apps/settings_app.dart
+          grep -q 'setTrackpadMode' lib/services/settings_store.dart
+          grep -q 'setTrackpadSpeed' lib/services/settings_store.dart
+          grep -q '_syncTrackpadSettings' lib/ui/apps/desktop_session_app.dart
+          grep -q 'ResizeObserver' lib/ui/apps/desktop_session_app.dart
+          grep -q 'visualViewport' lib/ui/apps/desktop_session_app.dart
+          grep -q '_visiblePages' lib/ui/apps/settings_app.dart
+          grep -q 'Clear search' lib/ui/apps/settings_app.dart
+          grep -q 'No matching settings' lib/ui/apps/settings_app.dart
+          grep -q 'Icons.display_settings_rounded' lib/ui/apps/settings_app.dart
+          grep -q 'dockScale' lib/services/settings_store.dart
+          grep -q 'dockMagnification' lib/services/settings_store.dart
+          grep -q 'settings.dockScale' lib/ui/dock.dart
+          grep -q 'settings.dockMagnification' lib/ui/dock.dart
+          grep -q 'Magnify icons on hover' lib/ui/apps/settings_app.dart
+          grep -q '_showHiddenFiles' lib/ui/apps/files_app.dart
+          grep -q '_FinderSort' lib/ui/apps/files_app.dart
+          grep -q '_breadcrumbs' lib/ui/apps/files_app.dart
+          grep -q '_trashSelected' lib/ui/apps/files_app.dart
+          grep -q 'Copy selected paths' lib/ui/apps/files_app.dart
+          grep -q '_previewEntry' lib/ui/apps/files_app.dart
+          grep -q 'MICROOS_PREVIEW_TOO_LARGE' lib/ui/apps/files_app.dart
+          grep -q 'imageBytes' lib/ui/apps/files_app.dart
+          grep -q 'browserHomePage' lib/services/settings_store.dart
+          grep -q 'setBrowserEngine' lib/services/settings_store.dart
+          grep -q 'Default browser' lib/ui/apps/settings_app.dart
+          grep -q 'snapToHalf' lib/state/desktop_state.dart
+          grep -q 'Tile Left' lib/ui/window_frame.dart
+          grep -q 'centerWindow' lib/ui/window_frame.dart
+          grep -q '_minimizedRect' lib/state/desktop_state.dart
+          grep -q 'minimizedRestoreRect' lib/models/window_state.dart
+          grep -q 'minimizedRestoreRect' lib/state/desktop_state.dart
+          grep -q 'window.minimized' lib/ui/window_frame.dart
+          grep -q 'minimized windows remain restorable' test/desktop_state_test.dart
+          grep -q 'accentColorValue' lib/services/settings_store.dart
+          grep -q '_AppearancePage' lib/ui/apps/settings_app.dart
+          grep -q 'displayResolution' lib/services/settings_store.dart
+          grep -q 'setDisplayResolution' lib/services/linux_runtime.dart
+          grep -q 'xrandr --display :1 --fb' lib/services/linux_runtime.dart
+          grep -q -- '--restore-last-session' tool/setup.sh
+          grep -q 'browser.sessionstore.resume_from_crash' tool/setup.sh
+          grep -q 'browser.startup.page", 3' tool/setup.sh
+          grep -q '_DisplayPage' lib/ui/apps/settings_app.dart
+          grep -q 'displayResolution' lib/services/settings_store.dart
+          grep -q 'setDisplayResolution' lib/ui/apps/desktop_session_app.dart
+          grep -q 'microos/system_controls' lib/services/system_controls.dart
+          grep -q 'setBrightness' tool/bootstrap_android.sh
+          grep -q 'setVolume' tool/bootstrap_android.sh
+          grep -q 'AudioManager' tool/bootstrap_android.sh
+          grep -q '_SystemControlSliders' lib/ui/control_center.dart
+          grep -q 'openNetworkSettings' lib/services/system_controls.dart
+          grep -q 'ACTION_INTERNET_CONNECTIVITY' tool/bootstrap_android.sh
+          grep -q 'AudioManager.STREAM_MUSIC' tool/bootstrap_android.sh
+          grep -q 'screenBrightness' tool/bootstrap_android.sh
+          grep -q 'screenBrightnessConfigured' lib/services/settings_store.dart
+          grep -q 'openNetworkSettings' tool/bootstrap_android.sh
+          grep -q 'browserHomePage' lib/services/settings_store.dart
+          grep -q 'setBrowserEngine' lib/services/settings_store.dart
+          grep -q 'Default browser' lib/ui/apps/settings_app.dart
+          grep -q 'snapToHalf' lib/state/desktop_state.dart
+          grep -q 'Tile Left' lib/ui/window_frame.dart
+          grep -q 'centerWindow' lib/ui/window_frame.dart
+          grep -q 'Show Hidden Files' lib/ui/apps/files_app.dart
+          grep -q '_goBack' lib/ui/apps/files_app.dart
+          grep -q '_goForward' lib/ui/apps/files_app.dart
+          grep -q '_columnView' lib/ui/apps/files_app.dart
+          grep -q 'Move to Trash' lib/ui/apps/files_app.dart
+          grep -q 'Duplicate' lib/ui/apps/files_app.dart
+          grep -q 'Do not launch Google Chrome as a side effect' tool/setup.sh
+          ! grep -q "start-browser.sh --new-window chrome://newtab/" tool/setup.sh
+          grep -q 'dump_diagnostics' tool/setup.sh
+          grep -q 'Openbox did not publish its EWMH' tool/setup.sh
+          grep -q 'websockify --verbose' tool/setup.sh
+          grep -q 'noVNC HTTP status' tool/setup.sh
+          grep -q 'installMicroOSDiagnostics(UI)' tool/setup.sh
+          grep -q 'microos-diagnostics.js' tool/setup.sh
+          grep -q 'autoconnect=1' lib/ui/apps/desktop_session_app.dart
+          grep -q 'noVNC_container canvas' lib/ui/apps/desktop_session_app.dart
+          grep -q 'noVNC_container canvas' tool/test-novnc-render.cjs
+          grep -q 'test-novnc-render.cjs' tool/prebake_rootfs.sh
+          grep -q 'window.__microOsVncHealth?.healthy === true' lib/ui/apps/desktop_session_app.dart
+          grep -q 'setOnConsoleMessage' lib/ui/apps/desktop_session_app.dart
+          grep -q 'websocket-error' lib/ui/apps/desktop_session_app.dart
+          ! grep -q 'document.body ? document.body.innerText' lib/ui/apps/desktop_session_app.dart
+          node --check tool/test-novnc-render.cjs
+          grep -q 'websockify --verbose --web /usr/share/novnc 127.0.0.1:6080' tool/setup.sh
+          grep -q 'wait_for_novnc_http' tool/setup.sh
+          grep -q 'http://127.0.0.1:6080/vnc.html' tool/setup.sh
+          grep -q 'http://127.0.0.1:6080/vnc.html' lib/services/linux_runtime.dart
+          grep -q 'ensureDisplay(restart: true)' lib/ui/apps/desktop_session_app.dart
+          grep -q "mode='drag'" lib/ui/apps/desktop_session_app.dart
+          grep -q "moveCursor(p.x-lastX,p.y-lastY,1)" lib/ui/apps/desktop_session_app.dart
+          grep -q "mouse('mouseup',trackpad?cursorX:lastX,trackpad?cursorY:lastY,0,0)" lib/ui/apps/desktop_session_app.dart
+          grep -q "mode==='scroll'&&e.touches.length>=2" lib/ui/apps/desktop_session_app.dart
           grep -q 'openbox --sm-disable' tool/prebake_rootfs.sh
           grep -q '_NET_SUPPORTING_WM_CHECK' tool/prebake_rootfs.sh
           chmod +x tool/prebake_rootfs.sh
@@ -98,8 +197,19 @@ jobs:
           zstd -dc "$ROOTFS" | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
-          grep -qxE '(\./)?usr/bin/chromium' /tmp/rootfs-archive.list
-          grep -qxE '(\./)?usr/lib/chromium/chromium' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/adb' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/fastboot' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/apktool' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/mitmproxy' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/blender' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/jadx' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/jadx/bin/jadx' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/frida' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/objection' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/apkid' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/share/microos/opencode-version' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/google-chrome-stable' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/google/chrome/chrome' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-browser.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-firefox.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browser-control' /tmp/rootfs-archive.list
@@ -175,6 +285,22 @@ jobs:
           zstd -dc assets/rootfs/rootfs.tar.zst | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/adb' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/fastboot' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/apktool' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/mitmproxy' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/blender' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/jadx' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/jadx/bin/jadx' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/pip3' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/frida' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/objection' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/apkid' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/share/microos/opencode-version' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/google-chrome-stable' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/google/chrome/chrome' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/zsh' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/.zshrc' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list

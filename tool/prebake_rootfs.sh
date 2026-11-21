@@ -18,9 +18,11 @@ command -v zstd >/dev/null 2>&1 || {
 echo "==> Provisioning Ubuntu 24.04 ARM64 in Docker"
 docker run --platform linux/arm64 --name "$NAME" \
   -v "$ROOT/tool/setup.sh:/tmp/microos-setup.sh:ro" \
+  -v "$ROOT/tool/test-novnc-render.cjs:/tmp/test-novnc-render.cjs:ro" \
   ubuntu:24.04 /bin/bash -lc '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
+    export MICROOS_REQUIRE_LATEST_OPENCODE=1
     mkdir -p /root/.microos
     cp /tmp/microos-setup.sh /root/.microos/setup.sh
     chmod 755 /root/.microos/setup.sh
@@ -38,30 +40,11 @@ docker run --platform linux/arm64 --name "$NAME" \
     # Credentials are supplied to guest processes via HF_TOKEN from Android
     # secure storage. Do not persist access tokens in the rootfs or shell files.
 
-    echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop; do
-      command -v "$tool" >/dev/null 2>&1 || {
-        echo "Required pre-baked tool is missing: $tool" >&2
-        exit 1
-      }
-      printf "%-10s %s\\n" "$tool" "$(command -v "$tool")"
-    done
-    if command -v opencode >/dev/null 2>&1; then
-      OPENCODE_BIN="$(command -v opencode)"
-    elif [ -x /root/.opencode/bin/opencode ]; then
-      OPENCODE_BIN=/root/.opencode/bin/opencode
-    else
-      echo "OpenCode is missing from the pre-baked image" >&2
-      exit 1
-    fi
-    timeout 30 "$OPENCODE_BIN" --version
-    python3 -c "import zipfile, json, pathlib"
-
     echo "==> Installing qBittorrent-nox headless torrent engine"
     # setup.sh removes APT indexes during its cleanup; refresh them before
     # installing this additional package in the pre-bake stage.
     apt-get update -y
-    apt-get install -y --no-install-recommends qbittorrent-nox
+    apt-get install -y --no-install-recommends qbittorrent-nox fzf tree htop neovim
     command -v qbittorrent-nox
     install -d -m 700 /root/.config/qBittorrent /mnt/android/Download
     cat > /root/.config/qBittorrent/qBittorrent.conf <<'QBTCONF'
@@ -116,25 +99,28 @@ PLAYWRIGHT_SMOKE
     test -s /tmp/microos-playwright-smoke.png
     rm -f /tmp/microos-playwright-smoke.png
 
-    echo "==> Installing native ARM64 Chromium from the Xtradeb .deb PPA (no Snap)"
+    echo "==> Installing official Google Chrome Stable for Linux ARM64"
     apt-get update -y
-    apt-get install -y --no-install-recommends software-properties-common ca-certificates
-    add-apt-repository -y ppa:xtradeb/apps
-    apt-get update -y
-    apt-get install -y --no-install-recommends chromium libgbm1 libx11-xcb1 libnss3 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libxkbcommon0 libwayland-client0 libegl1 libgl1
-    CHROMIUM_BIN="$(command -v chromium)"
-    CHROMIUM_REAL=/usr/lib/chromium/chromium
-    test -x "$CHROMIUM_REAL"
-    file "$CHROMIUM_REAL" | grep -Eqi "ARM aarch64|ARM64"
-    if ldd "$CHROMIUM_REAL" 2>&1 | tee /tmp/chromium-ldd.txt | grep -q "not found"; then cat /tmp/chromium-ldd.txt >&2; exit 1; fi
-    "$CHROMIUM_BIN" --version
-    runuser -u microos-browser -- env HOME=/home/microos-browser timeout 90 "$CHROMIUM_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --dump-dom "data:text/html,<title>MicroOS Chromium smoke test</title><h1>Chromium is ready</h1>" > /tmp/microos-chromium-smoke.html
-    grep -q "Chromium is ready" /tmp/microos-chromium-smoke.html
-    echo "==> Chromium ARM64 startup and DOM rendering test passed"
+    apt-get install -y --no-install-recommends ca-certificates curl
+    GOOGLE_CHROME_DEB=/tmp/google-chrome-stable_current_arm64.deb
+    curl --fail --location --retry 3 --retry-delay 3 --connect-timeout 20 --max-time 600 \
+      https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb \
+      --output "$GOOGLE_CHROME_DEB"
+    test "$(dpkg-deb -f "$GOOGLE_CHROME_DEB" Architecture)" = arm64
+    apt-get install -y --no-install-recommends "$GOOGLE_CHROME_DEB"
+    CHROME_BIN="$(command -v google-chrome-stable)"
+    CHROME_REAL=/opt/google/chrome/chrome
+    test -x "$CHROME_REAL"
+    file "$CHROME_REAL" | grep -Eqi "ARM aarch64|ARM64"
+    if ldd "$CHROME_REAL" 2>&1 | tee /tmp/google-chrome-ldd.txt | grep -q "not found"; then cat /tmp/google-chrome-ldd.txt >&2; exit 1; fi
+    "$CHROME_BIN" --version
+    runuser -u microos-browser -- env HOME=/home/microos-browser timeout 90 "$CHROME_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --dump-dom "data:text/html,<title>Misty OS Google Chrome smoke test</title><h1>Google Chrome is ready</h1>" > /tmp/microos-chrome-smoke.html
+    grep -q "Google Chrome is ready" /tmp/microos-chrome-smoke.html
+    echo "==> Official Google Chrome ARM64 startup and DOM rendering test passed"
 
     # Exercise the actual Linux desktop browser window, not only headless DOM
     # rendering. This runs the same launcher used by the Android PRoot guest.
-    echo "==> Testing native Chromium X11 window, tabs and mobile control helper"
+    echo "==> Testing native Google Chrome X11 window, tabs and mobile control helper"
     # Initialize every PID before starting background processes so strict
     # nounset mode can safely handle early startup failures.
     MICROOS_XVFB_PID=""
@@ -144,7 +130,7 @@ PLAYWRIGHT_SMOKE
       [ -z "${MICROOS_BROWSER_PID:-}" ] || kill "$MICROOS_BROWSER_PID" 2>/dev/null || true
       [ -z "${MICROOS_OPENBOX_PID:-}" ] || kill "$MICROOS_OPENBOX_PID" 2>/dev/null || true
       [ -z "${MICROOS_XVFB_PID:-}" ] || kill "$MICROOS_XVFB_PID" 2>/dev/null || true
-      pkill -u microos-browser -f '[c]hromium' 2>/dev/null || true
+      pkill -u microos-browser -f '[c]hrome' 2>/dev/null || true
     }
     trap cleanup_x11_smoke EXIT
     Xvfb :99 -screen 0 1280x800x24 -nolisten tcp -ac >/tmp/microos-xvfb.log 2>&1 &
@@ -176,18 +162,18 @@ PLAYWRIGHT_SMOKE
       cat /tmp/microos-openbox.log >&2 || true
       exit 1
     fi
-    MICROOS_DISABLE_GPU=1 timeout 45 /usr/local/bin/start-browser.sh about:blank >/tmp/microos-chromium-x11.log 2>&1 &
+    MICROOS_DISABLE_GPU=1 timeout 45 /usr/local/bin/start-browser.sh about:blank >/tmp/microos-chrome-x11.log 2>&1 &
     MICROOS_BROWSER_PID=$!
     WINDOW_ID=""
     for attempt in $(seq 1 100); do
-      WINDOW_ID="$(xdotool search --onlyvisible --class "chromium|Chromium" 2>/dev/null | tail -n 1 || true)"
+      WINDOW_ID="$(xdotool search --onlyvisible --class "google-chrome|Google-chrome|chrome|Chrome|chromium|Chromium" 2>/dev/null | tail -n 1 || true)"
       if [ -n "$WINDOW_ID" ]; then break; fi
       if [ -z "${MICROOS_BROWSER_PID:-}" ] || ! kill -0 "$MICROOS_BROWSER_PID" 2>/dev/null; then break; fi
       sleep 0.25
     done
     if [ -z "$WINDOW_ID" ]; then
-      cat /tmp/microos-chromium-x11.log >&2 || true
-      echo "Chromium X11 window did not appear within 25 seconds" >&2
+      cat /tmp/microos-chrome-x11.log >&2 || true
+      echo "Google Chrome X11 window did not appear within 25 seconds" >&2
       cat /tmp/microos-xvfb.log /tmp/microos-openbox.log >&2 || true
       exit 1
     fi
@@ -199,17 +185,111 @@ PLAYWRIGHT_SMOKE
     WIDTH="$(printf "%s\n" "$GEOMETRY" | sed -n "s/^WIDTH=//p")"
     HEIGHT="$(printf "%s\n" "$GEOMETRY" | sed -n "s/^HEIGHT=//p")"
     if [ "${WIDTH:-0}" -lt 1000 ] || [ "${HEIGHT:-0}" -lt 600 ]; then
-      echo "Chromium X11 window did not maximize: $GEOMETRY" >&2
-      cat /tmp/microos-chromium-x11.log >&2 || true
+      echo "Google Chrome X11 window did not maximize: $GEOMETRY" >&2
+      cat /tmp/microos-chrome-x11.log >&2 || true
       kill -9 "${MICROOS_BROWSER_PID:-}" "${MICROOS_OPENBOX_PID:-}" "${MICROOS_XVFB_PID:-}" 2>/dev/null || true
       exit 1
     fi
-    echo "==> Native Chromium window verified: ${WIDTH}x${HEIGHT}"
+    echo "==> Native Google Chrome window verified: ${WIDTH}x${HEIGHT}"
     /usr/local/bin/microos-browser-control window-close || true
     wait "$MICROOS_BROWSER_PID" 2>/dev/null || true
     MICROOS_BROWSER_PID=""
     cleanup_x11_smoke
     trap - EXIT
+
+    # Verify the full X11 -> x11vnc -> websockify -> noVNC canvas path.
+    # A changing, known root-window color must arrive as real canvas pixels.
+    echo "==> Testing noVNC WebSocket/RFB framebuffer updates"
+    MICROOS_VNC_XVFB_PID=""
+    MICROOS_VNC_OPENBOX_PID=""
+    MICROOS_VNC_PID=""
+    MICROOS_WEBSOCKIFY_PID=""
+    cleanup_novnc_smoke() {
+      [ -z "$MICROOS_WEBSOCKIFY_PID" ] || kill "$MICROOS_WEBSOCKIFY_PID" 2>/dev/null || true
+      [ -z "$MICROOS_VNC_PID" ] || kill "$MICROOS_VNC_PID" 2>/dev/null || true
+      [ -z "$MICROOS_VNC_OPENBOX_PID" ] || kill "$MICROOS_VNC_OPENBOX_PID" 2>/dev/null || true
+      [ -z "$MICROOS_VNC_XVFB_PID" ] || kill "$MICROOS_VNC_XVFB_PID" 2>/dev/null || true
+      pkill -x websockify 2>/dev/null || true
+      pkill -x x11vnc 2>/dev/null || true
+    }
+    trap cleanup_novnc_smoke EXIT
+    Xvfb :100 -screen 0 1280x720x24 -nolisten tcp -ac -noreset > /tmp/microos-novnc-xvfb.log 2>&1 &
+    MICROOS_VNC_XVFB_PID=$!
+    export DISPLAY=:100
+    for attempt in $(seq 1 40); do
+      if xset -display :100 q >/dev/null 2>&1; then break; fi
+      kill -0 "$MICROOS_VNC_XVFB_PID" 2>/dev/null || {
+        cat /tmp/microos-novnc-xvfb.log >&2 || true
+        exit 1
+      }
+      sleep 0.25
+    done
+    xset -display :100 q >/dev/null
+    xsetroot -display :100 -solid "#123456"
+    DISPLAY=:100 openbox > /tmp/microos-novnc-openbox.log 2>&1 &
+    MICROOS_VNC_OPENBOX_PID=$!
+    WM_READY=0
+    for attempt in $(seq 1 40); do
+      if xprop -display :100 -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "window id"; then
+        WM_READY=1
+        break
+      fi
+      kill -0 "$MICROOS_VNC_OPENBOX_PID" 2>/dev/null || break
+      sleep 0.25
+    done
+    if [ "$WM_READY" -ne 1 ]; then
+      cat /tmp/microos-novnc-openbox.log >&2 || true
+      echo "Openbox did not start for noVNC framebuffer test" >&2
+      exit 1
+    fi
+    x11vnc -display :100 -forever -shared -nopw -rfbport 5901 -localhost \
+      -noxdamage -noshm -wait 1 -defer 1 > /tmp/microos-novnc-x11vnc.log 2>&1 &
+    MICROOS_VNC_PID=$!
+    for attempt in $(seq 1 40); do
+      if (echo >/dev/tcp/127.0.0.1/5901) >/dev/null 2>&1; then break; fi
+      kill -0 "$MICROOS_VNC_PID" 2>/dev/null || {
+        cat /tmp/microos-novnc-x11vnc.log >&2 || true
+        exit 1
+      }
+      sleep 0.25
+    done
+    (echo >/dev/tcp/127.0.0.1/5901) >/dev/null 2>&1 || {
+      cat /tmp/microos-novnc-x11vnc.log >&2 || true
+      echo "x11vnc did not open port 5901" >&2
+      exit 1
+    }
+    websockify --verbose --web /usr/share/novnc 127.0.0.1:6081 localhost:5901 \
+      > /tmp/microos-novnc-websockify.log 2>&1 &
+    MICROOS_WEBSOCKIFY_PID=$!
+    for attempt in $(seq 1 40); do
+      if curl -fsS --max-time 2 http://127.0.0.1:6081/vnc.html -o /dev/null 2>/dev/null; then break; fi
+      kill -0 "$MICROOS_WEBSOCKIFY_PID" 2>/dev/null || {
+        cat /tmp/microos-novnc-websockify.log >&2 || true
+        exit 1
+      }
+      sleep 0.25
+    done
+    curl -fsS --max-time 2 http://127.0.0.1:6081/vnc.html -o /dev/null || {
+      cat /tmp/microos-novnc-websockify.log >&2 || true
+      echo "websockify did not serve noVNC on port 6081" >&2
+      exit 1
+    }
+    if ! DISPLAY=:100 MICROOS_NOVNC_URL="http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale&path=websockify&quality=6&compression=2" \
+      PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright NODE_PATH=/opt/node-global \
+      timeout 60 node /tmp/test-novnc-render.cjs; then
+      echo "noVNC framebuffer test failed; service logs follow" >&2
+      cat /tmp/microos-novnc-xvfb.log /tmp/microos-novnc-openbox.log \
+        /tmp/microos-novnc-x11vnc.log /tmp/microos-novnc-websockify.log >&2 || true
+      exit 1
+    fi
+    test -s /tmp/microos-novnc-render.png
+    echo "==> noVNC canvas received two distinct X11 framebuffer updates"
+    cleanup_novnc_smoke
+    trap - EXIT
+    rm -f /tmp/microos-novnc-render.png /tmp/microos-novnc-render-failure.png \
+      /tmp/microos-novnc-xvfb.log /tmp/microos-novnc-openbox.log \
+      /tmp/microos-novnc-x11vnc.log /tmp/microos-novnc-websockify.log
+    unset DISPLAY
 
     echo "==> Installing official Mozilla Firefox ARM64"
     apt-get update -y
@@ -258,17 +338,46 @@ PLAYWRIGHT_SMOKE
         --screenshot /tmp/microos-firefox-smoke.png \
         "data:text/html,<title>MicroOS Firefox smoke test</title><h1>Firefox is ready</h1>"
     test -s /tmp/microos-firefox-smoke.png
-    echo "==> Firefox ARM64 headless startup and rendering test passed"
+    # Verify after all workstation tools and browsers have been installed.
+    # The previous location ran before Chrome was installed and aborted every
+    # rootfs build with a misleading "google-chrome-stable is missing" error.
+    echo "==> Verifying the fully provisioned developer workstation"
+    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop adb fastboot jadx apktool mitmproxy blender frida objection apkid google-chrome-stable qbittorrent-nox zsh fzf rg fdfind batcat htop tree nvim; do
+      command -v "$tool" >/dev/null 2>&1 || {
+        echo "Required pre-baked tool is missing: $tool" >&2
+        exit 1
+      }
+      printf "%-10s %s\\n" "$tool" "$(command -v "$tool")"
+    done
+    if command -v opencode >/dev/null 2>&1; then
+      OPENCODE_BIN="$(command -v opencode)"
+    elif [ -x /root/.opencode/bin/opencode ]; then
+      OPENCODE_BIN=/root/.opencode/bin/opencode
+    else
+      echo "OpenCode is missing from the pre-baked image" >&2
+      exit 1
+    fi
+    OPENCODE_VERSION_FILE=/usr/local/share/microos/opencode-version
+    test -s "$OPENCODE_VERSION_FILE" || { echo "OpenCode release version manifest missing" >&2; exit 1; }
+    EXPECTED_OPENCODE_VERSION="$(cat "$OPENCODE_VERSION_FILE")"
+    ACTUAL_OPENCODE_VERSION="$(timeout 30 "$OPENCODE_BIN" --version | head -n 1 | tr -d '\r')"
+    test "$ACTUAL_OPENCODE_VERSION" = "$EXPECTED_OPENCODE_VERSION" || {
+      echo "OpenCode version mismatch: expected $EXPECTED_OPENCODE_VERSION, got $ACTUAL_OPENCODE_VERSION" >&2
+      exit 1
+    }
+    echo "Verified latest OpenCode: $ACTUAL_OPENCODE_VERSION"
+    python3 -c "import zipfile, json, pathlib"
+
     # Keep the browser home in the exported rootfs; the runtime launcher expects
     # this path to exist and will repair ownership before starting Firefox.
     rm -rf "$BROWSER_HOME/.mozilla" "$BROWSER_HOME/.cache"
     install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME"
     rm -f /tmp/microos-firefox-smoke.png /tmp/firefox-ldd.txt
 
-    rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
+    rm -f /tmp/firefox.tar.xz /tmp/google-chrome-ldd.txt /tmp/microos-chrome-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "12\\n" > /root/.microos/image-version
+    printf "15\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
@@ -301,8 +410,10 @@ PY
 
 # Keep ownership metadata and ordinary files instead of hard-link records.
 # Stream the tar directly into zstd so no second uncompressed archive is written.
+# Level 19 keeps the sideload APK comfortably below Android's practical 2 GB
+# package limit while decompression stays fast on the phone.
 tar --hard-dereference --numeric-owner --owner=0 --group=0 \
-  -cf - -C "$TMP/rootfs" . | zstd -T0 -10 -f -o "$OUT"
+  -cf - -C "$TMP/rootfs" . | zstd -T0 -19 -f -o "$OUT"
 
 zstd -t "$OUT"
 # Store the exact uncompressed tar-stream size so the Android installer can
@@ -322,8 +433,29 @@ require_archive_path() {
 # Keep this list in sync with the APK workflow's transfer validation.
 require_archive_path 'root/\.microos/ready'
 require_archive_path 'root/\.microos/image-version'
-require_archive_path 'usr/bin/chromium'
-require_archive_path 'usr/lib/chromium/chromium'
+require_archive_path 'usr/bin/zsh'
+require_archive_path 'usr/bin/fzf'
+require_archive_path 'usr/bin/rg'
+require_archive_path 'usr/bin/fdfind'
+require_archive_path 'usr/bin/batcat'
+require_archive_path 'usr/bin/htop'
+require_archive_path 'usr/bin/tree'
+require_archive_path 'usr/bin/nvim'
+require_archive_path 'root/.zshrc'
+require_archive_path 'usr/bin/adb'
+require_archive_path 'usr/bin/fastboot'
+require_archive_path 'usr/bin/apktool'
+require_archive_path 'usr/bin/mitmproxy'
+require_archive_path 'usr/bin/blender'
+require_archive_path 'usr/local/bin/jadx'
+require_archive_path 'opt/jadx/bin/jadx'
+require_archive_path 'usr/local/bin/pip3'
+require_archive_path 'usr/local/bin/frida'
+require_archive_path 'usr/local/bin/objection'
+require_archive_path 'usr/local/bin/apkid'
+require_archive_path 'usr/local/share/microos/opencode-version'
+require_archive_path 'usr/bin/google-chrome-stable'
+require_archive_path 'opt/google/chrome/chrome'
 require_archive_path 'usr/local/bin/start-browser.sh'
 require_archive_path 'usr/local/bin/microos-browser-control'
 require_archive_path 'usr/bin/xdotool'

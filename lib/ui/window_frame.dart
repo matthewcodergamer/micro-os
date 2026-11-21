@@ -14,12 +14,14 @@ class WindowFrame extends StatelessWidget {
     required this.window,
     required this.desktop,
     required this.screen,
+    this.touchOptimized = false,
     required this.child,
   });
 
   final ManagedWindow window;
   final DesktopState desktop;
   final Size screen;
+  final bool touchOptimized;
   final Widget child;
 
   @override
@@ -39,17 +41,12 @@ class WindowFrame extends StatelessWidget {
       height: window.rect.height,
       child: IgnorePointer(
         ignoring: window.minimized,
-        // No Opacity/Transform animation here: both break Android platform
-        // views (the noVNC WebView) and turn the window into a blank surface.
-        // Entry motion is handled by AnimatedPositioned and the shadow.
         child: Listener(
           onPointerDown: (_) => desktop.focus(window.id),
           child: RepaintBoundary(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: radius,
-                // Sequoia casts one wide, soft shadow per window and lifts the
-                // focused window instead of recolouring its chrome.
                 boxShadow: maxed
                     ? null
                     : Sequoia.panelShadow(opacity: focused ? 0.5 : 0.3),
@@ -65,6 +62,7 @@ class WindowFrame extends StatelessWidget {
                         desktop: desktop,
                         screen: screen,
                         focused: focused,
+                        touchOptimized: touchOptimized,
                       ),
                       Expanded(child: child),
                     ],
@@ -85,22 +83,75 @@ class _TitleBar extends StatelessWidget {
     required this.desktop,
     required this.screen,
     required this.focused,
+    required this.touchOptimized,
   });
 
   final ManagedWindow window;
   final DesktopState desktop;
   final Size screen;
   final bool focused;
+  final bool touchOptimized;
+
+  Future<void> _showWindowActions(BuildContext context) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: MicroColors.panelSolid,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.vertical_split_rounded),
+              title: const Text('Tile Left'),
+              onTap: () => Navigator.pop(context, 'left'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.vertical_split_rounded),
+              title: const Text('Tile Right'),
+              onTap: () => Navigator.pop(context, 'right'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.center_focus_strong_rounded),
+              title: const Text('Center Window'),
+              onTap: () => Navigator.pop(context, 'center'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.open_in_full_rounded),
+              title: const Text('Zoom'),
+              onTap: () => Navigator.pop(context, 'zoom'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case 'left':
+        desktop.snapToHalf(window.id, screen, left: true);
+        break;
+      case 'right':
+        desktop.snapToHalf(window.id, screen, left: false);
+        break;
+      case 'center':
+        desktop.centerWindow(window.id, screen);
+        break;
+      case 'zoom':
+        desktop.toggleMaximize(window.id, screen);
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onDoubleTap: () => desktop.toggleMaximize(window.id, screen),
+      onLongPress: () => _showWindowActions(context),
       onPanUpdate: window.maximized
           ? null
-          : (d) => desktop.move(window.id, d.delta, screen),
+          : (details) => desktop.move(window.id, details.delta, screen),
       child: Container(
-        height: Sequoia.titleBarHeight,
+        height: touchOptimized ? 52 : Sequoia.titleBarHeight,
         decoration: BoxDecoration(
           color: focused
               ? MicroColors.windowHeader
@@ -117,6 +168,7 @@ class _TitleBar extends StatelessWidget {
           children: [
             _TrafficLights(
               focused: focused,
+              touchOptimized: touchOptimized,
               onClose: () => desktop.close(window.id),
               onMinimize: () => desktop.minimize(window.id),
               onZoom: () => desktop.toggleMaximize(window.id, screen),
@@ -144,12 +196,14 @@ class _TitleBar extends StatelessWidget {
 class _TrafficLights extends StatelessWidget {
   const _TrafficLights({
     required this.focused,
+    required this.touchOptimized,
     required this.onClose,
     required this.onMinimize,
     required this.onZoom,
   });
 
   final bool focused;
+  final bool touchOptimized;
   final VoidCallback onClose;
   final VoidCallback onMinimize;
   final VoidCallback onZoom;
@@ -162,16 +216,19 @@ class _TrafficLights extends StatelessWidget {
         _Light(
           color: focused ? Sequoia.closeLight : MicroColors.inactiveLight,
           onTap: onClose,
+          touchOptimized: touchOptimized,
         ),
         const SizedBox(width: Sequoia.trafficLightGap),
         _Light(
           color: focused ? Sequoia.miniLight : MicroColors.inactiveLight,
           onTap: onMinimize,
+          touchOptimized: touchOptimized,
         ),
         const SizedBox(width: Sequoia.trafficLightGap),
         _Light(
           color: focused ? Sequoia.zoomLight : MicroColors.inactiveLight,
           onTap: onZoom,
+          touchOptimized: touchOptimized,
         ),
       ],
     );
@@ -179,24 +236,36 @@ class _TrafficLights extends StatelessWidget {
 }
 
 class _Light extends StatelessWidget {
-  const _Light({required this.color, required this.onTap});
+  const _Light({
+    required this.color,
+    required this.onTap,
+    this.touchOptimized = false,
+  });
 
   final Color color;
   final VoidCallback onTap;
+  final bool touchOptimized;
 
   @override
   Widget build(BuildContext context) {
+    final targetSize = touchOptimized ? 40.0 : Sequoia.trafficLightSize;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: Sequoia.trafficLightSize,
-        height: Sequoia.trafficLightSize,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.black.withValues(alpha: 0.15),
-            width: 0.5,
+      child: SizedBox(
+        width: targetSize,
+        height: targetSize,
+        child: Center(
+          child: Container(
+            width: Sequoia.trafficLightSize,
+            height: Sequoia.trafficLightSize,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.black.withValues(alpha: 0.15),
+                width: 0.5,
+              ),
+            ),
           ),
         ),
       ),

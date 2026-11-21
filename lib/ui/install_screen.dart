@@ -168,8 +168,10 @@ class _InstallScreenState extends State<InstallScreen>
                                         child: Text(
                                           stage,
                                           key: ValueKey<String>(stage),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: failed ? null : 2,
+                                          overflow: failed
+                                              ? TextOverflow.visible
+                                              : TextOverflow.ellipsis,
                                           style: TextStyle(
                                             color: Colors.white
                                                 .withValues(alpha: 0.62),

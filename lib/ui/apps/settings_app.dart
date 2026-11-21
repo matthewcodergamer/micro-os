@@ -5,14 +5,20 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../app_scope.dart';
 import '../../core/macos_design.dart';
 import '../../core/terminal_profiles.dart';
+import '../../core/wallpapers.dart';
 import '../../core/theme.dart';
+import '../../core/experience_mode.dart';
 import '../../services/github_auth.dart';
 import '../../services/linux_runtime.dart';
 import '../../services/performance_monitor.dart';
 import '../../services/settings_store.dart';
 
 enum _Page {
+  appearance,
+  display,
   desktop,
+  wallpaper,
+  pointer,
   performance,
   github,
   huggingface,
@@ -34,6 +40,26 @@ class SettingsApp extends StatefulWidget {
 
 class _SettingsAppState extends State<SettingsApp> {
   _Page _page = _Page.desktop;
+  String _search = '';
+
+  IconData _icon(_Page page) => switch (page) {
+    _Page.appearance => Icons.palette_rounded,
+    _Page.display => Icons.monitor_rounded,
+    _Page.desktop => Icons.display_settings_rounded,
+    _Page.wallpaper => Icons.wallpaper_rounded,
+    _Page.pointer => Icons.mouse_rounded,
+    _Page.performance => Icons.speed_rounded,
+    _Page.github => Icons.code_rounded,
+    _Page.huggingface => Icons.hub_rounded,
+    _Page.linux => Icons.terminal_rounded,
+    _Page.terminal => Icons.keyboard_rounded,
+    _Page.browser => Icons.language_rounded,
+    _Page.login => Icons.person_rounded,
+    _Page.about => Icons.info_outline_rounded,
+  };
+
+  List<_Page> get _visiblePages => _Page.values.where((page) =>
+    _title(page).toLowerCase().contains(_search.trim().toLowerCase())).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +73,11 @@ class _SettingsAppState extends State<SettingsApp> {
       listenable: Listenable.merge([settings, runtime]),
       builder: (context, _) {
         return switch (_page) {
+          _Page.appearance => _AppearancePage(settings: settings),
+          _Page.display => _DisplayPage(settings: settings, runtime: runtime),
           _Page.desktop => _DesktopPage(settings: settings),
+          _Page.wallpaper => _WallpaperPage(settings: settings),
+          _Page.pointer => _PointerPage(settings: settings),
           _Page.performance => const _PerformancePage(),
           _Page.github => _GitHubPage(auth: auth, runtime: runtime),
           _Page.huggingface => _HuggingFacePage(auth: auth, runtime: runtime),
@@ -74,14 +104,38 @@ class _SettingsAppState extends State<SettingsApp> {
               ),
             ),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+              padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
               children: [
-                for (final page in _Page.values)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(10, 3, 8, 12),
+                  child: Text('SYSTEM SETTINGS', style: TextStyle(
+                    color: Sequoia.labelTertiary, fontSize: 10,
+                    fontWeight: FontWeight.w700, letterSpacing: 1.1)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
+                  child: SizedBox(height: 34, child: TextField(
+                    onChanged: (value) => setState(() => _search = value),
+                    style: const TextStyle(color: Sequoia.label, fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: 'Search settings',
+                      hintStyle: const TextStyle(color: Sequoia.labelTertiary, fontSize: 12),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 16, color: Sequoia.labelSecondary),
+                      filled: true, fillColor: Colors.black.withValues(alpha: 0.16),
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    ),
+                  )),
+                ),
+                for (final page in _visiblePages)
                   _SidebarItem(
                     label: _title(page),
+                    icon: _icon(page),
                     selected: _page == page,
                     onTap: () => setState(() => _page = page),
                   ),
+                if (_visiblePages.isEmpty)
+                  const Padding(padding: EdgeInsets.all(10), child: Text('No matching settings', style: TextStyle(color: Sequoia.labelTertiary, fontSize: 11))),
               ],
             ),
           ),
@@ -95,23 +149,81 @@ class _SettingsAppState extends State<SettingsApp> {
     // became unreachable.
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+          child: SizedBox(
+            height: 34,
+            child: TextField(
+              onChanged: (value) => setState(() => _search = value),
+              style: const TextStyle(color: Sequoia.label, fontSize: 12),
+              decoration: InputDecoration(
+                hintText: 'Search settings',
+                hintStyle: const TextStyle(
+                  color: Sequoia.labelTertiary,
+                  fontSize: 12,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 16,
+                  color: Sequoia.labelSecondary,
+                ),
+                suffixIcon: _search.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => setState(() => _search = ''),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 15,
+                          color: Sequoia.labelSecondary,
+                        ),
+                      ),
+                filled: true,
+                fillColor: Sequoia.sidebarTint.withValues(alpha: 0.62),
+                contentPadding: EdgeInsets.zero,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+        ),
         SizedBox(
           height: 44,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            children: [
-              for (final page in _Page.values)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: _CompactPageTab(
-                    label: _title(page),
-                    selected: _page == page,
-                    onTap: () => setState(() => _page = page),
+          child: _visiblePages.isEmpty
+              ? const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'No matching settings',
+                      style: TextStyle(
+                        color: Sequoia.labelTertiary,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
+                )
+              : ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  children: [
+                    for (final page in _visiblePages)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: _CompactPageTab(
+                          label: _title(page),
+                          selected: _page == page,
+                          onTap: () => setState(() => _page = page),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
         ),
         const Divider(height: 1),
         Expanded(child: content),
@@ -120,7 +232,11 @@ class _SettingsAppState extends State<SettingsApp> {
   }
 
   String _title(_Page p) => switch (p) {
+    _Page.appearance => 'Appearance',
+    _Page.display => 'Displays',
     _Page.desktop => 'Desktop & Dock',
+    _Page.wallpaper => 'Wallpaper',
+    _Page.pointer => 'Trackpad & Pointer',
     _Page.performance => 'Performance',
     _Page.github => 'GitHub',
     _Page.huggingface => 'Hugging Face',
@@ -130,6 +246,74 @@ class _SettingsAppState extends State<SettingsApp> {
     _Page.login => 'Users & Login',
     _Page.about => 'About',
   };
+}
+
+class _DisplayPage extends StatelessWidget {
+  const _DisplayPage({required this.settings, required this.runtime});
+  final dynamic settings;
+  final LinuxRuntime runtime;
+  static const _resolutions = ['1024x768', '1280x720', '1600x900', '1920x1080'];
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(padding: const EdgeInsets.all(24), children: [
+      const Text('Displays', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      const Text('Choose the virtual Linux desktop framebuffer size. Larger sizes provide more workspace but use more memory and rendering bandwidth.', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+      const SizedBox(height: 20),
+      DropdownButtonFormField<String>(
+        value: settings.displayResolution as String,
+        decoration: const InputDecoration(labelText: 'Desktop resolution'),
+        items: [for (final value in _resolutions) DropdownMenuItem(value: value, child: Text(value))],
+        onChanged: (value) async {
+          if (value == null) return;
+          await settings.setDisplayResolution(value);
+          final applied = await runtime.setDisplayResolution(value);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(applied ? 'Desktop resolution changed to $value.' : 'Saved $value. It will apply when the Linux desktop starts.')));
+        },
+      ),
+      const SizedBox(height: 12),
+      const Text('The setting is saved on this device and restored when the Linux desktop session starts.', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+    ]);
+  }
+}
+
+class _AppearancePage extends StatelessWidget {
+  const _AppearancePage({required this.settings});
+  final dynamic settings;
+
+  static const _colors = <({String name, int value})>[
+    (name: 'Blue', value: 0xFF0A84FF),
+    (name: 'Purple', value: 0xFFBF5AF2),
+    (name: 'Pink', value: 0xFFFF375F),
+    (name: 'Red', value: 0xFFFF453A),
+    (name: 'Orange', value: 0xFFFF9F0A),
+    (name: 'Yellow', value: 0xFFFFD60A),
+    (name: 'Green', value: 0xFF30D158),
+    (name: 'Teal', value: 0xFF64D2FF),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(padding: const EdgeInsets.all(24), children: [
+      const Text('Appearance', style: TextStyle(color: MicroColors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      const Text('Choose the system accent colour used by controls, focus rings and sliders.', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+      const SizedBox(height: 20),
+      const Text('Accent colour', style: TextStyle(color: MicroColors.text, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 12),
+      Wrap(spacing: 10, runSpacing: 10, children: [
+        for (final color in _colors)
+          ChoiceChip(
+            avatar: CircleAvatar(backgroundColor: Color(color.value), radius: 8),
+            label: Text(color.name),
+            selected: settings.accentColorValue == color.value,
+            onSelected: (_) => settings.setAccentColor(color.value),
+          ),
+      ]),
+    ]);
+  }
 }
 
 class _DesktopPage extends StatelessWidget {
@@ -158,6 +342,37 @@ class _DesktopPage extends StatelessWidget {
           value: settings.dockAutoHide,
           onChanged: (v) => settings.setDockAutoHide(v),
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Magnify icons on hover', style: TextStyle(color: MicroColors.text)),
+          subtitle: const Text('Enlarge nearby Dock icons as the pointer moves across them.', style: TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          value: settings.dockMagnification,
+          onChanged: (value) => settings.setDockMagnification(value),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Dock icon size', style: TextStyle(color: MicroColors.text, fontWeight: FontWeight.w600)),
+            ),
+            Text('${(settings.dockScale * 100).round()}%', style: const TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          ],
+        ),
+        Slider(
+          min: 0.8,
+          max: 1.2,
+          divisions: 8,
+          value: (settings.dockScale as double).clamp(0.8, 1.2).toDouble(),
+          label: '${(settings.dockScale * 100).round()}%',
+          onChanged: (value) => settings.setDockScale(value),
+        ),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Smaller', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+            Text('Larger', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+          ],
+        ),
         const Divider(height: 28),
         SwitchListTile(
           title: const Text(
@@ -173,6 +388,193 @@ class _DesktopPage extends StatelessWidget {
             await settings.setSystemBarsVisible(visible);
             await SystemChrome.setEnabledSystemUIMode(
               visible ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky,
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _PointerPage extends StatelessWidget {
+  const _PointerPage({required this.settings});
+  final dynamic settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final speed = settings.trackpadSpeed as double;
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text(
+          'Trackpad & Pointer',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Tune touch gestures for the Linux desktop. Changes are saved on this device and applied to the active VNC session.',
+          style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+        ),
+        const SizedBox(height: 18),
+        const Text('Workspace experience', style: TextStyle(color: MicroColors.text, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          ChoiceChip(
+            label: const Text('Desktop Mode'),
+            selected: settings.experienceMode == ExperienceMode.desktop,
+            onSelected: (_) => settings.setExperienceMode(ExperienceMode.desktop),
+          ),
+          ChoiceChip(
+            label: const Text('Mobile Desktop'),
+            selected: settings.experienceMode == ExperienceMode.mobileDesktop,
+            onSelected: (_) => settings.setExperienceMode(ExperienceMode.mobileDesktop),
+          ),
+        ]),
+        const SizedBox(height: 18),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Trackpad mode', style: TextStyle(color: MicroColors.text)),
+          subtitle: const Text(
+            'Move a visible pointer with relative finger movement. Turn off for direct touch-to-screen positioning.',
+            style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+          ),
+          value: settings.trackpadMode,
+          onChanged: (value) => settings.setTrackpadMode(value),
+        ),
+        const Divider(height: 24),
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Pointer speed', style: TextStyle(color: MicroColors.text, fontWeight: FontWeight.w600)),
+            ),
+            Text('${speed.toStringAsFixed(2)}×', style: const TextStyle(color: MicroColors.subtle, fontSize: 12)),
+          ],
+        ),
+        Slider(
+          min: 0.7,
+          max: 2.2,
+          divisions: 15,
+          value: speed.clamp(0.7, 2.2).toDouble(),
+          label: '${speed.toStringAsFixed(2)}×',
+          onChanged: (value) => settings.setTrackpadSpeed(value),
+        ),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Slow', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+            Text('Fast', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Sequoia.sidebarTint.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+          ),
+          child: const Text(
+            'Gestures: one finger moves and clicks, a long press opens the context menu, and two fingers scroll. Use the desktop toolbar for a quick right-click or keyboard.',
+            style: TextStyle(color: Sequoia.labelSecondary, fontSize: 12, height: 1.45),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WallpaperPage extends StatelessWidget {
+  const _WallpaperPage({required this.settings});
+  final dynamic settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(22),
+      children: [
+        const Text(
+          'Wallpaper',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Choose the desktop background. Your selection is saved on this device.',
+          style: TextStyle(color: MicroColors.subtle, fontSize: 12),
+        ),
+        const SizedBox(height: 18),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth > 650 ? 3 : 2;
+            final itemWidth = (constraints.maxWidth - (columns - 1) * 12) / columns;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 14,
+              children: [
+                for (final wallpaper in kWallpapers)
+                  SizedBox(
+                    width: itemWidth,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => settings.setWallpaper(wallpaper.id),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: AspectRatio(
+                                  aspectRatio: 16 / 10,
+                                  child: Image.asset(
+                                    wallpaper.asset,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: Sequoia.sidebarTint,
+                                      alignment: Alignment.center,
+                                      child: const Icon(Icons.image_not_supported_outlined,
+                                          color: Sequoia.labelSecondary),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (settings.wallpaper == wallpaper.id)
+                                Positioned(
+                                  right: 8,
+                                  top: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF0A84FF),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.check, size: 14, color: Colors.white),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            wallpaper.name,
+                            style: TextStyle(
+                              color: MicroColors.text,
+                              fontSize: 12,
+                              fontWeight: settings.wallpaper == wallpaper.id
+                                  ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             );
           },
         ),
@@ -682,6 +1084,35 @@ class _BrowserPage extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
+        const Text('Default browser', style: TextStyle(color: MicroColors.text)),
+        const SizedBox(height: 4),
+        const Text('The selected engine is used the next time the browser opens. Changes from the browser toolbar are saved here too.', style: TextStyle(color: MicroColors.subtle, fontSize: 11)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: settings.browserEngine as String,
+          decoration: const InputDecoration(labelText: 'Browser engine'),
+          items: const [
+            DropdownMenuItem(value: 'chrome', child: Text('Google Chrome Stable')),
+            DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
+          ],
+          onChanged: (value) { if (value != null) settings.setBrowserEngine(value); },
+        ),
+        const SizedBox(height: 14),
+        TextFormField(
+          initialValue: settings.browserHomePage as String,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          decoration: const InputDecoration(labelText: 'Home page', hintText: 'https://example.com'),
+          onFieldSubmitted: (value) async {
+            try {
+              await settings.setBrowserHomePage(value);
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Browser home page saved.')));
+            } catch (error) {
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+            }
+          },
+        ),
+        const SizedBox(height: 12),
         SwitchListTile(
           title: const Text(
             'Single-process mode',
@@ -1390,11 +1821,13 @@ class _PerfStat extends StatelessWidget {
 class _SidebarItem extends StatelessWidget {
   const _SidebarItem({
     required this.label,
+    required this.icon,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1418,7 +1851,10 @@ class _SidebarItem extends StatelessWidget {
               borderRadius: BorderRadius.circular(7),
             ),
             alignment: Alignment.centerLeft,
-            child: Text(
+            child: Row(children: [
+              Icon(icon, size: 16, color: selected ? Sequoia.label : Sequoia.labelSecondary),
+              const SizedBox(width: 9),
+              Expanded(child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1427,7 +1863,8 @@ class _SidebarItem extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
-            ),
+              )),
+            ]),
           ),
         ),
       ),

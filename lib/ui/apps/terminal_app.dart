@@ -43,7 +43,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
     _addTab();
   }
 
-  void _addTab() {
+  void _addTab({List<String>? argv, String title = 'zsh'}) {
     final terminal = Terminal(maxLines: 1000);
     final controller = TerminalController();
     Pty? pty;
@@ -51,7 +51,9 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
 
     if (widget.runtime.isReady) {
       try {
-        pty = widget.runtime.startShell(argv: widget.argv);
+        pty = widget.runtime.startShell(
+          argv: argv ?? widget.argv ?? <String>['/usr/bin/zsh', '-l'],
+        );
         // Decode byte chunks incrementally, retaining partial UTF-8 sequences.
         pty.output
             .map<List<int>>((chunk) => chunk)
@@ -66,13 +68,78 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
       terminal: terminal,
       controller: controller,
       pty: pty,
-      title: 'bash',
+      title: title,
     );
     setState(() {
       _tabs.add(tab);
       _active = _tabs.length - 1;
     });
-    widget.onTitle?.call('root - bash - 80x24');
+    widget.onTitle?.call('root - $title - 80x24');
+  }
+
+  void _openNewOpenCodeSession() {
+    _addTab(
+      argv: <String>['/bin/bash', '-lc', 'exec opencode'],
+      title: 'OpenCode · New session',
+    );
+  }
+
+  void _openOpenCodeSessionList() {
+    _addTab(
+      argv: <String>[
+        '/bin/bash',
+        '-lc',
+        'exec opencode session list --max-count 50',
+      ],
+      title: 'OpenCode · Sessions',
+    );
+  }
+
+  Future<void> _resumeOpenCodeSession() async {
+    final idController = TextEditingController();
+    final sessionId = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: MicroColors.windowBody,
+        title: const Text('Resume OpenCode session'),
+        content: TextField(
+          controller: idController,
+          autofocus: true,
+          style: const TextStyle(color: MicroColors.text),
+          decoration: const InputDecoration(
+            hintText: 'Paste session ID (ses_...)',
+            hintStyle: TextStyle(color: MicroColors.subtle),
+          ),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(idController.text.trim()),
+            child: const Text('Resume'),
+          ),
+        ],
+      ),
+    );
+    idController.dispose();
+    if (!mounted || sessionId == null || sessionId.isEmpty) return;
+    if (!RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(sessionId)) {
+      _notify('That session ID contains unsupported characters.');
+      return;
+    }
+    _addTab(
+      argv: <String>[
+        '/bin/bash',
+        '-lc',
+        r'exec opencode --session "$1"',
+        'misty-opencode-resume',
+        sessionId,
+      ],
+      title: 'OpenCode · Resume',
+    );
   }
 
   void _closeTab(int index) {
@@ -385,7 +452,52 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                       },
                     ),
                   ),
+                  PopupMenuButton<_OpenCodeAction>(
+                    tooltip: 'OpenCode sessions',
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 17),
+                    color: MicroColors.windowBody,
+                    onSelected: (action) {
+                      switch (action) {
+                        case _OpenCodeAction.newSession:
+                          _openNewOpenCodeSession();
+                          break;
+                        case _OpenCodeAction.listSessions:
+                          _openOpenCodeSessionList();
+                          break;
+                        case _OpenCodeAction.resumeSession:
+                          unawaited(_resumeOpenCodeSession());
+                          break;
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: _OpenCodeAction.newSession,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.add_rounded),
+                          title: Text('New OpenCode session'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: _OpenCodeAction.listSessions,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.history_rounded),
+                          title: Text('Browse saved sessions'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: _OpenCodeAction.resumeSession,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.play_circle_outline_rounded),
+                          title: Text('Resume by session ID'),
+                        ),
+                      ),
+                    ],
+                  ),
                   IconButton(
+                    tooltip: 'New terminal tab',
                     icon: const Icon(Icons.add_rounded, size: 18),
                     color: MicroColors.text,
                     onPressed: _addTab,
@@ -437,6 +549,8 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
 }
 
 enum _TerminalMenuAction { copy, paste }
+
+enum _OpenCodeAction { newSession, listSessions, resumeSession }
 
 /// Always-visible accessory row. xterm's gestures handle long-press and drag
 /// selection, but on a phone the copy affordance and scrollback must be

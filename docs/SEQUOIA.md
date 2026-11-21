@@ -7,6 +7,21 @@ was deliberately left out.
 
 ## Reference projects evaluated
 
+The following complete recreations were also inspected for interaction and component
+architecture. Their React implementations are references for a Flutter port, not
+runtime dependencies:
+
+| Project | Licence check | Reuse decision |
+| --- | --- | --- |
+| [ThanasOS](https://github.com/Thanas-R/Thanas-OS) | MIT license verified in upstream LICENSE | May port/adapt code where useful; preserve MIT copyright and license notice. Strong reference for window lifecycle, dock magnification, menu registry, cursor behavior, overlays and animation choreography. Its current README describes Tahoe styling, so use Sequoia tokens here. |
+| [MacOS Web Simulator](https://github.com/LikhithSP/MacOS-Web-Simulator) | MIT license verified in upstream LICENSE | May port/adapt selected interaction patterns with attribution. Useful for boot/lock flow, draggable windows, dock bounce, top bar, context menus and settings organization. Its Finder filesystem is simulated; do not port that filesystem into MicroOS. |
+| [macOS Sequoia Web Clone](https://github.com/Musheer360/macos-sequoia-clone) | No LICENSE file found on the inspected default branch | Visual/behavioral study only. Do not copy or vendor code/assets unless the author adds a compatible license or grants permission. |
+
+Porting means translating reusable interaction patterns into Flutter and wiring
+them to MicroOS services. Do not embed the React apps in WebView or substitute
+their simulated browser filesystems for the real Linux guest filesystem.
+
+
 | Project | Stars | Licence | Language | Verdict |
 | --- | --- | --- | --- | --- |
 | [`macosui/macos_ui`](https://github.com/macosui/macos_ui) | ~2.1k | MIT | Dart | **Adopted as the metric and colour reference.** Widgets are not imported: a second theme layer would fight the shell's existing window manager. |

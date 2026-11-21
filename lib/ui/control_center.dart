@@ -7,6 +7,8 @@ import '../core/macos_design.dart';
 import '../core/theme.dart';
 import '../services/linux_runtime.dart';
 import '../services/system_stats.dart';
+import '../services/settings_store.dart';
+import '../services/system_controls.dart';
 
 /// Control Center panel shown from the menu bar.
 class ControlCenterOverlay extends StatelessWidget {
@@ -16,12 +18,14 @@ class ControlCenterOverlay extends StatelessWidget {
     required this.onClose,
     required this.runtime,
     required this.stats,
+    required this.settings,
   });
 
   final double topPadding;
   final VoidCallback onClose;
   final LinuxRuntime runtime;
   final SystemStats stats;
+  final SettingsStore settings;
 
   @override
   Widget build(BuildContext context) {
@@ -62,12 +66,15 @@ class ControlCenterOverlay extends StatelessWidget {
               children: [
                 _header(),
                 const SizedBox(height: 12),
+                _SystemControlSliders(settings: settings),
+                const SizedBox(height: 10),
                 _tileRow([
                   _Tile(
                     icon: Icons.wifi_rounded,
                     label: 'Wi-Fi',
                     value: stats.connection,
                     active: true,
+                    onTap: () async { try { await SystemControls.openNetworkSettings(); } catch (_) {} },
                   ),
                   _Tile(
                     icon: Icons.battery_full_rounded,
@@ -166,53 +173,158 @@ class ControlCenterOverlay extends StatelessWidget {
   }
 }
 
+class _SystemControlSliders extends StatefulWidget {
+  const _SystemControlSliders({required this.settings});
+  final SettingsStore settings;
+
+  @override
+  State<_SystemControlSliders> createState() => _SystemControlSlidersState();
+}
+
+class _SystemControlSlidersState extends State<_SystemControlSliders> {
+  double _brightness = 0.75;
+  double _volume = 0.5;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _brightness = widget.settings.screenBrightness;
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final state = await SystemControls.getState();
+      if (!mounted) return;
+      setState(() {
+        _brightness = widget.settings.screenBrightnessConfigured
+            ? widget.settings.screenBrightness
+            : (state['brightness'] ?? 0.75).clamp(0.05, 1.0).toDouble();
+        _volume = (state['volume'] ?? 0.5).clamp(0.0, 1.0).toDouble();
+        _loaded = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loaded = true);
+    }
+  }
+
+  Future<void> _setBrightness(double value) async {
+    setState(() => _brightness = value);
+    try { await SystemControls.setBrightness(value); } catch (_) {}
+  }
+
+  Future<void> _setVolume(double value) async {
+    setState(() => _volume = value);
+    try { await SystemControls.setVolume(value); } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(children: [
+        Row(children: [
+          const Icon(Icons.brightness_6_rounded, color: Colors.white70, size: 17),
+          const SizedBox(width: 8),
+          const SizedBox(width: 70, child: Text('Brightness', style: TextStyle(color: Colors.white, fontSize: 12, decoration: TextDecoration.none))),
+          Expanded(child: Slider(min: 0.05, max: 1, value: _brightness.clamp(0.05, 1).toDouble(), onChanged: _setBrightness, onChangeEnd: widget.settings.setScreenBrightness)),
+        ]),
+        Row(children: [
+          const Icon(Icons.volume_up_rounded, color: Colors.white70, size: 17),
+          const SizedBox(width: 8),
+          const SizedBox(width: 70, child: Text('Volume', style: TextStyle(color: Colors.white, fontSize: 12, decoration: TextDecoration.none))),
+          Expanded(child: Slider(min: 0, max: 1, value: _volume.clamp(0, 1).toDouble(), onChanged: _setVolume)),
+        ]),
+        if (!_loaded) const LinearProgressIndicator(minHeight: 1),
+      ]),
+    );
+  }
+}
+
 class _Tile extends StatelessWidget {
   const _Tile({
     required this.icon,
     required this.label,
     required this.value,
     required this.active,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final String value;
   final bool active;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+      constraints: const BoxConstraints(minHeight: 62),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: active ? 0.13 : 0.06),
-        borderRadius: BorderRadius.circular(Sequoia.cardRadius + 4),
+        color: Colors.white.withValues(alpha: active ? 0.105 : 0.045),
+        borderRadius: BorderRadius.circular(Sequoia.cardRadius + 2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: active ? 0.10 : 0.055),
+          width: 0.7,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Icon(icon, color: active ? Colors.white : Colors.white54, size: 22),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: active ? 0.10 : 0.045),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
               color: active ? Colors.white : Colors.white54,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              decoration: TextDecoration.none,
+              size: 17,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: TextStyle(
-              color: active ? Colors.white70 : Colors.white38,
-              fontSize: 11,
-              decoration: TextDecoration.none,
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: active ? Colors.white : Colors.white54,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: active ? Colors.white70 : Colors.white38,
+                    fontSize: 10,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
       ),
     );
   }

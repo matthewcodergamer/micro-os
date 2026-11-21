@@ -19,6 +19,18 @@ Do not stop after writing a plan. Implement, test, and document the work.
 
 ---
 
+
+## Workspace experiences
+
+Misty OS offers two interaction profiles for the same Ubuntu 24.04 ARM64 PRoot guest:
+
+- **Desktop Mode:** pointer-first interaction with a visible remote cursor, precise selection, dragging, context menus and keyboard shortcuts.
+- **Mobile Desktop:** touch-first interaction with direct touch mapping, larger controls, responsive windows and Android keyboard behavior.
+
+The first-run chooser saves the selection on-device. Switch modes later in **System Settings → Trackpad & Pointer → Workspace experience**. The Linux filesystem, installed applications, user data and running services are shared; switching modes does not create or reset a second Linux installation.
+
+See [Workspace Modes and Developer Toolchain](docs/WORKSPACE-MODES-AND-TOOLCHAIN.md) for the design and tool inventory.
+
 ## 1. Project overview
 
 Misty OS is a Flutter-based Android desktop environment with a macOS-inspired Golden Gate interface.
@@ -29,7 +41,7 @@ Its architecture includes:
 - PRoot: Ubuntu 24.04 ARM64 Linux userspace.
 - X11/Openbox: Linux graphical desktop.
 - VNC/noVNC: remote desktop display inside Misty OS.
-- OpenCode: AI coding agent running inside the Linux environment.
+- OpenCode: latest upstream Linux ARM64 release, SHA-256 verified against GitHub release metadata and version-checked during rootfs creation.
 - PTY/xterm: interactive Linux terminal.
 - GitHub Actions: Linux root filesystem preparation and Android APK builds.
 
@@ -384,9 +396,9 @@ A Flutter shell that runs an Ubuntu userspace on Android, with a macOS-style
 window manager, a PTY terminal, a desktop browser, and a developer toolchain
 (Python, Node, Rust, git, GitHub CLI, OpenCode).
 
-**Requirements:** an ARM64 Android device, a reliable Wi-Fi connection for the
-first Linux installation, and **at least 1 GB of free storage** (more is
-recommended because package downloads and unpacked files need space).
+**Requirements:** an ARM64 Android device and **at least 6.5 GB of free
+storage** for the first Linux unpack. The bundled image expands to roughly
+5.5 GB; no package download is needed on first boot.
 
 The UI and the Linux guest are deliberately separated: `lib/` is pure Flutter,
 `tool/setup.sh` is pure bash running inside the guest.
@@ -404,13 +416,16 @@ kernel.
   Android version, device memory, storage speed, and manufacturer restrictions.
   Heavy desktop or browser workloads may be slow, use substantial memory,
   increase battery use, or cause heat.
-- **Storage and network:** first-run Linux provisioning downloads roughly
-  700 MB–1.2 GB of packages. Use Wi-Fi and have at least 1 GB free before
-  starting; additional working space is recommended.
-- **Browser:** Misty OS installs **Falkon**, not the Ubuntu Chromium Snap.
-  Chromium on Ubuntu arm64 is distributed as a snap, and snapd cannot run
-  inside this proot environment. Falkon is a desktop browser using
-  QtWebEngine (Chromium's Blink renderer and V8 engine).
+- **Storage and network:** the APK already contains the ARM64 workstation image
+  (browsers, developer tools, Blender and Burp Suite). First-run unpacking
+  expands it to roughly 5.5 GB inside app storage. Keep at least **6.5 GB free**
+  before tapping **Install Linux**; the installer checks free space and stops
+  with a clear message instead of failing halfway through. Wi-Fi is only needed
+  after the guest is ready.
+- **Browser:** Misty OS installs the official **Google Chrome Stable ARM64**
+  package as a normal X11 desktop browser, with Firefox as an alternate engine.
+  The browser uses its own persistent profile and downloads to Android shared
+  storage. Chromium Snap is not used inside PRoot.
 - **ZRAM:** Misty OS cannot enable or configure kernel ZRAM. The proot guest
   shares Android's kernel and lacks the privileges required to manage swap.
   The app can display host memory/swap information, but it does not control
@@ -421,10 +436,11 @@ kernel.
 - **Mobile window layout:** on narrow phone screens, windows use a
   full-screen/mobile presentation rather than overlapping draggable desktop
   windows. Desktop-style window management is intended for wider displays.
-- **Security and distribution:** Android builds are debug-signed and intended
-  for sideload testing. The current target SDK configuration is not
-  Play-Store compliant. Treat credentials and device data carefully; do not
-  use this alpha for sensitive workloads.
+- **Security and distribution:** Android builds use a stable sideload signing
+  key so newer builds install over older ones. The key is public and is not
+  suitable for a Play Store listing. The current target SDK configuration is
+  not Play-Store compliant. Treat credentials and device data carefully; do
+  not use this alpha for sensitive workloads.
 
 Please report reproducible bugs with your device model, Android version,
 steps to reproduce, and relevant logs. Do not include passwords, access
@@ -445,26 +461,14 @@ about "Linux on a phone" are not true. Here is the honest version.
 | Developer toolchain installed on first boot | Implemented |
 | Android storage visible inside the guest at `/mnt/android` | Implemented (needs All-files access) |
 | GitHub PAT → `git credential.helper store` | Implemented |
-| Desktop browser inside X11 | Implemented with Falkon; see below |
+| Desktop browser inside X11 | Implemented with Google Chrome Stable ARM64 and Firefox; see below |
 | X11 desktop rendered in a Flutter window | Implemented via noVNC, not via a native X surface |
 | ZRAM enabled by the app | **No** — see "ZRAM" below |
 | iOS build with a Linux guest | **No** — see "iOS" below |
 
-### Falkon instead of Chromium
+### Google Chrome Stable on ARM64
 
-Ubuntu arm64 ships Chromium **only as a snap**, and snapd cannot run inside
-proot. So `apt-get install chromium` cannot work on Ubuntu, no matter which
-flags are passed.
-
-The app installs **Falkon** instead: a real desktop browser, packaged as a
-normal `.deb`, built on **QtWebEngine — which is Chromium's Blink renderer and
-V8 engine**. It is not a WebView wrapper and it is not a mobile browser.
-
-The memory flags still apply. Falkon receives the Chromium flags through
-`QTWEBENGINE_CHROMIUM_FLAGS`. `--single-process` is available as an opt-in
-toggle in Settings because upstream deprecated it and it crashes on many
-pages — `--renderer-process-limit=1` gets most of the memory benefit without
-the crashes.
+Misty OS provisions Google's native Linux ARM64 `.deb` package and verifies its architecture and executable before the rootfs is exported. It launches as a normal X11 browser window with tabs, address bar, bookmarks, persistent profile storage and Google account sign-in. Firefox remains available as an alternate engine. Chromium's Ubuntu Snap package is not required or used inside PRoot.
 
 ### X11
 
@@ -521,9 +525,11 @@ Push to `main`. GitHub Actions builds both targets:
    `MistyOS-<run>-arm64.apk` to a release tagged `apk-<run>`.
 
 Install with `adb install -r MistyOS-…-arm64.apk`, or copy it to the phone and
-allow "install unknown apps". This build is debug-signed and sideload-only; it
-is not Play-Store compliant (targetSdk 28 is required for the current proot
-execution arrangement).
+allow "install unknown apps". Builds share the repository's stable sideload
+key, so later APKs install as updates. If you installed an older build that
+used a per-run debug key, uninstall it once before installing this one. The
+build is sideload-only and not Play-Store compliant (targetSdk 28 is required
+for the current proot execution arrangement).
 
 ### Local build
 
@@ -541,10 +547,12 @@ flutter build apk --release --target-platform android-arm64
 
 ## First run
 
-1. Connect to Wi-Fi and confirm at least **1 GB of free storage** (more is
-   recommended).
-2. Launch the app → **Install Linux** (downloads roughly 700 MB–1.2 GB of
-   packages; actual free-space needs can be higher while files are unpacked).
+1. Confirm at least **6.5 GB of free storage**. The APK is about 2 GB and the
+   bundled Linux image expands to roughly 5.5 GB.
+2. Launch the app → **Install Linux**. The installer streams the image
+   directly from the APK, so it does not create a second archive copy. On a
+   low-end phone the unpack can take 10–20 minutes; keep the app in the
+   foreground until it finishes.
 3. Grant **All files access** in Settings → Storage access.
 4. Paste a GitHub PAT in Settings → GitHub. It is verified against the API,
    stored in the Android keystore, and written into the guest as
