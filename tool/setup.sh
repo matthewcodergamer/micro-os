@@ -674,60 +674,86 @@ apt-get install "${APT_OPTS[@]}" ca-certificates || warn "ca-certificates packag
 update-ca-certificates --fresh || warn "certificate refresh failed; retrying once"
 update-ca-certificates || true
 
-stage 91 "Installing OpenCode"
-# Keep npm's V8 heap bounded for low-memory Android devices running proot.
-# The official installer is preferred; npm is a bounded fallback, not a
-# prerequisite for the rest of the Linux environment.
-export NODE_OPTIONS="--max-old-space-size=384"
-apt-get install "${APT_OPTS[@]}" curl wget unzip tar ca-certificates || warn "OpenCode prerequisites could not all be installed"
-mkdir -p "$TMPDIR"
+stage 91 "Installing latest official OpenCode ARM64 release"
+# Resolve the current upstream release at build time, then verify its exact
+# GitHub-published asset digest before installing. This avoids silently
+# retaining a stale CLI or depending on a mutable shell installer.
+apt-get install "${APT_OPTS[@]}" curl wget tar ca-certificates python3 || {
+  echo "[microos] OpenCode prerequisites failed" >&2
+  exit 1
+}
+mkdir -p "$TMPDIR" /root/.opencode/bin /usr/local/share/microos
 chmod 1777 "$TMPDIR"
 update-ca-certificates || true
 
-# Refresh OpenCode on every full workstation setup so existing rootfs images do
-# not keep an obsolete CLI indefinitely. If the network is unavailable, the
-# already-installed executable is left in place.
-installed=0
-  for attempt in 1 2 3; do
-    log "OpenCode installer download attempt $attempt/3"
-    rm -f /tmp/opencode-install.sh
-    if curl --silent --show-error --fail --location \
-        --connect-timeout 15 --max-time 90 --retry 2 --retry-delay 3 \
-        --retry-all-errors \
-        https://opencode.ai/install --output /tmp/opencode-install.sh \
-        && [ -s /tmp/opencode-install.sh ]; then
-      log "OpenCode installer downloaded ($(wc -c < /tmp/opencode-install.sh) bytes)"
-      if timeout 240 bash /tmp/opencode-install.sh; then
-        if command -v opencode >/dev/null 2>&1 || [ -x /root/.opencode/bin/opencode ]; then
-          installed=1
-          break
+OPENCODE_RELEASE_JSON="$TMPDIR/opencode-release.json"
+OPENCODE_ARCHIVE="$TMPDIR/opencode-linux-arm64.tar.gz"
+OPENCODE_EXTRACT="$TMPDIR/opencode-extract"
+OPENCODE_RELEASE_INFO="$TMPDIR/opencode-release-info"
+OPENCODE_INSTALLED=0
+for attempt in 1 2 3; do
+  log "Resolving latest OpenCode ARM64 release (attempt $attempt/3)"
+  rm -f "$OPENCODE_RELEASE_JSON" "$OPENCODE_ARCHIVE" "$OPENCODE_RELEASE_INFO"
+  if curl --silent --show-error --fail --location \
+      --connect-timeout 20 --max-time 120 --retry 2 --retry-all-errors \
+      -H "Accept: application/vnd.github+json" \
+      https://api.github.com/repos/anomalyco/opencode/releases/latest \
+      --output "$OPENCODE_RELEASE_JSON" \
+      && python3 - "$OPENCODE_RELEASE_JSON" "$OPENCODE_RELEASE_INFO" <<'PYOPENCODE'
+import json, pathlib, sys
+release = json.loads(pathlib.Path(sys.argv[1]).read_text())
+asset = next((a for a in release.get("assets", [])
+              if a.get("name") == "opencode-linux-arm64.tar.gz"), None)
+digest = (asset or {}).get("digest") or ""
+if not release.get("tag_name") or not asset or not digest.startswith("sha256:"):
+    raise SystemExit("Latest OpenCode release has no ARM64 archive with a SHA-256 digest")
+pathlib.Path(sys.argv[2]).write_text(
+    release["tag_name"] + "\n" + asset["browser_download_url"] + "\n" + digest.split(":", 1)[1] + "\n"
+)
+PYOPENCODE
+    then
+      mapfile -t OPENCODE_INFO < "$OPENCODE_RELEASE_INFO"
+      OPENCODE_VERSION="${OPENCODE_INFO[0]}"
+      OPENCODE_URL="${OPENCODE_INFO[1]}"
+      OPENCODE_SHA256="${OPENCODE_INFO[2]}"
+      log "Latest upstream OpenCode: $OPENCODE_VERSION"
+      if curl --silent --show-error --fail --location \
+          --connect-timeout 20 --max-time 600 --retry 2 --retry-all-errors \
+          "$OPENCODE_URL" --output "$OPENCODE_ARCHIVE" \
+          && echo "$OPENCODE_SHA256  $OPENCODE_ARCHIVE" | sha256sum --check --status; then
+        rm -rf "$OPENCODE_EXTRACT"
+        mkdir -p "$OPENCODE_EXTRACT"
+        tar -xzf "$OPENCODE_ARCHIVE" -C "$OPENCODE_EXTRACT" --no-same-owner
+        OPENCODE_BINARY="$(find "$OPENCODE_EXTRACT" -type f -name opencode -print -quit)"
+        if [ -n "$OPENCODE_BINARY" ]; then
+          install -m 0755 "$OPENCODE_BINARY" /root/.opencode/bin/opencode
+          ln -sfn /root/.opencode/bin/opencode /usr/local/bin/opencode
+          ACTUAL_OPENCODE_VERSION="$(/root/.opencode/bin/opencode --version 2>&1 | head -n 1 | tr -d '\r')"
+          if [ "$ACTUAL_OPENCODE_VERSION" = "$OPENCODE_VERSION" ]; then
+            printf '%s\n' "$OPENCODE_VERSION" > /usr/local/share/microos/opencode-version
+            OPENCODE_INSTALLED=1
+            log "OpenCode $ACTUAL_OPENCODE_VERSION installed; GitHub SHA-256 verified"
+            break
+          fi
+          warn "OpenCode version mismatch: expected $OPENCODE_VERSION, got $ACTUAL_OPENCODE_VERSION"
+        else
+          warn "OpenCode archive contained no executable named opencode"
         fi
-        warn "installer exited successfully but no OpenCode executable was found"
       else
-        warn "OpenCode installer failed or timed out on attempt $attempt"
+        warn "OpenCode ARM64 download or SHA-256 verification failed"
       fi
     else
-      warn "OpenCode installer download failed or timed out on attempt $attempt"
+      warn "Could not resolve latest OpenCode release metadata"
     fi
-    sleep $((attempt * 5))
-  done
-if [ "$installed" -ne 1 ]; then
+  sleep $((attempt * 5))
+done
+rm -rf "$OPENCODE_EXTRACT" "$OPENCODE_ARCHIVE" "$OPENCODE_RELEASE_JSON" "$OPENCODE_RELEASE_INFO"
+if [ "$OPENCODE_INSTALLED" -ne 1 ]; then
   if [ "${MICROOS_REQUIRE_LATEST_OPENCODE:-0}" = "1" ]; then
-    echo "[microos] latest OpenCode installation is required for the release rootfs but did not complete" >&2
+    echo "[microos] refusing to ship a rootfs without the latest verified OpenCode ARM64 release" >&2
     exit 1
   fi
-  warn "OpenCode update did not complete. Keeping any existing executable; skipping npm fallback to avoid exhausting phone RAM."
-fi
-
-# Verify the binary exists; a successful download attempt alone is not proof.
-if command -v opencode >/dev/null 2>&1; then
-  log "OpenCode verified: $(command -v opencode)"
-  opencode --version 2>&1 | head -n 1 || true
-elif [ -x /root/.opencode/bin/opencode ]; then
-  log "OpenCode verified: /root/.opencode/bin/opencode"
-  /root/.opencode/bin/opencode --version 2>&1 | head -n 1 || true
-else
-  warn "OpenCode verification failed: executable not found; Linux setup will continue without it"
+  warn "Latest OpenCode could not be installed; retaining any existing binary for this interactive setup"
 fi
 
 # -----------------------------------------------------------------------------
