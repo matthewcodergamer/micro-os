@@ -41,7 +41,7 @@ Its architecture includes:
 - PRoot: Ubuntu 24.04 ARM64 Linux userspace.
 - X11/Openbox: Linux graphical desktop.
 - VNC/noVNC: remote desktop display inside Misty OS.
-- OpenCode: AI coding agent running inside the Linux environment.
+- OpenCode: latest upstream Linux ARM64 release, SHA-256 verified against GitHub release metadata and version-checked during rootfs creation.
 - PTY/xterm: interactive Linux terminal.
 - GitHub Actions: Linux root filesystem preparation and Android APK builds.
 
