@@ -52,7 +52,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   double _trackpadSpeed = 1.35;
   SettingsStore? _settingsStore;
   bool _settingsInitialized = false;
-  String _selectedBrowser = 'chromium';
+  String _selectedBrowser = 'chrome';
 
   @override
   void initState() {
