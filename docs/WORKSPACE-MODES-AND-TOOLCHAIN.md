@@ -22,7 +22,7 @@ The first-run chooser appears after the Linux guest is ready. The saved selectio
 
 ## Browser architecture
 
-The guest uses native ARM64 Chromium in a normal X11 desktop window, with Firefox available as an alternate engine. This is the full browser application surface (tabs, address bar, bookmarks and normal browser controls), not a web page pretending to be a browser. Chromium is the upstream open-source browser; Google's branded Chrome desktop distribution is not the Linux ARM64 package used here. Do not replace the working ARM64 Chromium package with Chromium Snap inside PRoot.
+The guest uses the official Google Chrome Stable ARM64 package in a normal X11 desktop window, with Firefox available as an alternate engine. This is the full browser application surface (tabs, address bar, bookmarks, Google account sign-in and normal browser controls), not a web page pretending to be a browser. The build verifies the package architecture and native executable before exporting the rootfs. Do not replace the native ARM64 package with Chromium Snap inside PRoot.
 
 Browser rendering, VNC transport and network throughput are measured separately. A healthy noVNC page alone is not proof that the remote desktop rendered; the integration test checks actual framebuffer pixels and WebSocket traffic.
 
