@@ -44,7 +44,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     # setup.sh removes APT indexes during its cleanup; refresh them before
     # installing this additional package in the pre-bake stage.
     apt-get update -y
-    apt-get install -y --no-install-recommends qbittorrent-nox
+    apt-get install -y --no-install-recommends qbittorrent-nox fzf
     command -v qbittorrent-nox
     install -d -m 700 /root/.config/qBittorrent /mnt/android/Download
     cat > /root/.config/qBittorrent/qBittorrent.conf <<'QBTCONF'
