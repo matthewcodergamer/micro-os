@@ -40,7 +40,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     # secure storage. Do not persist access tokens in the rootfs or shell files.
 
     echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop; do
+    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop adb fastboot jadx apktool mitmproxy blender frida objection apkid; do
       command -v "$tool" >/dev/null 2>&1 || {
         echo "Required pre-baked tool is missing: $tool" >&2
         exit 1
