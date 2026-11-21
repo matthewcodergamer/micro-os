@@ -190,7 +190,7 @@ PLAYWRIGHT_SMOKE
       sleep 0.25
     done
     if [ -z "$WINDOW_ID" ]; then
-      cat /tmp/microos-chromium-x11.log >&2 || true
+      cat /tmp/microos-chrome-x11.log >&2 || true
       echo "Google Chrome X11 window did not appear within 25 seconds" >&2
       cat /tmp/microos-xvfb.log /tmp/microos-openbox.log >&2 || true
       exit 1
@@ -204,7 +204,7 @@ PLAYWRIGHT_SMOKE
     HEIGHT="$(printf "%s\n" "$GEOMETRY" | sed -n "s/^HEIGHT=//p")"
     if [ "${WIDTH:-0}" -lt 1000 ] || [ "${HEIGHT:-0}" -lt 600 ]; then
       echo "Google Chrome X11 window did not maximize: $GEOMETRY" >&2
-      cat /tmp/microos-chromium-x11.log >&2 || true
+      cat /tmp/microos-chrome-x11.log >&2 || true
       kill -9 "${MICROOS_BROWSER_PID:-}" "${MICROOS_OPENBOX_PID:-}" "${MICROOS_XVFB_PID:-}" 2>/dev/null || true
       exit 1
     fi
