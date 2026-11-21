@@ -7,6 +7,7 @@ import '../../core/macos_design.dart';
 import '../../core/terminal_profiles.dart';
 import '../../core/wallpapers.dart';
 import '../../core/theme.dart';
+import '../../core/experience_mode.dart';
 import '../../services/github_auth.dart';
 import '../../services/linux_runtime.dart';
 import '../../services/performance_monitor.dart';
@@ -418,6 +419,21 @@ class _PointerPage extends StatelessWidget {
           'Tune touch gestures for the Linux desktop. Changes are saved on this device and applied to the active VNC session.',
           style: TextStyle(color: MicroColors.subtle, fontSize: 12),
         ),
+        const SizedBox(height: 18),
+        const Text('Workspace experience', style: TextStyle(color: MicroColors.text, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          ChoiceChip(
+            label: const Text('Desktop Mode'),
+            selected: settings.experienceMode == ExperienceMode.desktop,
+            onSelected: (_) => settings.setExperienceMode(ExperienceMode.desktop),
+          ),
+          ChoiceChip(
+            label: const Text('Mobile Desktop'),
+            selected: settings.experienceMode == ExperienceMode.mobileDesktop,
+            onSelected: (_) => settings.setExperienceMode(ExperienceMode.mobileDesktop),
+          ),
+        ]),
         const SizedBox(height: 18),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
