@@ -147,7 +147,7 @@ PLAYWRIGHT_SMOKE
 
     # Exercise the actual Linux desktop browser window, not only headless DOM
     # rendering. This runs the same launcher used by the Android PRoot guest.
-    echo "==> Testing native Chromium X11 window, tabs and mobile control helper"
+    echo "==> Testing native Google Chrome X11 window, tabs and mobile control helper"
     # Initialize every PID before starting background processes so strict
     # nounset mode can safely handle early startup failures.
     MICROOS_XVFB_PID=""
