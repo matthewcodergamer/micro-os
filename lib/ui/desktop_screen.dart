@@ -154,6 +154,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     window: window,
                     desktop: desktop,
                     screen: size,
+                    touchOptimized: settings.experienceMode == ExperienceMode.mobileDesktop,
                     child: _contentFor(window, scope),
                   ),
 
