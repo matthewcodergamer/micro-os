@@ -19,6 +19,18 @@ Do not stop after writing a plan. Implement, test, and document the work.
 
 ---
 
+
+## Workspace experiences
+
+Misty OS offers two interaction profiles for the same Ubuntu 24.04 ARM64 PRoot guest:
+
+- **Desktop Mode:** pointer-first interaction with a visible remote cursor, precise selection, dragging, context menus and keyboard shortcuts.
+- **Mobile Desktop:** touch-first interaction with direct touch mapping, larger controls, responsive windows and Android keyboard behavior.
+
+The first-run chooser saves the selection on-device. Switch modes later in **System Settings → Trackpad & Pointer → Workspace experience**. The Linux filesystem, installed applications, user data and running services are shared; switching modes does not create or reset a second Linux installation.
+
+See [Workspace Modes and Developer Toolchain](docs/WORKSPACE-MODES-AND-TOOLCHAIN.md) for the design and tool inventory.
+
 ## 1. Project overview
 
 Misty OS is a Flutter-based Android desktop environment with a macOS-inspired Golden Gate interface.
