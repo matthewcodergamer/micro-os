@@ -192,7 +192,7 @@ PYTHON_PATH
 fi
 
 # A fast, macOS-inspired interactive shell without a heavy framework.
-stage 69 "Installing the Misty terminal experience"
+stage 68 "Installing the Misty terminal experience"
 SHELL_APT_PACKAGES=(
   zsh zsh-autosuggestions zsh-syntax-highlighting
   fzf ripgrep fd-find bat htop tree neovim
@@ -246,7 +246,7 @@ fi
 
 # Burp Suite Community has a native Linux ARM64 installer. Pin the verified
 # release/checksum so a changed upstream download can never be installed silently.
-stage 68 "Installing Burp Suite Community (ARM64)"
+stage 69 "Installing Burp Suite Community (ARM64)"
 if [ "$(dpkg --print-architecture 2>/dev/null || true)" = arm64 ]; then
   BURP_INSTALLER=/tmp/burpsuite_community_arm64.sh
   if curl -fL --connect-timeout 20 --max-time 600 \
