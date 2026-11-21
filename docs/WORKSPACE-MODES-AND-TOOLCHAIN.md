@@ -55,7 +55,7 @@ Copying a protected path under `/data/app` may still be denied by Android's app 
 
 ## OpenCode sessions
 
-The Terminal app supports multiple independent terminal tabs. OpenCode has its own persistent session manager: use `/new` to start a separate conversation and `/sessions` to list and resume saved conversations. Its TUI session tabs are separate from OS terminal tabs. A graphical OpenCode session switcher is still a distinct UI task; do not describe terminal tabs as OpenCode session management.
+The Terminal app uses a lightweight Zsh setup with a two-line Misty prompt, Git branch indicator, history sharing, command autosuggestions, syntax highlighting, fzf history/file search, ripgrep and modern CLI aliases. It supports multiple independent terminal tabs. OpenCode has its own persistent session manager: use `/new` to start a separate conversation and `/sessions` to list and resume saved conversations. Its TUI session tabs are separate from OS terminal tabs. A graphical OpenCode session switcher is still a distinct UI task; do not describe terminal tabs as OpenCode session management.
 
 ## Performance and device constraints
 
