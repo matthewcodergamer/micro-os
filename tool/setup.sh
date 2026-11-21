@@ -127,7 +127,7 @@ apt-get install "${APT_OPTS[@]}" \
 # Keep these in the ARM64 Ubuntu guest so commands work from every terminal session.
 stage 66 "Installing Android and security toolchain"
 SECURITY_APT_PACKAGES=(
-  android-tools-adb android-tools-fastboot jadx apktool mitmproxy blender
+  adb fastboot apktool mitmproxy blender
 )
 AVAILABLE_SECURITY_PACKAGES=()
 for package in "${SECURITY_APT_PACKAGES[@]}"; do
@@ -140,6 +140,28 @@ done
 if [ "${#AVAILABLE_SECURITY_PACKAGES[@]}" -gt 0 ]; then
   apt-get install "${APT_OPTS[@]}" "${AVAILABLE_SECURITY_PACKAGES[@]}" || warn "some Android/security/creative packages failed to install"
 fi
+
+# JADX is distributed as an upstream ZIP (Ubuntu Noble does not publish a
+# native JADX package for this ARM64 image). Pin the release and GitHub's
+# release-asset digest so the executable is reproducible and verified.
+stage 67 "Installing JADX ARM64"
+JADX_VERSION=1.5.7
+JADX_SHA256=1755e4242ade71a077438723689f404079592ec7764a3a0572f98fef94ebcbf3
+JADX_ARCHIVE="/tmp/jadx-$JADX_VERSION.zip"
+if curl --fail --location --retry 3 --connect-timeout 20 --max-time 600 \
+    "https://github.com/skylot/jadx/releases/download/v$JADX_VERSION/jadx-$JADX_VERSION.zip" \
+    --output "$JADX_ARCHIVE" \
+    && echo "$JADX_SHA256  $JADX_ARCHIVE" | sha256sum --check --status; then
+  install -d /opt/jadx
+  unzip -q -o "$JADX_ARCHIVE" -d /opt/jadx
+  test -x /opt/jadx/bin/jadx
+  ln -sfn /opt/jadx/bin/jadx /usr/local/bin/jadx
+  chmod 755 /opt/jadx/bin/jadx
+  log "JADX $JADX_VERSION installed and SHA-256 verified"
+else
+  warn "JADX download or checksum verification failed"
+fi
+rm -f "$JADX_ARCHIVE"
 
 # PEP 668-safe Python tools: never modify Ubuntu's externally-managed Python.
 SECURITY_VENV=/opt/microos-security-tools
@@ -375,8 +397,8 @@ rm -rf /tmp/WhiteSur-cursors
 
 # -----------------------------------------------------------------------------
 # 5. Browser
-# Chromium is pre-baked as a native ARM64 .deb; do not use Ubuntu Snap.
-stage 84 "Preparing Chromium desktop browser"
+# Official Google Chrome Stable is pre-baked as a native ARM64 .deb.
+stage 84 "Preparing Google Chrome desktop browser"
 apt-get install "${APT_OPTS[@]}" passwd util-linux || warn "browser user tools unavailable"
 if ! id microos-browser >/dev/null 2>&1; then
   useradd --system --create-home --home-dir /home/microos-browser --shell /usr/sbin/nologin microos-browser || warn "browser user creation failed"
@@ -387,12 +409,9 @@ cat > /usr/local/bin/start-browser.sh <<'BROWSER'
 set -euo pipefail
 export DISPLAY="${DISPLAY:-:1}"
 BROWSER_HOME=/home/microos-browser
-BROWSER_BIN="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
-if [ -z "$BROWSER_BIN" ]; then echo "[microos] Google Chrome ARM64 (or Chromium fallback) is not installed" >&2; exit 127; fi
-case "$(basename "$BROWSER_BIN")" in
-  google-chrome*) BROWSER_PROFILE="$BROWSER_HOME/.config/google-chrome" ;;
-  *) BROWSER_PROFILE="$BROWSER_HOME/.config/chromium" ;;
-esac
+BROWSER_BIN="$(command -v google-chrome-stable || true)"
+if [ -z "$BROWSER_BIN" ]; then echo "[microos] Official Google Chrome Stable ARM64 is not installed" >&2; exit 127; fi
+BROWSER_PROFILE="$BROWSER_HOME/.config/google-chrome"
 install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_PROFILE" "$BROWSER_PROFILE/Default" "$BROWSER_HOME/.cache"
 BROWSER_PREFS="$BROWSER_PROFILE/Default/Preferences"
 python3 - "$BROWSER_PREFS" <<'BROWSER_PREFS'
@@ -432,7 +451,7 @@ if changed or not os.path.exists(path):
 BROWSER_PREFS
 chown microos-browser:microos-browser "$BROWSER_PREFS"
 
-# Seed a useful native Chromium bookmarks bar once. Never replace a user's
+# Seed a useful Google Chrome bookmarks bar once. Never replace a user's
 # existing Bookmarks database after their first browser launch.
 BOOKMARKS_FILE="$BROWSER_PROFILE/Default/Bookmarks"
 if [ ! -s "$BOOKMARKS_FILE" ]; then
@@ -584,7 +603,7 @@ esac
 # _NET_ACTIVE_WINDOW: some Xvfb/proot window-manager configurations omit it.
 WINDOW_ID="$(xdotool search --class 'chromium|Chromium|chrome|Chrome|firefox|Firefox|Navigator' 2>/dev/null | tail -n 1 || true)"
 if [ -z "$WINDOW_ID" ]; then
-  echo "[microos] no Chromium/Firefox window is available" >&2
+  echo "[microos] no Google Chrome/Firefox window is available" >&2
   exit 1
 fi
 
@@ -693,6 +712,10 @@ installed=0
     sleep $((attempt * 5))
   done
 if [ "$installed" -ne 1 ]; then
+  if [ "${MICROOS_REQUIRE_LATEST_OPENCODE:-0}" = "1" ]; then
+    echo "[microos] latest OpenCode installation is required for the release rootfs but did not complete" >&2
+    exit 1
+  fi
   warn "OpenCode update did not complete. Keeping any existing executable; skipping npm fallback to avoid exhausting phone RAM."
 fi
 
