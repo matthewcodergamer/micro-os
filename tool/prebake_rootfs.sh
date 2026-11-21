@@ -40,33 +40,6 @@ docker run --platform linux/arm64 --name "$NAME" \
     # Credentials are supplied to guest processes via HF_TOKEN from Android
     # secure storage. Do not persist access tokens in the rootfs or shell files.
 
-    echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop adb fastboot jadx apktool mitmproxy blender frida objection apkid google-chrome-stable zsh fzf rg fdfind batcat htop tree nvim; do
-      command -v "$tool" >/dev/null 2>&1 || {
-        echo "Required pre-baked tool is missing: $tool" >&2
-        exit 1
-      }
-      printf "%-10s %s\\n" "$tool" "$(command -v "$tool")"
-    done
-    if command -v opencode >/dev/null 2>&1; then
-      OPENCODE_BIN="$(command -v opencode)"
-    elif [ -x /root/.opencode/bin/opencode ]; then
-      OPENCODE_BIN=/root/.opencode/bin/opencode
-    else
-      echo "OpenCode is missing from the pre-baked image" >&2
-      exit 1
-    fi
-    OPENCODE_VERSION_FILE=/usr/local/share/microos/opencode-version
-    test -s "$OPENCODE_VERSION_FILE" || { echo "OpenCode release version manifest missing" >&2; exit 1; }
-    EXPECTED_OPENCODE_VERSION="$(cat "$OPENCODE_VERSION_FILE")"
-    ACTUAL_OPENCODE_VERSION="$(timeout 30 "$OPENCODE_BIN" --version | head -n 1 | tr -d '\r')"
-    test "$ACTUAL_OPENCODE_VERSION" = "$EXPECTED_OPENCODE_VERSION" || {
-      echo "OpenCode version mismatch: expected $EXPECTED_OPENCODE_VERSION, got $ACTUAL_OPENCODE_VERSION" >&2
-      exit 1
-    }
-    echo "Verified latest OpenCode: $ACTUAL_OPENCODE_VERSION"
-    python3 -c "import zipfile, json, pathlib"
-
     echo "==> Installing qBittorrent-nox headless torrent engine"
     # setup.sh removes APT indexes during its cleanup; refresh them before
     # installing this additional package in the pre-bake stage.
@@ -365,7 +338,36 @@ PLAYWRIGHT_SMOKE
         --screenshot /tmp/microos-firefox-smoke.png \
         "data:text/html,<title>MicroOS Firefox smoke test</title><h1>Firefox is ready</h1>"
     test -s /tmp/microos-firefox-smoke.png
-    echo "==> Firefox ARM64 headless startup and rendering test passed"
+    # Verify after all workstation tools and browsers have been installed.
+    # The previous location ran before Chrome was installed and aborted every
+    # rootfs build with a misleading "google-chrome-stable is missing" error.
+    echo "==> Verifying the fully provisioned developer workstation"
+    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop adb fastboot jadx apktool mitmproxy blender frida objection apkid google-chrome-stable qbittorrent-nox zsh fzf rg fdfind batcat htop tree nvim; do
+      command -v "$tool" >/dev/null 2>&1 || {
+        echo "Required pre-baked tool is missing: $tool" >&2
+        exit 1
+      }
+      printf "%-10s %s\\n" "$tool" "$(command -v "$tool")"
+    done
+    if command -v opencode >/dev/null 2>&1; then
+      OPENCODE_BIN="$(command -v opencode)"
+    elif [ -x /root/.opencode/bin/opencode ]; then
+      OPENCODE_BIN=/root/.opencode/bin/opencode
+    else
+      echo "OpenCode is missing from the pre-baked image" >&2
+      exit 1
+    fi
+    OPENCODE_VERSION_FILE=/usr/local/share/microos/opencode-version
+    test -s "$OPENCODE_VERSION_FILE" || { echo "OpenCode release version manifest missing" >&2; exit 1; }
+    EXPECTED_OPENCODE_VERSION="$(cat "$OPENCODE_VERSION_FILE")"
+    ACTUAL_OPENCODE_VERSION="$(timeout 30 "$OPENCODE_BIN" --version | head -n 1 | tr -d '\r')"
+    test "$ACTUAL_OPENCODE_VERSION" = "$EXPECTED_OPENCODE_VERSION" || {
+      echo "OpenCode version mismatch: expected $EXPECTED_OPENCODE_VERSION, got $ACTUAL_OPENCODE_VERSION" >&2
+      exit 1
+    }
+    echo "Verified latest OpenCode: $ACTUAL_OPENCODE_VERSION"
+    python3 -c "import zipfile, json, pathlib"
+
     # Keep the browser home in the exported rootfs; the runtime launcher expects
     # this path to exist and will repair ownership before starting Firefox.
     rm -rf "$BROWSER_HOME/.mozilla" "$BROWSER_HOME/.cache"
