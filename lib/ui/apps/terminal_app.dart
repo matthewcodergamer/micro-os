@@ -134,7 +134,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
       argv: <String>[
         '/bin/bash',
         '-lc',
-        'exec opencode --session "$1"',
+        r'exec opencode --session "$1"',
         'misty-opencode-resume',
         sessionId,
       ],
@@ -548,7 +548,9 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
   }
 }
 
-enum _TerminalMenuAction { copy, paste }\n\nenum _OpenCodeAction { newSession, listSessions, resumeSession }
+enum _TerminalMenuAction { copy, paste }
+
+enum _OpenCodeAction { newSession, listSessions, resumeSession }
 
 /// Always-visible accessory row. xterm's gestures handle long-press and drag
 /// selection, but on a phone the copy affordance and scrollback must be

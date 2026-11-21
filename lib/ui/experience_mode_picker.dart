@@ -40,16 +40,16 @@ class ExperienceModePicker extends StatelessWidget {
                         icon: Icons.mouse_rounded,
                         title: 'Desktop Mode',
                         subtitle: 'Pointer-first · keyboard and mouse',
-                        description: Experience a traditional desktop with a visible cursor, precise selection, dragging, context menus and keyboard shortcuts. Great with a Bluetooth mouse or trackpad.
-                        ,onTap: () => onSelected(ExperienceMode.desktop),
+                        description: 'Experience a traditional desktop with a visible cursor, precise selection, dragging, context menus and keyboard shortcuts. Great with a Bluetooth mouse or trackpad.',
+                        onTap: () => onSelected(ExperienceMode.desktop),
                       )),
                       SizedBox(width: wide ? 14 : 0, height: wide ? 0 : 14),
                       ExpandedIfWide(wide: wide, child: _ModeCard(
                         icon: Icons.touch_app_rounded,
                         title: 'Mobile Desktop',
                         subtitle: 'Touch-first · phone optimized',
-                        description: Keep desktop windows and Linux apps, but use direct touch, larger controls, adaptive spacing and the Android keyboard when entering text.
-                        ,onTap: () => onSelected(ExperienceMode.mobileDesktop),
+                        description: 'Keep desktop windows and Linux apps, but use direct touch, larger controls, adaptive spacing and the Android keyboard when entering text.',
+                        onTap: () => onSelected(ExperienceMode.mobileDesktop),
                       )),
                     ],
                   ),

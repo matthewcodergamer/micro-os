@@ -167,7 +167,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             'mainFrame=${error.isForMainFrame} url=${error.url} '
             'description=${error.description}',
           );
-          if (error.isForMainFrame) {
+          if (error.isForMainFrame ?? false) {
             _requestDisplayDiagnostics('main-frame WebResourceError: ${error.description}');
             _retryVncPage(controller);
           }
@@ -175,9 +175,9 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
         onHttpError: (error) {
           widget.runtime.logDiagnostic(
             'HttpError status=${error.response?.statusCode} '
-            'url=${error.request.uri}',
+            'url=${error.request?.uri}',
           );
-          _requestDisplayDiagnostics('HTTP error: ${error.response?.statusCode} ${error.request.uri}');
+          _requestDisplayDiagnostics('HTTP error: ${error.response?.statusCode} ${error.request?.uri}');
           _retryVncPage(controller);
         },
       ))
