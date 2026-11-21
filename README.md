@@ -577,3 +577,10 @@ lib/
 tool/setup.sh                   guest provisioning (apt, browser, X11, OpenCode)
 tool/                           CI helpers (runtime fetch, platform scaffolding)
 ```
+
+
+---
+
+## OpenCode implementation handoff
+
+For the current macOS-inspired shell, mobile UX, real Linux browser, Finder, terminal, wallpaper, and performance implementation specification, read **[docs/MISTY_OS_MACOS_MASTER_PROMPT.md](docs/MISTY_OS_MACOS_MASTER_PROMPT.md)**. OpenCode's concise entrypoint is **[OPENCODE_TASK.md](OPENCODE_TASK.md)**. These documents require auditing the reference projects and porting appropriate UI behavior into Flutter while preserving real Linux/PRoot functionality.
