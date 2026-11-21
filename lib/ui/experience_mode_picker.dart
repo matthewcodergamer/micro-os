@@ -107,7 +107,7 @@ class _ModeCard extends StatelessWidget {
             Text(subtitle, style: const TextStyle(color: Color(0xFF9FC7FF), fontSize: 11, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             Text(description, style: const TextStyle(color: Color(0xFFB6C2D2), fontSize: 12, height: 1.5)),
-            const Spacer(),
+            const SizedBox(height: 12),
             const Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               Text('Choose this mode', style: TextStyle(color: Color(0xFF9FC7FF), fontSize: 12, fontWeight: FontWeight.w600)),
               SizedBox(width: 6), Icon(Icons.arrow_forward_rounded, color: Color(0xFF9FC7FF), size: 16),
