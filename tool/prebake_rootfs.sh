@@ -375,7 +375,7 @@ PLAYWRIGHT_SMOKE
     rm -f /tmp/firefox.tar.xz /tmp/google-chrome-ldd.txt /tmp/microos-chrome-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "14\\n" > /root/.microos/image-version
+    printf "15\\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
