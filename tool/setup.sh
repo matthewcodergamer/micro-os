@@ -235,7 +235,8 @@ _misty_git_branch() {
   [[ -n "$branch" ]] && print -n " %F{magenta}git:$branch%f"
 }
 setopt PROMPT_SUBST
-PROMPT='%F{green}%n%f@%F{cyan}%m%f %F{blue}%~%f$(_misty_git_branch)\n%F{magenta}❯%f '
+PROMPT='%F{green}%n%f@%F{cyan}%m%f %F{blue}%~%f$(_misty_git_branch)
+%F{magenta}❯%f '
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
 [[ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 [[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]] && source /usr/share/doc/fzf/examples/key-bindings.zsh
