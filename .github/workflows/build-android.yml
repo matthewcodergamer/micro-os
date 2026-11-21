@@ -169,7 +169,7 @@ jobs:
           grep -q 'websocket-error' lib/ui/apps/desktop_session_app.dart
           ! grep -q 'document.body ? document.body.innerText' lib/ui/apps/desktop_session_app.dart
           node --check tool/test-novnc-render.cjs
-          grep -q 'websockify --verbose --host=127.0.0.1' tool/setup.sh
+          grep -q 'websockify --verbose --web /usr/share/novnc 127.0.0.1:6080' tool/setup.sh
           grep -q 'wait_for_novnc_http' tool/setup.sh
           grep -q 'http://127.0.0.1:6080/vnc.html' tool/setup.sh
           grep -q 'http://127.0.0.1:6080/vnc.html' lib/services/linux_runtime.dart
