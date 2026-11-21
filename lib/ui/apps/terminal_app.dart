@@ -450,7 +450,49 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                       },
                     ),
                   ),
+                  PopupMenuButton<_OpenCodeAction>(
+                    tooltip: 'OpenCode sessions',
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 17),
+                    color: MicroColors.windowBody,
+                    onSelected: (action) {
+                      switch (action) {
+                        case _OpenCodeAction.newSession:
+                          _openNewOpenCodeSession();
+                        case _OpenCodeAction.listSessions:
+                          _openOpenCodeSessionList();
+                        case _OpenCodeAction.resumeSession:
+                          unawaited(_resumeOpenCodeSession());
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: _OpenCodeAction.newSession,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.add_rounded),
+                          title: Text('New OpenCode session'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: _OpenCodeAction.listSessions,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.history_rounded),
+                          title: Text('Browse saved sessions'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: _OpenCodeAction.resumeSession,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.play_circle_outline_rounded),
+                          title: Text('Resume by session ID'),
+                        ),
+                      ),
+                    ],
+                  ),
                   IconButton(
+                    tooltip: 'New terminal tab',
                     icon: const Icon(Icons.add_rounded, size: 18),
                     color: MicroColors.text,
                     onPressed: _addTab,
@@ -501,7 +543,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
   }
 }
 
-enum _TerminalMenuAction { copy, paste }
+enum _TerminalMenuAction { copy, paste }\n\nenum _OpenCodeAction { newSession, listSessions, resumeSession }
 
 /// Always-visible accessory row. xterm's gestures handle long-press and drag
 /// selection, but on a phone the copy affordance and scrollback must be
