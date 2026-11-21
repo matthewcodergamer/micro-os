@@ -7,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../app_scope.dart';
 import '../../core/macos_design.dart';
 import '../../core/theme.dart';
+import '../../core/experience_mode.dart';
 import '../../services/linux_runtime.dart';
 import '../../services/settings_store.dart';
 
@@ -415,7 +416,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     final url = widget.url ?? _settingsStore?.browserHomePage ?? 'https://www.google.com';
     if (!mounted) return;
     setState(() => _status =
-        'Opening $url in ${_selectedBrowser == 'firefox' ? 'Firefox' : 'Chromium'}…');
+        'Opening $url in ${_selectedBrowser == 'firefox' ? 'Firefox' : 'Google Chrome'}…');
     await widget.runtime.launchBrowser(
       browser: _selectedBrowser,
       url: url,
