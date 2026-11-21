@@ -41,17 +41,12 @@ class WindowFrame extends StatelessWidget {
       height: window.rect.height,
       child: IgnorePointer(
         ignoring: window.minimized,
-        // No Opacity/Transform animation here: both break Android platform
-        // views (the noVNC WebView) and turn the window into a blank surface.
-        // Entry motion is handled by AnimatedPositioned and the shadow.
         child: Listener(
           onPointerDown: (_) => desktop.focus(window.id),
           child: RepaintBoundary(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: radius,
-                // Sequoia casts one wide, soft shadow per window and lifts the
-                // focused window instead of recolouring its chrome.
                 boxShadow: maxed
                     ? null
                     : Sequoia.panelShadow(opacity: focused ? 0.5 : 0.3),
@@ -74,8 +69,6 @@ class WindowFrame extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-          ),
             ),
           ),
         ),
@@ -104,12 +97,33 @@ class _TitleBar extends StatelessWidget {
       context: context,
       backgroundColor: MicroColors.panelSolid,
       showDragHandle: true,
-      builder: (context) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(leading: const Icon(Icons.vertical_split_rounded), title: const Text('Tile Left'), onTap: () => Navigator.pop(context, 'left')),
-        ListTile(leading: const Icon(Icons.vertical_split_rounded), title: const Text('Tile Right'), onTap: () => Navigator.pop(context, 'right')),
-        ListTile(leading: const Icon(Icons.center_focus_strong_rounded), title: const Text('Center Window'), onTap: () => Navigator.pop(context, 'center')),
-        ListTile(leading: const Icon(Icons.open_in_full_rounded), title: const Text('Zoom'), onTap: () => Navigator.pop(context, 'zoom')),
-      ])),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.vertical_split_rounded),
+              title: const Text('Tile Left'),
+              onTap: () => Navigator.pop(context, 'left'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.vertical_split_rounded),
+              title: const Text('Tile Right'),
+              onTap: () => Navigator.pop(context, 'right'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.center_focus_strong_rounded),
+              title: const Text('Center Window'),
+              onTap: () => Navigator.pop(context, 'center'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.open_in_full_rounded),
+              title: const Text('Zoom'),
+              onTap: () => Navigator.pop(context, 'zoom'),
+            ),
+          ],
+        ),
+      ),
     );
     if (!context.mounted || action == null) return;
     switch (action) {
@@ -135,7 +149,7 @@ class _TitleBar extends StatelessWidget {
       onLongPress: () => _showWindowActions(context),
       onPanUpdate: window.maximized
           ? null
-          : (d) => desktop.move(window.id, d.delta, screen),
+          : (details) => desktop.move(window.id, details.delta, screen),
       child: Container(
         height: touchOptimized ? 52 : Sequoia.titleBarHeight,
         decoration: BoxDecoration(
@@ -222,7 +236,11 @@ class _TrafficLights extends StatelessWidget {
 }
 
 class _Light extends StatelessWidget {
-  const _Light({required this.color, required this.onTap, this.touchOptimized = false});
+  const _Light({
+    required this.color,
+    required this.onTap,
+    this.touchOptimized = false,
+  });
 
   final Color color;
   final VoidCallback onTap;
@@ -230,21 +248,24 @@ class _Light extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final targetSize = touchOptimized ? 40.0 : Sequoia.trafficLightSize;
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        width: touchOptimized ? 40 : Sequoia.trafficLightSize,
-        height: touchOptimized ? 40 : Sequoia.trafficLightSize,
+        width: targetSize,
+        height: targetSize,
         child: Center(
           child: Container(
             width: Sequoia.trafficLightSize,
             height: Sequoia.trafficLightSize,
             decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.black.withValues(alpha: 0.15),
-            width: 0.5,
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.black.withValues(alpha: 0.15),
+                width: 0.5,
+              ),
+            ),
           ),
         ),
       ),
