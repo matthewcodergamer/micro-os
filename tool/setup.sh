@@ -967,7 +967,7 @@ mkdir -p /root/.config/openbox
 cat > /root/.config/openbox/menu.xml <<'MENU'
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_menu><menu id="root-menu" label="MicroOS">
-<item label="Chromium"><action name="Execute"><command>/usr/local/bin/start-browser.sh</command></action></item>
+<item label="Google Chrome"><action name="Execute"><command>/usr/local/bin/start-browser.sh</command></action></item>
 <item label="Terminal"><action name="Execute"><command>xterm -fa Monospace -fs 10</command></action></item>
 </menu></openbox_menu>
 MENU
@@ -1004,7 +1004,7 @@ wait_for_novnc_http() {
 if ! wait_for_port 6080 80 || ! wait_for_novnc_http || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then log "ERROR: noVNC HTTP bridge failed its 127.0.0.1:6080 health check"; dump_diagnostics; exit 1; fi
 log "websockify/noVNC HTTP ready; pid=$WEBSOCKIFY_PID port=6080 -> localhost:5900"
 dump_diagnostics
-# Do not launch Chromium as a side effect of starting the desktop service.
+# Do not launch Google Chrome as a side effect of starting the desktop service.
 log "display :1 READY (Xvfb, Openbox, x11vnc/RFB, websockify/noVNC HTTP)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
 log "ERROR: one or more display services exited unexpectedly"
@@ -1024,7 +1024,7 @@ echo "[microos] display stopped"
 EOF
 chmod 755 /root/.microos/stop-gui.sh
 
-# Chromium is launched through the unprivileged ARM64 wrapper above.
+# Google Chrome is launched through the unprivileged ARM64 wrapper above.
 
 # Optional Steam/Box64 feasibility check. This intentionally does not install
 # Steam or alter the guest: the Steam Linux client has 32-bit components and
