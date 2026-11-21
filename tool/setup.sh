@@ -117,11 +117,151 @@ stage 63 "Installing core toolchain"
 apt-get install "${APT_OPTS[@]}" \
   ca-certificates curl wget gnupg apt-utils locales \
   git git-lfs openssh-client \
-  build-essential pkg-config make cmake openjdk-21-jdk-headless \
+  build-essential pkg-config make cmake openjdk-17-jdk-headless openjdk-21-jdk-headless \
   python3 python3-pip python3-venv python3-dev \
   unzip zip xz-utils tar less nano vim-tiny \
   procps file jq tmux sudo \
   || warn "some core packages failed to install"
+
+# Android reverse engineering, traffic inspection and creative workstation tools.
+# Keep these in the ARM64 Ubuntu guest so commands work from every terminal session.
+stage 66 "Installing Android and security toolchain"
+SECURITY_APT_PACKAGES=(
+  adb fastboot apktool mitmproxy blender
+)
+AVAILABLE_SECURITY_PACKAGES=()
+for package in "${SECURITY_APT_PACKAGES[@]}"; do
+  if apt-cache show "$package" 2>/dev/null | grep -q "^Package: $package$"; then
+    AVAILABLE_SECURITY_PACKAGES+=("$package")
+  else
+    warn "$package is not available for this Ubuntu ARM64 repository snapshot"
+  fi
+done
+if [ "${#AVAILABLE_SECURITY_PACKAGES[@]}" -gt 0 ]; then
+  apt-get install "${APT_OPTS[@]}" "${AVAILABLE_SECURITY_PACKAGES[@]}" || warn "some Android/security/creative packages failed to install"
+fi
+
+# JADX is distributed as an upstream ZIP (Ubuntu Noble does not publish a
+# native JADX package for this ARM64 image). Pin the release and GitHub's
+# release-asset digest so the executable is reproducible and verified.
+stage 67 "Installing JADX ARM64"
+JADX_VERSION=1.5.7
+JADX_SHA256=1755e4242ade71a077438723689f404079592ec7764a3a0572f98fef94ebcbf3
+JADX_ARCHIVE="/tmp/jadx-$JADX_VERSION.zip"
+if curl --fail --location --retry 3 --connect-timeout 20 --max-time 600 \
+    "https://github.com/skylot/jadx/releases/download/v$JADX_VERSION/jadx-$JADX_VERSION.zip" \
+    --output "$JADX_ARCHIVE" \
+    && echo "$JADX_SHA256  $JADX_ARCHIVE" | sha256sum --check --status; then
+  install -d /opt/jadx
+  unzip -q -o "$JADX_ARCHIVE" -d /opt/jadx
+  test -x /opt/jadx/bin/jadx
+  ln -sfn /opt/jadx/bin/jadx /usr/local/bin/jadx
+  chmod 755 /opt/jadx/bin/jadx
+  log "JADX $JADX_VERSION installed and SHA-256 verified"
+else
+  warn "JADX download or checksum verification failed"
+fi
+rm -f "$JADX_ARCHIVE"
+
+# PEP 668-safe Python tools: never modify Ubuntu's externally-managed Python.
+SECURITY_VENV=/opt/microos-security-tools
+if [ ! -x "$SECURITY_VENV/bin/python" ]; then
+  python3 -m venv "$SECURITY_VENV" || warn "could not create security-tools virtualenv"
+fi
+if [ -x "$SECURITY_VENV/bin/pip" ]; then
+  # Install independently so one optional wheel failure cannot roll back all
+  # three tools. The release-rootfs verifier below still requires every CLI.
+  for python_package in frida-tools objection apkid; do
+    "$SECURITY_VENV/bin/pip" install --disable-pip-version-check --no-cache-dir "$python_package" || warn "$python_package installation failed"
+  done
+  for command_name in frida frida-ps frida-ls-devices objection apkid; do
+    if [ -x "$SECURITY_VENV/bin/$command_name" ]; then
+      ln -sfn "$SECURITY_VENV/bin/$command_name" "/usr/local/bin/$command_name"
+    fi
+  done
+  # Preserve the familiar pip3 install workflow while keeping Ubuntu's
+  # externally-managed system Python untouched.
+  cat > /usr/local/bin/pip3 <<'PIP3'
+#!/usr/bin/env bash
+exec /opt/microos-security-tools/bin/pip "$@"
+PIP3
+  chmod 755 /usr/local/bin/pip3
+  cat > /etc/profile.d/microos-python-tools.sh <<'PYTHON_PATH'
+export PATH="/opt/microos-security-tools/bin:$PATH"
+PYTHON_PATH
+fi
+
+# A fast, macOS-inspired interactive shell without a heavy framework.
+stage 68 "Installing the Misty terminal experience"
+SHELL_APT_PACKAGES=(
+  zsh zsh-autosuggestions zsh-syntax-highlighting
+  fzf ripgrep fd-find bat htop tree neovim
+)
+AVAILABLE_SHELL_PACKAGES=()
+for package in "${SHELL_APT_PACKAGES[@]}"; do
+  if apt-cache show "$package" 2>/dev/null | grep -q "^Package: $package$"; then
+    AVAILABLE_SHELL_PACKAGES+=("$package")
+  else
+    warn "$package is not available for this Ubuntu ARM64 repository snapshot"
+  fi
+done
+if [ "${#AVAILABLE_SHELL_PACKAGES[@]}" -gt 0 ]; then
+  apt-get install "${APT_OPTS[@]}" "${AVAILABLE_SHELL_PACKAGES[@]}" || warn "some interactive shell packages failed to install"
+fi
+if command -v fdfind >/dev/null 2>&1; then ln -sfn "$(command -v fdfind)" /usr/local/bin/fd; fi
+if command -v batcat >/dev/null 2>&1; then ln -sfn "$(command -v batcat)" /usr/local/bin/bat; fi
+if command -v zsh >/dev/null 2>&1; then
+  cat > /root/.zshrc <<'ZSHRC'
+export TERM="${TERM:-xterm-256color}"
+export EDITOR=nvim
+export VISUAL=nvim
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=20000
+SAVEHIST=20000
+setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_ALL_DUPS HIST_REDUCE_BLANKS
+setopt AUTO_CD AUTO_PUSHD PUSHD_IGNORE_DUPS INTERACTIVE_COMMENTS NO_BEEP
+autoload -Uz compinit && compinit -C
+bindkey '^[[A' history-search-backward
+bindkey '^[[B' history-search-forward
+alias ll='ls -lah --color=auto'
+alias la='ls -A'
+alias grep='grep --color=auto'
+alias cls='clear'
+alias c='clear'
+_misty_git_branch() {
+  command git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return
+  local branch
+  branch="$(command git branch --show-current 2>/dev/null)"
+  [[ -n "$branch" ]] && print -n " %F{magenta}git:$branch%f"
+}
+setopt PROMPT_SUBST
+PROMPT='%F{green}%n%f@%F{cyan}%m%f %F{blue}%~%f$(_misty_git_branch)
+%F{magenta}❯%f '
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
+[[ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+[[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]] && source /usr/share/doc/fzf/examples/key-bindings.zsh
+[[ -f /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+ZSHRC
+  chmod 644 /root/.zshrc
+fi
+
+# Burp Suite Community has a native Linux ARM64 installer. Pin the verified
+# release/checksum so a changed upstream download can never be installed silently.
+stage 69 "Installing Burp Suite Community (ARM64)"
+if [ "$(dpkg --print-architecture 2>/dev/null || true)" = arm64 ]; then
+  BURP_INSTALLER=/tmp/burpsuite_community_arm64.sh
+  if curl -fL --connect-timeout 20 --max-time 600 \
+      "https://portswigger.net/burp/releases/download?product=community&type=LinuxArm64" \
+      -o "$BURP_INSTALLER"; then
+    echo "6ddcd34bf055693106d8e624f1341ef61e00e86d3d950dcf136b43578caf55f3  $BURP_INSTALLER" | sha256sum -c - && \
+      chmod +x "$BURP_INSTALLER" && \
+      timeout 600 "$BURP_INSTALLER" -q -Dinstall4j.suppressUnattendedReboot=true || \
+      warn "Burp Suite ARM64 installer failed checksum or installation; see setup log"
+  else
+    warn "Burp Suite ARM64 download failed; other workstation tools remain available"
+  fi
+  rm -f "$BURP_INSTALLER"
+fi
 
 # Generate the UTF-8 locale explicitly; merely exporting LANG does not create it.
 if [ -f /etc/locale.gen ]; then
@@ -324,8 +464,8 @@ rm -rf /tmp/WhiteSur-cursors
 
 # -----------------------------------------------------------------------------
 # 5. Browser
-# Chromium is pre-baked as a native ARM64 .deb; do not use Ubuntu Snap.
-stage 84 "Preparing Chromium desktop browser"
+# Official Google Chrome Stable is pre-baked as a native ARM64 .deb.
+stage 84 "Preparing Google Chrome desktop browser"
 apt-get install "${APT_OPTS[@]}" passwd util-linux || warn "browser user tools unavailable"
 if ! id microos-browser >/dev/null 2>&1; then
   useradd --system --create-home --home-dir /home/microos-browser --shell /usr/sbin/nologin microos-browser || warn "browser user creation failed"
@@ -336,11 +476,12 @@ cat > /usr/local/bin/start-browser.sh <<'BROWSER'
 set -euo pipefail
 export DISPLAY="${DISPLAY:-:1}"
 BROWSER_HOME=/home/microos-browser
-CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || true)"
-if [ -z "$CHROMIUM_BIN" ]; then echo "[microos] Chromium .deb is not installed" >&2; exit 127; fi
-install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_HOME/.config/chromium" "$BROWSER_HOME/.config/chromium/Default" "$BROWSER_HOME/.cache"
-CHROMIUM_PREFS="$BROWSER_HOME/.config/chromium/Default/Preferences"
-python3 - "$CHROMIUM_PREFS" <<'CHROMIUM_PREFS'
+BROWSER_BIN="$(command -v google-chrome-stable || true)"
+if [ -z "$BROWSER_BIN" ]; then echo "[microos] Official Google Chrome Stable ARM64 is not installed" >&2; exit 127; fi
+BROWSER_PROFILE="$BROWSER_HOME/.config/google-chrome"
+install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME" "$BROWSER_PROFILE" "$BROWSER_PROFILE/Default" "$BROWSER_HOME/.cache"
+BROWSER_PREFS="$BROWSER_PROFILE/Default/Preferences"
+python3 - "$BROWSER_PREFS" <<'BROWSER_PREFS'
 import json
 import os
 import sys
@@ -374,12 +515,12 @@ if changed or not os.path.exists(path):
     with open(temporary, "w", encoding="utf-8") as target:
         json.dump(preferences, target, separators=(",", ":"))
     os.replace(temporary, path)
-CHROMIUM_PREFS
-chown microos-browser:microos-browser "$CHROMIUM_PREFS"
+BROWSER_PREFS
+chown microos-browser:microos-browser "$BROWSER_PREFS"
 
-# Seed a useful native Chromium bookmarks bar once. Never replace a user's
+# Seed a useful Google Chrome bookmarks bar once. Never replace a user's
 # existing Bookmarks database after their first browser launch.
-BOOKMARKS_FILE="$BROWSER_HOME/.config/chromium/Default/Bookmarks"
+BOOKMARKS_FILE="$BROWSER_PROFILE/Default/Bookmarks"
 if [ ! -s "$BOOKMARKS_FILE" ]; then
   cat > "$BOOKMARKS_FILE" <<'BOOKMARKS'
 {
@@ -408,21 +549,21 @@ fi
 # Ensure the shared X11 session has only one browser engine at a time.
 pkill -u microos-browser -f '[f]irefox' 2>/dev/null || true
 sleep 0.4
-CHROMIUM_EXTRA_ARGS=(
+BROWSER_EXTRA_ARGS=(
   --ignore-gpu-blocklist
   --canvas-oop-rasterization
 )
 if [ "${MICROOS_DISABLE_GPU:-0}" = "1" ]; then
   # Used only by the CI Xvfb window test. Phone launches keep acceleration enabled.
-  CHROMIUM_EXTRA_ARGS+=(--disable-gpu)
+  BROWSER_EXTRA_ARGS+=(--disable-gpu)
 fi
 if [ "${MICROOS_HARDWARE_GPU_ONLY:-0}" = "1" ]; then
   # Opt-in only: disabling SwiftShader/software fallback can blank rendering on
   # devices where PRoot cannot expose a usable host GPU. Enable after device test.
-  CHROMIUM_EXTRA_ARGS+=(--disable-software-rasterizer)
+  BROWSER_EXTRA_ARGS+=(--disable-software-rasterizer)
 fi
-exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
-  "${CHROMIUM_EXTRA_ARGS[@]}" \
+exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$BROWSER_BIN" \
+  "${BROWSER_EXTRA_ARGS[@]}" \
   --no-sandbox \
   --disable-gpu-sandbox \
   --process-per-site \
@@ -435,7 +576,7 @@ exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" X
   --disk-cache-size=67108864 --media-cache-size=16777216 \
   --start-maximized \
   --restore-last-session \
-  --user-data-dir="$BROWSER_HOME/.config/chromium" "$@"
+  --user-data-dir="$BROWSER_PROFILE" "$@"
 BROWSER
 chmod 755 /usr/local/bin/start-browser.sh
 
@@ -529,7 +670,7 @@ esac
 # _NET_ACTIVE_WINDOW: some Xvfb/proot window-manager configurations omit it.
 WINDOW_ID="$(xdotool search --class 'chromium|Chromium|chrome|Chrome|firefox|Firefox|Navigator' 2>/dev/null | tail -n 1 || true)"
 if [ -z "$WINDOW_ID" ]; then
-  echo "[microos] no Chromium/Firefox window is available" >&2
+  echo "[microos] no Google Chrome/Firefox window is available" >&2
   exit 1
 fi
 
@@ -600,55 +741,87 @@ apt-get install "${APT_OPTS[@]}" ca-certificates || warn "ca-certificates packag
 update-ca-certificates --fresh || warn "certificate refresh failed; retrying once"
 update-ca-certificates || true
 
-stage 91 "Installing OpenCode"
-# Keep npm's V8 heap bounded for low-memory Android devices running proot.
-# The official installer is preferred; npm is a bounded fallback, not a
-# prerequisite for the rest of the Linux environment.
-export NODE_OPTIONS="--max-old-space-size=384"
-apt-get install "${APT_OPTS[@]}" curl wget unzip tar ca-certificates || warn "OpenCode prerequisites could not all be installed"
-mkdir -p "$TMPDIR"
+stage 91 "Installing latest official OpenCode ARM64 release"
+# Resolve the current upstream release at build time, then verify its exact
+# GitHub-published asset digest before installing. This avoids silently
+# retaining a stale CLI or depending on a mutable shell installer.
+apt-get install "${APT_OPTS[@]}" curl wget tar ca-certificates python3 || {
+  echo "[microos] OpenCode prerequisites failed" >&2
+  exit 1
+}
+mkdir -p "$TMPDIR" /root/.opencode/bin /usr/local/share/microos
 chmod 1777 "$TMPDIR"
 update-ca-certificates || true
 
-if ! command -v opencode >/dev/null 2>&1 && [ ! -x /root/.opencode/bin/opencode ]; then
-  installed=0
-  for attempt in 1 2 3; do
-    log "OpenCode installer download attempt $attempt/3"
-    rm -f /tmp/opencode-install.sh
-    if curl --silent --show-error --fail --location \
-        --connect-timeout 15 --max-time 90 --retry 2 --retry-delay 3 \
-        --retry-all-errors \
-        https://opencode.ai/install --output /tmp/opencode-install.sh \
-        && [ -s /tmp/opencode-install.sh ]; then
-      log "OpenCode installer downloaded ($(wc -c < /tmp/opencode-install.sh) bytes)"
-      if timeout 240 bash /tmp/opencode-install.sh; then
-        if command -v opencode >/dev/null 2>&1 || [ -x /root/.opencode/bin/opencode ]; then
-          installed=1
-          break
+OPENCODE_RELEASE_JSON="$TMPDIR/opencode-release.json"
+OPENCODE_ARCHIVE="$TMPDIR/opencode-linux-arm64.tar.gz"
+OPENCODE_EXTRACT="$TMPDIR/opencode-extract"
+OPENCODE_RELEASE_INFO="$TMPDIR/opencode-release-info"
+OPENCODE_INSTALLED=0
+for attempt in 1 2 3; do
+  log "Resolving latest OpenCode ARM64 release (attempt $attempt/3)"
+  rm -f "$OPENCODE_RELEASE_JSON" "$OPENCODE_ARCHIVE" "$OPENCODE_RELEASE_INFO"
+  if curl --silent --show-error --fail --location \
+      --connect-timeout 20 --max-time 120 --retry 2 --retry-all-errors \
+      -H "Accept: application/vnd.github+json" \
+      https://api.github.com/repos/anomalyco/opencode/releases/latest \
+      --output "$OPENCODE_RELEASE_JSON" \
+      && python3 - "$OPENCODE_RELEASE_JSON" "$OPENCODE_RELEASE_INFO" <<'PYOPENCODE'
+import json, pathlib, sys
+release = json.loads(pathlib.Path(sys.argv[1]).read_text())
+asset = next((a for a in release.get("assets", [])
+              if a.get("name") == "opencode-linux-arm64.tar.gz"), None)
+digest = (asset or {}).get("digest") or ""
+if not release.get("tag_name") or not asset or not digest.startswith("sha256:"):
+    raise SystemExit("Latest OpenCode release has no ARM64 archive with a SHA-256 digest")
+pathlib.Path(sys.argv[2]).write_text(
+    release["tag_name"] + "\n" + asset["browser_download_url"] + "\n" + digest.split(":", 1)[1] + "\n"
+)
+PYOPENCODE
+    then
+      mapfile -t OPENCODE_INFO < "$OPENCODE_RELEASE_INFO"
+      OPENCODE_VERSION="${OPENCODE_INFO[0]}"
+      OPENCODE_URL="${OPENCODE_INFO[1]}"
+      OPENCODE_SHA256="${OPENCODE_INFO[2]}"
+      log "Latest upstream OpenCode: $OPENCODE_VERSION"
+      if curl --silent --show-error --fail --location \
+          --connect-timeout 20 --max-time 600 --retry 2 --retry-all-errors \
+          "$OPENCODE_URL" --output "$OPENCODE_ARCHIVE" \
+          && echo "$OPENCODE_SHA256  $OPENCODE_ARCHIVE" | sha256sum --check --status; then
+        rm -rf "$OPENCODE_EXTRACT"
+        mkdir -p "$OPENCODE_EXTRACT"
+        tar -xzf "$OPENCODE_ARCHIVE" -C "$OPENCODE_EXTRACT" --no-same-owner
+        OPENCODE_BINARY="$(find "$OPENCODE_EXTRACT" -type f -name opencode -print -quit)"
+        if [ -n "$OPENCODE_BINARY" ]; then
+          install -m 0755 "$OPENCODE_BINARY" /root/.opencode/bin/opencode
+          ln -sfn /root/.opencode/bin/opencode /usr/local/bin/opencode
+          ACTUAL_OPENCODE_VERSION="$(/root/.opencode/bin/opencode --version 2>&1 | head -n 1 | tr -d '\r')"
+          EXPECTED_OPENCODE_VERSION="${OPENCODE_VERSION#v}"
+          if [ "$ACTUAL_OPENCODE_VERSION" = "$EXPECTED_OPENCODE_VERSION" ]; then
+            printf '%s\n' "$ACTUAL_OPENCODE_VERSION" > /usr/local/share/microos/opencode-version
+            OPENCODE_INSTALLED=1
+            log "OpenCode $ACTUAL_OPENCODE_VERSION installed; GitHub SHA-256 verified"
+            break
+          fi
+          warn "OpenCode version mismatch: expected $OPENCODE_VERSION, got $ACTUAL_OPENCODE_VERSION"
+        else
+          warn "OpenCode archive contained no executable named opencode"
         fi
-        warn "installer exited successfully but no OpenCode executable was found"
       else
-        warn "OpenCode installer failed or timed out on attempt $attempt"
+        warn "OpenCode ARM64 download or SHA-256 verification failed"
       fi
     else
-      warn "OpenCode installer download failed or timed out on attempt $attempt"
+      warn "Could not resolve latest OpenCode release metadata"
     fi
-    sleep $((attempt * 5))
-  done
-  if [ "$installed" -ne 1 ]; then
-    warn "OpenCode not installed. Skipping npm fallback to avoid exhausting phone RAM; Linux remains usable."
+  sleep $((attempt * 5))
+done
+rm -rf "$OPENCODE_EXTRACT" "$OPENCODE_ARCHIVE" "$OPENCODE_RELEASE_JSON" "$OPENCODE_RELEASE_INFO"
+if [ "$OPENCODE_INSTALLED" -ne 1 ]; then
+  if [ "${MICROOS_REQUIRE_LATEST_OPENCODE:-0}" = "1" ]; then
+    echo "[microos] refusing to ship a rootfs without the latest verified OpenCode ARM64 release" >&2
+    exit 1
   fi
-fi
-
-# Verify the binary exists; a successful download attempt alone is not proof.
-if command -v opencode >/dev/null 2>&1; then
-  log "OpenCode verified: $(command -v opencode)"
-  opencode --version 2>&1 | head -n 1 || true
-elif [ -x /root/.opencode/bin/opencode ]; then
-  log "OpenCode verified: /root/.opencode/bin/opencode"
-  /root/.opencode/bin/opencode --version 2>&1 | head -n 1 || true
-else
-  warn "OpenCode verification failed: executable not found; Linux setup will continue without it"
+  warn "Latest OpenCode could not be installed; retaining any existing binary for this interactive setup"
 fi
 
 # -----------------------------------------------------------------------------
@@ -848,7 +1021,7 @@ mkdir -p /root/.config/openbox
 cat > /root/.config/openbox/menu.xml <<'MENU'
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_menu><menu id="root-menu" label="MicroOS">
-<item label="Chromium"><action name="Execute"><command>/usr/local/bin/start-browser.sh</command></action></item>
+<item label="Google Chrome"><action name="Execute"><command>/usr/local/bin/start-browser.sh</command></action></item>
 <item label="Terminal"><action name="Execute"><command>xterm -fa Monospace -fs 10</command></action></item>
 </menu></openbox_menu>
 MENU
@@ -885,7 +1058,7 @@ wait_for_novnc_http() {
 if ! wait_for_port 6080 80 || ! wait_for_novnc_http || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then log "ERROR: noVNC HTTP bridge failed its 127.0.0.1:6080 health check"; dump_diagnostics; exit 1; fi
 log "websockify/noVNC HTTP ready; pid=$WEBSOCKIFY_PID port=6080 -> localhost:5900"
 dump_diagnostics
-# Do not launch Chromium as a side effect of starting the desktop service.
+# Do not launch Google Chrome as a side effect of starting the desktop service.
 log "display :1 READY (Xvfb, Openbox, x11vnc/RFB, websockify/noVNC HTTP)"
 while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
 log "ERROR: one or more display services exited unexpectedly"
@@ -905,7 +1078,7 @@ echo "[microos] display stopped"
 EOF
 chmod 755 /root/.microos/stop-gui.sh
 
-# Chromium is launched through the unprivileged ARM64 wrapper above.
+# Google Chrome is launched through the unprivileged ARM64 wrapper above.
 
 # Optional Steam/Box64 feasibility check. This intentionally does not install
 # Steam or alter the guest: the Steam Linux client has 32-bit components and

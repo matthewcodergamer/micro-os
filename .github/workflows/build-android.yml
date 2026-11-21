@@ -152,7 +152,7 @@ jobs:
           grep -q '_columnView' lib/ui/apps/files_app.dart
           grep -q 'Move to Trash' lib/ui/apps/files_app.dart
           grep -q 'Duplicate' lib/ui/apps/files_app.dart
-          grep -q 'Do not launch Chromium as a side effect' tool/setup.sh
+          grep -q 'Do not launch Google Chrome as a side effect' tool/setup.sh
           ! grep -q "start-browser.sh --new-window chrome://newtab/" tool/setup.sh
           grep -q 'dump_diagnostics' tool/setup.sh
           grep -q 'Openbox did not publish its EWMH' tool/setup.sh
@@ -197,8 +197,19 @@ jobs:
           zstd -dc "$ROOTFS" | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
-          grep -qxE '(\./)?usr/bin/chromium' /tmp/rootfs-archive.list
-          grep -qxE '(\./)?usr/lib/chromium/chromium' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/adb' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/fastboot' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/apktool' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/mitmproxy' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/blender' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/jadx' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/jadx/bin/jadx' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/frida' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/objection' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/apkid' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/share/microos/opencode-version' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/google-chrome-stable' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/google/chrome/chrome' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-browser.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/start-firefox.sh' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browser-control' /tmp/rootfs-archive.list
@@ -274,6 +285,22 @@ jobs:
           zstd -dc assets/rootfs/rootfs.tar.zst | tar -tf - > /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/ready' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.microos/image-version' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/adb' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/fastboot' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/apktool' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/mitmproxy' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/blender' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/jadx' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/jadx/bin/jadx' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/pip3' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/frida' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/objection' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/apkid' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/share/microos/opencode-version' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/google-chrome-stable' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?opt/google/chrome/chrome' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/zsh' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/.zshrc' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list

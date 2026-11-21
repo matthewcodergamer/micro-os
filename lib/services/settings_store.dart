@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/terminal_profiles.dart';
+import '../core/experience_mode.dart';
 import '../core/wallpapers.dart';
 
 /// Stores ordinary UI settings separately from secrets.
@@ -31,13 +32,14 @@ class SettingsStore extends ChangeNotifier {
   static const _kScreenBrightness = 'display.brightness';
   static const _kTrackpadMode = 'desktop.trackpad_mode';
   static const _kTrackpadSpeed = 'desktop.trackpad_speed';
+  static const _kExperienceMode = 'desktop.experience_mode';
 
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 
   bool singleProcessBrowser = false;
-  String browserEngine = 'chromium';
+  String browserEngine = 'chrome';
   String browserHomePage = 'https://www.google.com';
   String? installedAt;
   String openCodeTheme = 'light';
@@ -57,6 +59,7 @@ class SettingsStore extends ChangeNotifier {
   double dockScale = 1.0;
   bool dockMagnification = true;
   bool systemBarsVisible = false;
+  ExperienceMode? experienceMode;
   bool trackpadMode = true;
   double trackpadSpeed = 1.35;
 
@@ -70,7 +73,7 @@ class SettingsStore extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     singleProcessBrowser = prefs.getBool(_kSingleProcess) ?? false;
-    browserEngine = prefs.getString(_kBrowserEngine) == 'firefox' ? 'firefox' : 'chromium';
+    browserEngine = prefs.getString(_kBrowserEngine) == 'firefox' ? 'firefox' : 'chrome';
     browserHomePage = _validHomePage(prefs.getString(_kBrowserHomePage)) ?? 'https://www.google.com';
     installedAt = prefs.getString(_kInstalledAt);
     openCodeTheme = prefs.getString(_kOpenCodeTheme) ?? 'light';
@@ -89,7 +92,8 @@ class SettingsStore extends ChangeNotifier {
     displayResolution = const {'1024x768', '1280x720', '1600x900', '1920x1080'}.contains(savedResolution) ? savedResolution : '1280x720';
     screenBrightnessConfigured = prefs.containsKey(_kScreenBrightness);
     screenBrightness = (prefs.getDouble(_kScreenBrightness) ?? 0.75).clamp(0.05, 1.0).toDouble();
-    trackpadMode = prefs.getBool(_kTrackpadMode) ?? true;
+    experienceMode = ExperienceModePresentation.fromStorage(prefs.getString(_kExperienceMode));
+    trackpadMode = prefs.getBool(_kTrackpadMode) ?? (experienceMode?.usesTrackpadPointer ?? true);
     trackpadSpeed = (prefs.getDouble(_kTrackpadSpeed) ?? 1.35).clamp(0.7, 2.2).toDouble();
 
     // Migrate older installations that kept the password in plain preferences.
@@ -139,7 +143,7 @@ class SettingsStore extends ChangeNotifier {
   }
 
   Future<void> setBrowserEngine(String value) async {
-    browserEngine = value == 'firefox' ? 'firefox' : 'chromium';
+    browserEngine = value == 'firefox' ? 'firefox' : 'chrome';
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kBrowserEngine, browserEngine);
@@ -264,6 +268,15 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kWallpaper, wallpaper);
+  }
+
+  Future<void> setExperienceMode(ExperienceMode value) async {
+    experienceMode = value;
+    trackpadMode = value.usesTrackpadPointer;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kExperienceMode, value.storageValue);
+    await prefs.setBool(_kTrackpadMode, trackpadMode);
   }
 
   Future<void> setTrackpadMode(bool value) async {
