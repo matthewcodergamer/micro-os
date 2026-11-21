@@ -258,7 +258,7 @@ PLAYWRIGHT_SMOKE
       echo "x11vnc did not open port 5901" >&2
       exit 1
     }
-    websockify --verbose --host=127.0.0.1 --web /usr/share/novnc 6081 localhost:5901 \
+    websockify --verbose --web /usr/share/novnc 127.0.0.1:6081 localhost:5901 \
       > /tmp/microos-novnc-websockify.log 2>&1 &
     MICROOS_WEBSOCKIFY_PID=$!
     for attempt in $(seq 1 40); do
