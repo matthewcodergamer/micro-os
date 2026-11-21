@@ -416,13 +416,13 @@ kernel.
   Android version, device memory, storage speed, and manufacturer restrictions.
   Heavy desktop or browser workloads may be slow, use substantial memory,
   increase battery use, or cause heat.
-- **Storage and network:** first-run Linux provisioning downloads roughly
-  700 MB–1.2 GB of packages. Use Wi-Fi and have at least 1 GB free before
-  starting; additional working space is recommended.
-- **Browser:** Misty OS installs **Falkon**, not the Ubuntu Chromium Snap.
-  Chromium on Ubuntu arm64 is distributed as a snap, and snapd cannot run
-  inside this proot environment. Falkon is a desktop browser using
-  QtWebEngine (Chromium's Blink renderer and V8 engine).
+- **Storage and network:** first-run Linux provisioning downloads a large ARM64 workstation image,
+  including browsers, developer tools, Blender and Burp Suite. Use Wi-Fi and
+  keep several GB of free storage available for downloads, unpacking and caches.
+- **Browser:** Misty OS installs the official **Google Chrome Stable ARM64**
+  package as a normal X11 desktop browser, with Firefox as an alternate engine.
+  The browser uses its own persistent profile and downloads to Android shared
+  storage. Chromium Snap is not used inside PRoot.
 - **ZRAM:** Misty OS cannot enable or configure kernel ZRAM. The proot guest
   shares Android's kernel and lacks the privileges required to manage swap.
   The app can display host memory/swap information, but it does not control
@@ -457,26 +457,14 @@ about "Linux on a phone" are not true. Here is the honest version.
 | Developer toolchain installed on first boot | Implemented |
 | Android storage visible inside the guest at `/mnt/android` | Implemented (needs All-files access) |
 | GitHub PAT → `git credential.helper store` | Implemented |
-| Desktop browser inside X11 | Implemented with Falkon; see below |
+| Desktop browser inside X11 | Implemented with Google Chrome Stable ARM64 and Firefox; see below |
 | X11 desktop rendered in a Flutter window | Implemented via noVNC, not via a native X surface |
 | ZRAM enabled by the app | **No** — see "ZRAM" below |
 | iOS build with a Linux guest | **No** — see "iOS" below |
 
-### Falkon instead of Chromium
+### Google Chrome Stable on ARM64
 
-Ubuntu arm64 ships Chromium **only as a snap**, and snapd cannot run inside
-proot. So `apt-get install chromium` cannot work on Ubuntu, no matter which
-flags are passed.
-
-The app installs **Falkon** instead: a real desktop browser, packaged as a
-normal `.deb`, built on **QtWebEngine — which is Chromium's Blink renderer and
-V8 engine**. It is not a WebView wrapper and it is not a mobile browser.
-
-The memory flags still apply. Falkon receives the Chromium flags through
-`QTWEBENGINE_CHROMIUM_FLAGS`. `--single-process` is available as an opt-in
-toggle in Settings because upstream deprecated it and it crashes on many
-pages — `--renderer-process-limit=1` gets most of the memory benefit without
-the crashes.
+Misty OS provisions Google's native Linux ARM64 `.deb` package and verifies its architecture and executable before the rootfs is exported. It launches as a normal X11 browser window with tabs, address bar, bookmarks, persistent profile storage and Google account sign-in. Firefox remains available as an alternate engine. Chromium's Ubuntu Snap package is not required or used inside PRoot.
 
 ### X11
 
