@@ -117,21 +117,24 @@ PLAYWRIGHT_SMOKE
     test -s /tmp/microos-playwright-smoke.png
     rm -f /tmp/microos-playwright-smoke.png
 
-    echo "==> Installing native ARM64 Chromium from the Xtradeb .deb PPA (no Snap)"
+    echo "==> Installing official Google Chrome Stable for Linux ARM64"
     apt-get update -y
-    apt-get install -y --no-install-recommends software-properties-common ca-certificates
-    add-apt-repository -y ppa:xtradeb/apps
-    apt-get update -y
-    apt-get install -y --no-install-recommends chromium libgbm1 libx11-xcb1 libnss3 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libxkbcommon0 libwayland-client0 libegl1 libgl1
-    CHROMIUM_BIN="$(command -v chromium)"
-    CHROMIUM_REAL=/usr/lib/chromium/chromium
-    test -x "$CHROMIUM_REAL"
-    file "$CHROMIUM_REAL" | grep -Eqi "ARM aarch64|ARM64"
-    if ldd "$CHROMIUM_REAL" 2>&1 | tee /tmp/chromium-ldd.txt | grep -q "not found"; then cat /tmp/chromium-ldd.txt >&2; exit 1; fi
-    "$CHROMIUM_BIN" --version
-    runuser -u microos-browser -- env HOME=/home/microos-browser timeout 90 "$CHROMIUM_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --dump-dom "data:text/html,<title>MicroOS Chromium smoke test</title><h1>Chromium is ready</h1>" > /tmp/microos-chromium-smoke.html
-    grep -q "Chromium is ready" /tmp/microos-chromium-smoke.html
-    echo "==> Chromium ARM64 startup and DOM rendering test passed"
+    apt-get install -y --no-install-recommends ca-certificates curl
+    GOOGLE_CHROME_DEB=/tmp/google-chrome-stable_current_arm64.deb
+    curl --fail --location --retry 3 --retry-delay 3 --connect-timeout 20 --max-time 600 \
+      https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb \
+      --output "$GOOGLE_CHROME_DEB"
+    test "$(dpkg-deb -f "$GOOGLE_CHROME_DEB" Architecture)" = arm64
+    apt-get install -y --no-install-recommends "$GOOGLE_CHROME_DEB"
+    CHROME_BIN="$(command -v google-chrome-stable)"
+    CHROME_REAL=/opt/google/chrome/chrome
+    test -x "$CHROME_REAL"
+    file "$CHROME_REAL" | grep -Eqi "ARM aarch64|ARM64"
+    if ldd "$CHROME_REAL" 2>&1 | tee /tmp/google-chrome-ldd.txt | grep -q "not found"; then cat /tmp/google-chrome-ldd.txt >&2; exit 1; fi
+    "$CHROME_BIN" --version
+    runuser -u microos-browser -- env HOME=/home/microos-browser timeout 90 "$CHROME_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --dump-dom "data:text/html,<title>Misty OS Google Chrome smoke test</title><h1>Google Chrome is ready</h1>" > /tmp/microos-chrome-smoke.html
+    grep -q "Google Chrome is ready" /tmp/microos-chrome-smoke.html
+    echo "==> Official Google Chrome ARM64 startup and DOM rendering test passed"
 
     # Exercise the actual Linux desktop browser window, not only headless DOM
     # rendering. This runs the same launcher used by the Android PRoot guest.
@@ -145,7 +148,7 @@ PLAYWRIGHT_SMOKE
       [ -z "${MICROOS_BROWSER_PID:-}" ] || kill "$MICROOS_BROWSER_PID" 2>/dev/null || true
       [ -z "${MICROOS_OPENBOX_PID:-}" ] || kill "$MICROOS_OPENBOX_PID" 2>/dev/null || true
       [ -z "${MICROOS_XVFB_PID:-}" ] || kill "$MICROOS_XVFB_PID" 2>/dev/null || true
-      pkill -u microos-browser -f '[c]hromium' 2>/dev/null || true
+      pkill -u microos-browser -f '[c]hrome' 2>/dev/null || true
     }
     trap cleanup_x11_smoke EXIT
     Xvfb :99 -screen 0 1280x800x24 -nolisten tcp -ac >/tmp/microos-xvfb.log 2>&1 &
@@ -177,18 +180,18 @@ PLAYWRIGHT_SMOKE
       cat /tmp/microos-openbox.log >&2 || true
       exit 1
     fi
-    MICROOS_DISABLE_GPU=1 timeout 45 /usr/local/bin/start-browser.sh about:blank >/tmp/microos-chromium-x11.log 2>&1 &
+    MICROOS_DISABLE_GPU=1 timeout 45 /usr/local/bin/start-browser.sh about:blank >/tmp/microos-chrome-x11.log 2>&1 &
     MICROOS_BROWSER_PID=$!
     WINDOW_ID=""
     for attempt in $(seq 1 100); do
-      WINDOW_ID="$(xdotool search --onlyvisible --class "chromium|Chromium" 2>/dev/null | tail -n 1 || true)"
+      WINDOW_ID="$(xdotool search --onlyvisible --class "google-chrome|Google-chrome|chrome|Chrome|chromium|Chromium" 2>/dev/null | tail -n 1 || true)"
       if [ -n "$WINDOW_ID" ]; then break; fi
       if [ -z "${MICROOS_BROWSER_PID:-}" ] || ! kill -0 "$MICROOS_BROWSER_PID" 2>/dev/null; then break; fi
       sleep 0.25
     done
     if [ -z "$WINDOW_ID" ]; then
       cat /tmp/microos-chromium-x11.log >&2 || true
-      echo "Chromium X11 window did not appear within 25 seconds" >&2
+      echo "Google Chrome X11 window did not appear within 25 seconds" >&2
       cat /tmp/microos-xvfb.log /tmp/microos-openbox.log >&2 || true
       exit 1
     fi
@@ -200,12 +203,12 @@ PLAYWRIGHT_SMOKE
     WIDTH="$(printf "%s\n" "$GEOMETRY" | sed -n "s/^WIDTH=//p")"
     HEIGHT="$(printf "%s\n" "$GEOMETRY" | sed -n "s/^HEIGHT=//p")"
     if [ "${WIDTH:-0}" -lt 1000 ] || [ "${HEIGHT:-0}" -lt 600 ]; then
-      echo "Chromium X11 window did not maximize: $GEOMETRY" >&2
+      echo "Google Chrome X11 window did not maximize: $GEOMETRY" >&2
       cat /tmp/microos-chromium-x11.log >&2 || true
       kill -9 "${MICROOS_BROWSER_PID:-}" "${MICROOS_OPENBOX_PID:-}" "${MICROOS_XVFB_PID:-}" 2>/dev/null || true
       exit 1
     fi
-    echo "==> Native Chromium window verified: ${WIDTH}x${HEIGHT}"
+    echo "==> Native Google Chrome window verified: ${WIDTH}x${HEIGHT}"
     /usr/local/bin/microos-browser-control window-close || true
     wait "$MICROOS_BROWSER_PID" 2>/dev/null || true
     MICROOS_BROWSER_PID=""
@@ -360,7 +363,7 @@ PLAYWRIGHT_SMOKE
     install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME"
     rm -f /tmp/microos-firefox-smoke.png /tmp/firefox-ldd.txt
 
-    rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
+    rm -f /tmp/firefox.tar.xz /tmp/google-chrome-ldd.txt /tmp/microos-chrome-smoke.html /root/.microos/setup.sh
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
     printf "14\\n" > /root/.microos/image-version
@@ -417,8 +420,8 @@ require_archive_path() {
 # Keep this list in sync with the APK workflow's transfer validation.
 require_archive_path 'root/\.microos/ready'
 require_archive_path 'root/\.microos/image-version'
-require_archive_path 'usr/bin/chromium'
-require_archive_path 'usr/lib/chromium/chromium'
+require_archive_path 'usr/bin/google-chrome-stable'
+require_archive_path 'opt/google/chrome/chrome'
 require_archive_path 'usr/local/bin/start-browser.sh'
 require_archive_path 'usr/local/bin/microos-browser-control'
 require_archive_path 'usr/bin/xdotool'
