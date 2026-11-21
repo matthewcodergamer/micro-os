@@ -43,7 +43,7 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
     _addTab();
   }
 
-  void _addTab({List<String>? argv, String title = 'bash'}) {
+  void _addTab({List<String>? argv, String title = 'zsh'}) {
     final terminal = Terminal(maxLines: 1000);
     final controller = TerminalController();
     Pty? pty;
@@ -51,7 +51,9 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
 
     if (widget.runtime.isReady) {
       try {
-        pty = widget.runtime.startShell(argv: argv ?? widget.argv);
+        pty = widget.runtime.startShell(
+          argv: argv ?? widget.argv ?? <String>['/usr/bin/zsh', '-l'],
+        );
         // Decode byte chunks incrementally, retaining partial UTF-8 sequences.
         pty.output
             .map<List<int>>((chunk) => chunk)
