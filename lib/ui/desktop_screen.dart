@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../core/theme.dart';
-import '../core/experience_mode.dart';
 import '../core/wallpapers.dart';
 import '../models/window_state.dart';
 import '../services/settings_store.dart';
