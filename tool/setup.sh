@@ -131,7 +131,7 @@ SECURITY_APT_PACKAGES=(
 )
 AVAILABLE_SECURITY_PACKAGES=()
 for package in "${SECURITY_APT_PACKAGES[@]}"; do
-  if apt-cache show "$package" >/dev/null 2>&1; then
+  if apt-cache show "$package" 2>/dev/null | grep -q "^Package: $package$"; then
     AVAILABLE_SECURITY_PACKAGES+=("$package")
   else
     warn "$package is not available for this Ubuntu ARM64 repository snapshot"
