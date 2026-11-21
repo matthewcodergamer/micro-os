@@ -729,8 +729,9 @@ PYOPENCODE
           install -m 0755 "$OPENCODE_BINARY" /root/.opencode/bin/opencode
           ln -sfn /root/.opencode/bin/opencode /usr/local/bin/opencode
           ACTUAL_OPENCODE_VERSION="$(/root/.opencode/bin/opencode --version 2>&1 | head -n 1 | tr -d '\r')"
-          if [ "$ACTUAL_OPENCODE_VERSION" = "$OPENCODE_VERSION" ]; then
-            printf '%s\n' "$OPENCODE_VERSION" > /usr/local/share/microos/opencode-version
+          EXPECTED_OPENCODE_VERSION="${OPENCODE_VERSION#v}"
+          if [ "$ACTUAL_OPENCODE_VERSION" = "$EXPECTED_OPENCODE_VERSION" ]; then
+            printf '%s\n' "$ACTUAL_OPENCODE_VERSION" > /usr/local/share/microos/opencode-version
             OPENCODE_INSTALLED=1
             log "OpenCode $ACTUAL_OPENCODE_VERSION installed; GitHub SHA-256 verified"
             break
