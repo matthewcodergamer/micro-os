@@ -458,10 +458,13 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                       switch (action) {
                         case _OpenCodeAction.newSession:
                           _openNewOpenCodeSession();
+                          break;
                         case _OpenCodeAction.listSessions:
                           _openOpenCodeSessionList();
+                          break;
                         case _OpenCodeAction.resumeSession:
                           unawaited(_resumeOpenCodeSession());
+                          break;
                       }
                     },
                     itemBuilder: (_) => const [
