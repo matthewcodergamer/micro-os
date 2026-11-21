@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../core/theme.dart';
+import '../core/experience_mode.dart';
 import '../core/wallpapers.dart';
 import '../models/window_state.dart';
 import '../services/settings_store.dart';
@@ -16,6 +17,7 @@ import 'apps/terminal_app.dart';
 import 'control_center.dart';
 import 'dock.dart';
 import 'install_screen.dart';
+import 'experience_mode_picker.dart';
 import 'login_screen.dart';
 import 'spotlight.dart';
 import 'status_bar.dart';
@@ -237,6 +239,12 @@ class _DesktopScreenState extends State<DesktopScreen> {
                   ),
                 ),
             ],
+            if (runtime.isReady && !desktop.locked && settings.experienceMode == null)
+              Positioned.fill(
+                child: ExperienceModePicker(
+                  onSelected: (mode) => settings.setExperienceMode(mode),
+                ),
+              ),
             // The installer fades away as soon as the rootfs is ready. The
             // login screen or desktop is already mounted underneath it.
             Positioned.fill(
