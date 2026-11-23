@@ -30,7 +30,7 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '12';
+  static const String _rootfsVersion = '14';
   static const String _imageVersionPath = 'root/.microos/image-version';
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
@@ -92,6 +92,13 @@ class LinuxRuntime extends ChangeNotifier {
 
   String get rootfsPath => p.join(base.path, 'rootfs');
   String get prootPath => p.join(base.path, 'proot', 'proot');
+
+  /// Unix socket exposed by the in-guest native X11 bridge.
+  String get displaySocketPath =>
+      p.join(base.path, 'tmp', 'microos-x11.sock');
+
+  /// Unix socket exposed by the guest's PulseAudio bridge.
+  String get audioSocketPath => p.join(base.path, 'tmp', 'microos-audio.sock');
   String get _readyPath => p.join(rootfsPath, _readyMarker);
 
   bool get _hasCurrentImage {
@@ -113,7 +120,12 @@ class LinuxRuntime extends ChangeNotifier {
         'LC_ALL': 'en_US.UTF-8',
         'PLAYWRIGHT_BROWSERS_PATH': '/opt/ms-playwright',
         'NODE_PATH': '/opt/node-global',
-        'DISPLAY': ':1',
+        'DISPLAY': ':0',
+        'PULSE_SERVER': 'unix:/tmp/microos-pulse.sock',
+        'CHROME_BIN': '/usr/local/bin/chrome',
+        'CHROME_PATH': '/usr/local/bin/chrome',
+        'CHROMIUM_BIN': '/usr/local/bin/chrome',
+        'PUPPETEER_EXECUTABLE_PATH': '/usr/local/bin/chrome',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:'
             '/root/.opencode/bin:/root/.local/bin',
         if (_githubToken != null && _githubToken!.isNotEmpty) ...<String, String>{
@@ -394,11 +406,19 @@ class LinuxRuntime extends ChangeNotifier {
 
   Future<void> _installSetupScript() async {
     final script = await rootBundle.loadString(_setupAsset);
+    final bridgeSource = await rootBundle.loadString('tool/x11_bridge.c');
+    final audioSource = await rootBundle.loadString('tool/audio_bridge.c');
     final dir = Directory(p.join(rootfsPath, 'root/.microos'));
     await dir.create(recursive: true);
     final file = File(p.join(dir.path, 'setup.sh'));
     await file.writeAsString(script);
     await _chmod(file.path, '755');
+    final bridge = File(p.join(dir.path, 'x11_bridge.c'));
+    await bridge.writeAsString(bridgeSource);
+    await _chmod(bridge.path, '644');
+    final audio = File(p.join(dir.path, 'audio_bridge.c'));
+    await audio.writeAsString(audioSource);
+    await _chmod(audio.path, '644');
 
     // apt refuses to run as a non-root sandbox user under proot.
     final aptConf = File(p.join(rootfsPath, 'etc/apt/apt.conf.d/99microos'));
@@ -545,27 +565,36 @@ class LinuxRuntime extends ChangeNotifier {
     return false;
   }
 
-  /// Boots the complete X11/VNC/noVNC chain. A listening HTTP bridge is
-  /// not sufficient: noVNC is unusable unless the RFB server on 5900 is alive.
+  /// Boots Xvfb, Openbox and Misty's native X11 bridge.
+  ///
+  /// The Android side connects directly to [displaySocketPath]; there is no
+  /// VNC server, websockify process or browser-based display client.
   Future<bool> ensureDisplay({bool restart = false}) async {
     if (!isReady) return false;
     await _ensureBackgroundSession();
 
     void start() {
       _displayRequested = true;
-      runDetached(<String>['/bin/bash', '-lc', '/root/.microos/start-desktop.sh']);
+      try {
+        runDetached(<String>['/bin/bash', '-lc', '/root/.microos/start-desktop.sh']);
+      } catch (error) {
+        _appendLog('[microos] could not launch the native X11 display: $error');
+      }
     }
 
-    if (!_displayRequested || restart) start();
+    final socketExists =
+        FileSystemEntity.typeSync(displaySocketPath) ==
+            FileSystemEntityType.unixDomainSock;
+    if (!_displayRequested || restart || !socketExists) start();
 
     var up = await _waitForDisplay(const Duration(seconds: 18));
     if (!up) {
-      _appendLog('[microos] display health check failed (5900/6080); restarting X11 stack once');
+      _appendLog('[microos] native X11 socket did not appear; restarting the display once');
       start();
       up = await _waitForDisplay(const Duration(seconds: 22));
     }
     if (!up) {
-      _appendLog('[microos] DISPLAY NOT READY: require both VNC 5900 and noVNC 6080');
+      _appendLog('[microos] DISPLAY NOT READY: missing $displaySocketPath');
     }
     return up;
   }
@@ -573,10 +602,24 @@ class LinuxRuntime extends ChangeNotifier {
   Future<bool> _waitForDisplay(Duration timeout) async {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      final vnc = await _isPortOpen(5900);
-      final bridge = vnc && await _isPortOpen(6080);
-      if (vnc && bridge) return true;
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+      if (FileSystemEntity.typeSync(displaySocketPath) ==
+          FileSystemEntityType.unixDomainSock) {
+        try {
+          final socket = await Socket.connect(
+            InternetAddress(
+              displaySocketPath,
+              type: InternetAddressType.unix,
+            ),
+            0,
+            timeout: const Duration(milliseconds: 700),
+          );
+          socket.destroy();
+          return true;
+        } catch (_) {
+          // The guest may still be creating the socket.
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
     }
     return false;
   }
@@ -599,7 +642,7 @@ class LinuxRuntime extends ChangeNotifier {
   ///
   /// Launches the native Linux browser as a normal X11 desktop window.
   /// Chromium/Firefox own their tabs, address bars, bookmarks and window chrome;
-  /// Flutter only provides compact touch controls around the VNC desktop.
+  /// Flutter only provides compact touch controls around the X11 surface.
   Future<void> launchBrowser({
     String? url,
     String browser = 'chromium',
@@ -611,7 +654,7 @@ class LinuxRuntime extends ChangeNotifier {
     }
     final displayUp = await ensureDisplay();
     if (!displayUp) {
-      _appendLog('[microos] browser launch blocked: the X11/VNC display is not healthy');
+      _appendLog('[microos] browser launch blocked: the native X11 display is not healthy');
       return;
     }
     final normalizedUrl = BrowserNavigation.normalizeAddress(
@@ -643,7 +686,7 @@ class LinuxRuntime extends ChangeNotifier {
     }
     runDetached(
       <String>['/usr/local/bin/microos-browser-control', action],
-      extraEnv: const <String, String>{'DISPLAY': ':1'},
+      extraEnv: const <String, String>{'DISPLAY': ':0'},
     );
   }
 

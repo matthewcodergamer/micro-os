@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/desktop_input.dart';
 import '../core/terminal_profiles.dart';
 import '../core/wallpapers.dart';
 
@@ -21,6 +22,8 @@ class SettingsStore extends ChangeNotifier {
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
   static const _kWallpaper = 'desktop.wallpaper';
+  static const _kDesktopPointerMode = 'desktop.pointer_mode';
+  static const _kDesktopCursorSpeed = 'desktop.cursor_speed';
 
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -38,6 +41,8 @@ class SettingsStore extends ChangeNotifier {
   bool loginPasswordMigrationPending = false;
   bool dockAutoHide = true;
   bool systemBarsVisible = false;
+  DesktopPointerMode desktopPointerMode = DesktopPointerMode.trackpad;
+  double desktopCursorSpeed = 1.35;
 
   bool get hasPassword =>
       loginPasswordStorageUnavailable ||
@@ -59,6 +64,11 @@ class SettingsStore extends ChangeNotifier {
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
+    desktopPointerMode = DesktopPointerMode.fromStorage(
+      prefs.getString(_kDesktopPointerMode),
+    );
+    desktopCursorSpeed =
+        (prefs.getDouble(_kDesktopCursorSpeed) ?? 1.35).clamp(0.8, 2.0).toDouble();
 
     // Migrate older installations that kept the password in plain preferences.
     final legacyPassword = prefs.getString(_kLoginPassword);
@@ -171,6 +181,23 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kWallpaper, wallpaper);
+  }
+
+  Future<void> setDesktopPointerMode(DesktopPointerMode value) async {
+    if (desktopPointerMode == value) return;
+    desktopPointerMode = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kDesktopPointerMode, value.storageValue);
+  }
+
+  Future<void> setDesktopCursorSpeed(double value) async {
+    final next = value.clamp(0.8, 2.0).toDouble();
+    if ((desktopCursorSpeed - next).abs() < 0.001) return;
+    desktopCursorSpeed = next;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kDesktopCursorSpeed, desktopCursorSpeed);
   }
 
   Future<void> markInstalled() async {

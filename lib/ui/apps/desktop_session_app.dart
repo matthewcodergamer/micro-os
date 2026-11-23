@@ -1,18 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../app_scope.dart';
+import '../../core/desktop_input.dart';
 import '../../core/theme.dart';
+import '../../services/desktop_audio.dart';
 import '../../services/linux_runtime.dart';
+import '../../services/settings_store.dart';
+import '../desktop_controls_overlay.dart';
+import '../desktop_key_bar.dart';
+import '../native_x11_view.dart';
 
-/// Shows the real X11 desktop.
+/// Shows the guest's real X11 desktop on Misty OS's own native surface.
 ///
-/// The guest runs Xvfb + openbox + x11vnc + noVNC; this widget is the noVNC
-/// client. That indirection is deliberate: drawing X11 pixels directly into a
-/// Flutter texture would require a native X server, which is a separate app
-/// (Termux:X11) and cannot be done in pure Dart. noVNC keeps everything inside
-/// one APK and gives correct pointer/keyboard mapping for free.
+/// The guest runs Xvfb + Openbox and a small MIT-licensed bridge. The Android
+/// side mirrors damaged X11 rectangles into a TextureView and sends touch,
+/// pointer and keyboard events back over a Unix socket. There is no VNC,
+/// websockify or WebView in this path.
 class DesktopSessionApp extends StatefulWidget {
   const DesktopSessionApp({
     super.key,
@@ -32,154 +37,185 @@ class DesktopSessionApp extends StatefulWidget {
 }
 
 class _DesktopSessionAppState extends State<DesktopSessionApp> {
-  WebViewController? _controller;
-  String _status = 'Connecting to the X11 display…';
+  String _status = 'Connecting to the native X11 display…';
   bool _failed = false;
   bool _booting = false;
+  bool _displayReady = false;
+  bool _connected = false;
+  String? _socketPath;
+  Size? _frameSize;
   int _attempts = 0;
-  Timer? _vncRetryTimer;
-  int _vncRetryCount = 0;
-  bool _vncRetryCheckInFlight = false;
-  bool _trackpadMode = true;
-  double _trackpadSpeed = 1.35;
+  int _sessionGeneration = 0;
+  DesktopPointerMode _pointerMode = DesktopPointerMode.trackpad;
+  double _cursorSpeed = 1.35;
+  bool _keyBarPinned = false;
+  bool _audioMuted = false;
+  Timer? _watchdog;
+  int _reconnectAttempts = 0;
+  SettingsStore? _settingsStore;
+  bool _settingsInitialized = false;
   String _selectedBrowser = 'chromium';
+  final GlobalKey<DesktopKeyBarState> _keyBarKey =
+      GlobalKey<DesktopKeyBarState>();
+  final GlobalKey<NativeX11ViewState> _x11Key = GlobalKey<NativeX11ViewState>();
 
   @override
   void initState() {
     super.initState();
+    _audioMuted = DesktopAudio.volume <= 0.001;
     WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
-  }
-
-  Future<void> _boot() async {
-    if (_booting) return;
-    _booting = true;
-
-    if (!widget.runtime.isReady) {
-      setState(() {
-        _failed = true;
-        _status = 'Linux is not installed yet. Finish setup first.';
-      });
-      _booting = false;
-      return;
-    }
-
-    setState(() {
-      _failed = false;
-      _status = 'Starting Xvfb and the window manager…';
-    });
-
-    final up = await widget.runtime.ensureDisplay(restart: _attempts > 0);
-    _attempts++;
-    if (!mounted) return;
-
-    if (!up) {
-      setState(() {
-        _failed = true;
-        _status = 'The display bridge did not start. Open Settings → Runtime log '
-            'to see why (usually the toolchain install did not finish).';
-      });
-      _booting = false;
-      return;
-    }
-
-    if (widget.launchBrowser) {
-      setState(() => _status = 'Launching the browser…');
-      await widget.runtime.launchBrowser(
-        url: widget.url ?? 'https://www.google.com',
-        browser: _selectedBrowser,
-        singleProcess: widget.singleProcess,
-      );
-      // Give the browser a moment to map its window before the client connects.
-      await Future<void>.delayed(const Duration(milliseconds: 900));
-    }
-
-    if (!mounted) return;
-    setState(() => _status = 'Attaching to :1…');
-
-    late final WebViewController controller;
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF0B0E14))
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageFinished: (_) => _installTouchBridge(controller),
-        onWebResourceError: (_) => _retryVncPage(controller),
-      ))
-      ..loadRequest(Uri.parse(_vncUrl));
-
-    setState(() {
-      _controller = controller;
-      _status = 'Connecting to VNC…';
-    });
-    _booting = false;
-    _startVncRetryLoop(controller);
-  }
-
-  void _startVncRetryLoop(WebViewController controller) {
-    _vncRetryTimer?.cancel();
-    _vncRetryCount = 0;
-    _vncRetryTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (!mounted || !identical(_controller, controller)) {
-        timer.cancel();
-        return;
-      }
-      if (_vncRetryCheckInFlight) return;
-      _vncRetryCheckInFlight = true;
-      try {
-        final result = await controller.runJavaScriptReturningResult(
-          "document.body ? document.body.innerText : ''",
-        );
-        final pageText = result.toString().toLowerCase();
-        final connected = pageText.contains('connected') &&
-            !pageText.contains('disconnected');
-        if (connected) {
-          timer.cancel();
-          if (mounted) setState(() => _status = 'Connected');
-          return;
-        }
-
-        _vncRetryCount++;
-        if (_vncRetryCount >= 15) {
-          _vncRetryCount = 0;
-          if (mounted) setState(() => _status = 'Still waiting for the display… reconnecting');
-          await controller.reload();
-          return;
-        }
-
-        final failed = pageText.contains('failed to connect') ||
-            pageText.contains('connection failed');
-        if (failed || _vncRetryCount % 3 == 0) {
-          if (mounted) {
-            setState(() => _status =
-                'Waiting for the VNC server… retry $_vncRetryCount/15');
-          }
-          await controller.reload();
-        }
-      } catch (_) {
-        _vncRetryCount++;
-        if (_vncRetryCount >= 15) {
-          _vncRetryCount = 0;
-          if (mounted) setState(() => _status = 'Still waiting for the display… reconnecting');
-          await controller.reload();
-        } else if (_vncRetryCount % 3 == 0) {
-          await controller.reload();
-        }
-      } finally {
-        _vncRetryCheckInFlight = false;
+    _watchdog = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_displayReady || _booting || _connected) return;
+      if (_reconnectAttempts >= 4) return;
+      _reconnectAttempts++;
+      if (_reconnectAttempts.isEven) {
+        // The surface alone cannot recover a guest bridge that exited. Restart
+        // the whole display stack on every second failed reattach.
+        _attempts = 1;
+        unawaited(_boot());
+      } else {
+        _reconnectSurface();
       }
     });
   }
 
-  void _retryVncPage(WebViewController controller) {
-    if (!mounted || !identical(_controller, controller)) return;
-    if (_vncRetryCount < 15) {
-      setState(() => _status = 'VNC connection interrupted; retrying…');
-    }
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_settingsInitialized) return;
+    _settingsStore = AppScope.of(context).settings;
+    _pointerMode = _settingsStore!.desktopPointerMode;
+    _cursorSpeed = _settingsStore!.desktopCursorSpeed;
+    _settingsStore!.addListener(_syncDesktopSettings);
+    _settingsInitialized = true;
+  }
+
+  void _syncDesktopSettings() {
+    final settings = _settingsStore;
+    if (settings == null || !mounted) return;
+    final modeChanged = _pointerMode != settings.desktopPointerMode;
+    final speedChanged = (_cursorSpeed - settings.desktopCursorSpeed).abs() > 0.001;
+    if (!modeChanged && !speedChanged) return;
+    setState(() {
+      _pointerMode = settings.desktopPointerMode;
+      _cursorSpeed = settings.desktopCursorSpeed;
+    });
   }
 
   @override
   void dispose() {
-    _vncRetryTimer?.cancel();
+    _watchdog?.cancel();
+    _settingsStore?.removeListener(_syncDesktopSettings);
+    unawaited(DesktopAudio.stop());
     super.dispose();
+  }
+
+  Future<void> _boot() async {
+    if (_booting || !mounted) return;
+    _booting = true;
+    try {
+      if (!widget.runtime.isReady) {
+        if (mounted) {
+          setState(() {
+            _failed = true;
+            _status = 'Linux is not installed yet. Finish setup first.';
+          });
+        }
+        return;
+      }
+
+      setState(() {
+        _failed = false;
+        _displayReady = false;
+        _connected = false;
+        _status = 'Starting Xvfb and Openbox…';
+      });
+
+      var up = false;
+      try {
+        up = await widget.runtime.ensureDisplay(restart: _attempts > 0);
+      } catch (error) {
+        if (mounted) {
+          setState(() {
+            _failed = true;
+            _status = 'Could not start the native X11 display: $error';
+          });
+        }
+        return;
+      }
+      _attempts++;
+      if (!mounted) return;
+
+      if (!up) {
+        setState(() {
+          _failed = true;
+          _status = 'The native X11 bridge did not start. Open Settings → '
+              'Runtime log to see why (usually the guest is still installing).';
+        });
+        return;
+      }
+
+      if (widget.launchBrowser) {
+        setState(() => _status = 'Launching the browser…');
+        try {
+          await widget.runtime.launchBrowser(
+            url: widget.url ?? 'https://www.google.com',
+            browser: _selectedBrowser,
+            singleProcess: widget.singleProcess,
+          );
+          // Give the browser a moment to map its window before attaching.
+          await Future<void>.delayed(const Duration(milliseconds: 900));
+        } catch (error) {
+          // A failed browser launch must never leave the desktop spinner stuck.
+          if (mounted) {
+            setState(() => _status = 'The desktop is ready; the browser did '
+                'not start: $error');
+          }
+        }
+      }
+
+      if (!mounted) return;
+      unawaited(DesktopAudio.start(widget.runtime.audioSocketPath));
+      setState(() {
+        _socketPath = widget.runtime.displaySocketPath;
+        _displayReady = true;
+        _connected = false;
+        _reconnectAttempts = 0;
+        _sessionGeneration++;
+        _status = 'Attaching native X11 surface…';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _status = 'The desktop session failed to start: $error';
+        });
+      }
+    } finally {
+      _booting = false;
+    }
+  }
+
+  void _onNativeStatus(NativeX11Status status) {
+    if (!mounted) return;
+    final frame = status.frameSize;
+    setState(() {
+      _connected = status.connected;
+      if (frame != null) _frameSize = frame;
+      if (status.connected) {
+        _failed = false;
+        _reconnectAttempts = 0;
+        _status = _frameSize == null
+            ? 'Connected to the X11 desktop'
+            : 'Connected · ${_frameSize!.width.round()}×${_frameSize!.height.round()}';
+      } else {
+        _status = 'Waiting for the native X11 bridge…';
+      }
+    });
+  }
+
+  void _onThreeFingerTap() {
+    _toggleKeyBar();
   }
 
   Future<void> _launchSelectedBrowser() async {
@@ -187,12 +223,20 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     if (!mounted) return;
     setState(() => _status =
         'Opening $url in ${_selectedBrowser == 'firefox' ? 'Firefox' : 'Chromium'}…');
-    await widget.runtime.launchBrowser(
-      browser: _selectedBrowser,
-      url: url,
-      singleProcess: widget.singleProcess,
-    );
-    if (mounted) setState(() => _status = 'Browser launch requested');
+    try {
+      await widget.runtime.launchBrowser(
+        browser: _selectedBrowser,
+        url: url,
+        singleProcess: widget.singleProcess,
+      );
+      if (mounted && _connected) {
+        setState(() => _status = 'Browser launch requested');
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _status = 'Browser launch failed: $error');
+      }
+    }
   }
 
   Future<void> _selectBrowser(String? browser) async {
@@ -202,174 +246,73 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
   }
 
   Future<void> _showRemoteKeyboard() async {
-    await _controller?.runJavaScript(
-      "document.querySelector('#noVNC_keyboardinput')?.focus();",
-    );
+    if (!mounted) return;
+    if (!_keyBarPinned) setState(() => _keyBarPinned = true);
+    await _x11Key.currentState?.showKeyboard();
+  }
+
+  Future<void> _hideDesktopKeyBar() async {
+    final bar = _keyBarKey.currentState;
+    if (bar != null) await bar.releaseAllModifiers();
+    if (!mounted) return;
+    setState(() => _keyBarPinned = false);
+    await _x11Key.currentState?.hideKeyboard();
+  }
+
+  void _toggleKeyBar() {
+    if (_keyBarPinned) {
+      unawaited(_hideDesktopKeyBar());
+    } else {
+      unawaited(_showRemoteKeyboard());
+    }
   }
 
   void _rightClick() {
-    _controller?.runJavaScript('window.__microOsRightClick?.();');
+    unawaited(_x11Key.currentState?.rightClick());
   }
 
-  void _setTrackpadSpeed(double speed) {
-    setState(() => _trackpadSpeed = speed);
-    _controller?.runJavaScript(
-      'window.__microOsTrackpadSpeed=$speed;window.__microOsSetTrackpadSpeed?.($speed);',
-    );
+  Future<void> _setPointerMode(DesktopPointerMode mode) async {
+    if (_pointerMode == mode) return;
+    setState(() => _pointerMode = mode);
+    await _settingsStore?.setDesktopPointerMode(mode);
   }
 
-  // Translate mobile gestures into mouse/wheel input for noVNC. Trackpad
-  // mode moves a visible cursor relatively; direct mode maps touch to pixels.
-  Future<void> _installTouchBridge(WebViewController controller) async {
-    await controller.runJavaScript(r"""
-      (() => {
-        if (window.__microOsTouchBridgeV2Installed) return;
-        const canvas = document.getElementById('noVNC_canvas');
-        if (!canvas) {
-          const observer = new MutationObserver(() => {
-            const found = document.getElementById('noVNC_canvas');
-            if (found) { observer.disconnect(); install(found); }
-          });
-          observer.observe(document.documentElement, {childList:true,subtree:true});
-          return;
-        }
-        function install(target) {
-          if (window.__microOsTouchBridgeV2Installed) return;
-          window.__microOsTouchBridgeV2Installed = true;
-          target.style.touchAction = 'none';
-          let trackpad = true, mode = 'idle', sensitivity = Number(window.__microOsTrackpadSpeed)||1.35;
-          let startX=0,startY=0,lastX=0,lastY=0,cursorX=0,cursorY=0;
-          let timer=null,moved=false;
-          const cursor=document.createElement('div');
-          cursor.setAttribute('aria-hidden','true');
-          cursor.style.cssText=[
-            'position:fixed','left:0','top:0','z-index:2147483647',
-            'width:26px','height:34px','pointer-events:none','display:none',
-            'transform:translate(-1px,-1px)',
-            'filter:drop-shadow(1px 2px 2px rgba(0,0,0,.65))'
-          ].join(';');
-          cursor.innerHTML='<svg viewBox="0 0 26 34" width="26" height="34" xmlns="http://www.w3.org/2000/svg"><path d="M2 1 L2 27 L8.5 20.5 L13.5 32 L18 30 L13 18.5 L23 18 Z" fill="white" stroke="#111827" stroke-width="1.6" stroke-linejoin="round"/></svg>';
-          document.body.appendChild(cursor);
-          const bounds=()=>target.getBoundingClientRect();
-          const clampCursor=()=>{
-            const r=bounds();
-            cursorX=Math.max(r.left+1,Math.min(r.right-2,cursorX));
-            cursorY=Math.max(r.top+1,Math.min(r.bottom-2,cursorY));
-            cursor.style.left=cursorX+'px'; cursor.style.top=cursorY+'px';
-          };
-          const moveCursor=(dx,dy)=>{cursorX+=dx*sensitivity;cursorY+=dy*sensitivity;clampCursor();mouse('mousemove',cursorX,cursorY,-1,0);};
-          const setMode=enabled=>{
-            trackpad=!!enabled;
-            cursor.style.display=trackpad?'block':'none';
-            target.style.cursor=trackpad?'none':'default';
-            if(trackpad&&cursorX===0&&cursorY===0){
-              const r=bounds();cursorX=r.left+r.width/2;cursorY=r.top+r.height/2;
-            }
-            if(trackpad)clampCursor();
-          };
-          window.__microOsSetTrackpadMode=setMode;
-          const mouse=(type,x,y,button=0,buttons=0)=>target.dispatchEvent(new MouseEvent(type,{
-            bubbles:true,cancelable:true,view:window,clientX:x,clientY:y,button,buttons
-          }));
-          const clickAt=(x,y,button=0)=>{
-            mouse('mousedown',x,y,button,button===0?1:2);
-            mouse('mouseup',x,y,button,0);
-            mouse(button===2?'contextmenu':'click',x,y,button,0);
-          };
-          window.__microOsSetTrackpadSpeed=value=>{
-            const next=Number(value);
-            if(Number.isFinite(next))sensitivity=Math.max(0.7,Math.min(2.2,next));
-          };
-          window.__microOsRightClick=()=>{
-            const x=trackpad?cursorX:lastX,y=trackpad?cursorY:lastY;
-            clickAt(x,y,2);
-          };
-          const point=t=>({x:t.clientX,y:t.clientY});
-          const clear=()=>{if(timer)clearTimeout(timer);timer=null;};
-          target.addEventListener('touchstart',e=>{
-            if(e.touches.length===2){
-              clear();mode='scroll';
-              const a=point(e.touches[0]),b=point(e.touches[1]);
-              lastX=(a.x+b.x)/2;lastY=(a.y+b.y)/2;return;
-            }
-            if(e.touches.length!==1)return;
-            const p=point(e.touches[0]);
-            mode='pending';startX=lastX=p.x;startY=lastY=p.y;moved=false;clear();
-            timer=setTimeout(()=>{
-              if(mode==='pending'&&!moved){
-                mode='right';
-                clickAt(trackpad?cursorX:startX,trackpad?cursorY:startY,2);
-              }
-            },500);
-          },{passive:false});
-          target.addEventListener('touchmove',e=>{
-            if(mode==='scroll'&&e.touches.length>=2){
-              e.preventDefault();
-              const a=point(e.touches[0]),b=point(e.touches[1]);
-              const x=(a.x+b.x)/2,y=(a.y+b.y)/2;
-              target.dispatchEvent(new WheelEvent('wheel',{
-                bubbles:true,cancelable:true,deltaX:lastX-x,deltaY:lastY-y,deltaMode:0
-              }));
-              lastX=x;lastY=y;return;
-            }
-            if((mode==='pending'||mode==='move')&&e.touches.length===1){
-              e.preventDefault();const p=point(e.touches[0]);
-              if(mode==='pending'&&Math.hypot(p.x-startX,p.y-startY)>8){
-                clear();moved=true;mode='move';
-                if(!trackpad)mouse('mousedown',startX,startY,0,1);
-              }
-              if(mode==='move'){
-                if(trackpad)moveCursor(p.x-lastX,p.y-lastY);
-                else mouse('mousemove',p.x,p.y,-1,1);
-              }
-              lastX=p.x;lastY=p.y;
-            }
-          },{passive:false});
-          const finish=e=>{
-            if(e && e.touches && e.touches.length>0)return;
-            clear();
-            if((!e || e.type!=='touchcancel')&&mode==='pending'&&!moved){
-              clickAt(trackpad?cursorX:startX,trackpad?cursorY:startY,0);
-            }
-            if(mode==='move'&&!trackpad)mouse('mouseup',lastX,lastY,0,0);
-            mode='idle';
-          };
-          target.addEventListener('touchend',finish,{passive:false});
-          target.addEventListener('touchcancel',finish,{passive:false});
-          const r=bounds();cursorX=r.left+r.width/2;cursorY=r.top+r.height/2;
-          setMode(true);
-        }
-        install(canvas);
-      })();
-    """);
-    await controller.runJavaScript(
-      'window.__microOsSetTrackpadMode(${_trackpadMode ? 'true' : 'false'});',
-    );
-    await controller.runJavaScript(
-      'window.__microOsSetTrackpadSpeed($_trackpadSpeed);',
-    );
+  void _cyclePointerMode() {
+    unawaited(_setPointerMode(_pointerMode.next));
   }
 
-  void _toggleTrackpadMode() {
-    setState(() => _trackpadMode = !_trackpadMode);
-    _controller?.runJavaScript(
-      'window.__microOsSetTrackpadMode(${_trackpadMode ? 'true' : 'false'});',
-    );
+  Future<void> _setCursorSpeed(double speed) async {
+    final next = speed.clamp(0.8, 2.0).toDouble();
+    setState(() => _cursorSpeed = next);
+    await _settingsStore?.setDesktopCursorSpeed(next);
   }
 
-  String get _vncUrl {
-    final base = 'http://127.0.0.1:6080/vnc.html';
-    final query = <String>[
-      'autoconnect=1',
-      'resize=scale',
-      'reconnect=1',
-      'reconnect_delay=1500',
-      'path=websockify',
-      // Moderate quality/compression keeps the stream responsive on mobile CPU.
-      'quality=5',
-      'compression=2',
-    ];
-    return '$base?${query.join('&')}';
+  Future<void> _sendDesktopKey(int keysym, String code, bool down) async {
+    await _x11Key.currentState?.sendKey(keysym, down);
+  }
+
+  Future<void> _typeDesktopText(String text) async {
+    await _x11Key.currentState?.sendText(text);
+  }
+
+  void _reconnectSurface() {
+    if (!mounted) return;
+    setState(() {
+      _connected = false;
+      _sessionGeneration++;
+      _status = 'Reconnecting to the native X11 bridge…';
+    });
+  }
+
+  Future<void> _toggleAudio() async {
+    final muted = !_audioMuted;
+    setState(() => _audioMuted = muted);
+    await DesktopAudio.setVolume(muted ? 0 : 1);
+  }
+
+  void _restartDesktop() {
+    _attempts = 1;
+    unawaited(_boot());
   }
 
   Widget _moreControlsButton() {
@@ -384,6 +327,15 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             break;
           case 'keyboard':
             _showRemoteKeyboard();
+            break;
+          case 'extra-keys':
+            _toggleKeyBar();
+            break;
+          case 'pointer-mode':
+            _cyclePointerMode();
+            break;
+          case 'recenter':
+            unawaited(_x11Key.currentState?.recenterCursor());
             break;
           case 'back':
           case 'forward':
@@ -405,25 +357,33 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             widget.runtime.controlBrowser(action);
             break;
           case 'slow':
-            _setTrackpadSpeed(0.9);
+            _setCursorSpeed(0.9);
             break;
           case 'normal':
-            _setTrackpadSpeed(1.35);
+            _setCursorSpeed(1.35);
             break;
           case 'fast':
-            _setTrackpadSpeed(1.8);
+            _setCursorSpeed(1.8);
+            break;
+          case 'mute-audio':
+            unawaited(_toggleAudio());
             break;
           case 'reconnect':
-            _reload();
+            _reconnectAttempts = 0;
+            _reconnectSurface();
             break;
           case 'restart':
-            _boot();
+            _restartDesktop();
             break;
         }
       },
       itemBuilder: (context) => [
         const PopupMenuItem(value: 'right', child: Text('Right-click')),
-        const PopupMenuItem(value: 'keyboard', child: Text('Show Linux keyboard')),
+        const PopupMenuItem(value: 'keyboard', child: Text('Desktop keyboard')),
+        const PopupMenuItem(value: 'extra-keys', child: Text('Show extra keys bar')),
+        const PopupMenuItem(value: 'pointer-mode', child: Text('Switch pointer mode')),
+        const PopupMenuItem(value: 'recenter', child: Text('Recenter pointer')),
+        const PopupMenuItem(value: 'mute-audio', child: Text('Mute desktop audio')),
         if (widget.launchBrowser) ...[
           const PopupMenuDivider(),
           const PopupMenuItem(value: 'back', child: Text('Back')),
@@ -453,13 +413,11 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     );
   }
 
-  void _reload() {
-    _controller?.reload();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final controller = _controller;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final showKeyBar = _displayReady && (_keyBarPinned || keyboardVisible);
+    final socketPath = _socketPath;
 
     return Container(
       color: const Color(0xFF0B0E14),
@@ -471,7 +429,11 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             color: const Color(0xFF141822),
             child: Row(
               children: [
-                const Icon(Icons.circle, size: 8, color: MicroColors.green),
+                Icon(
+                  Icons.circle,
+                  size: 8,
+                  color: _connected ? MicroColors.green : MicroColors.subtle,
+                ),
                 const SizedBox(width: 6),
                 if (widget.launchBrowser) ...[
                   DropdownButtonHideUnderline(
@@ -484,7 +446,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                         DropdownMenuItem(value: 'chromium', child: Text('Chromium')),
                         DropdownMenuItem(value: 'firefox', child: Text('Firefox')),
                       ],
-                      onChanged: controller == null ? null : _selectBrowser,
+                      onChanged: _displayReady ? _selectBrowser : null,
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -496,20 +458,28 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                     style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
                   ),
                 ),
-                if (controller != null) ...[
+                if (_displayReady) ...[
                   IconButton(
-                    tooltip: _trackpadMode
-                        ? 'Trackpad cursor enabled'
-                        : 'Direct touch enabled',
+                    tooltip: _audioMuted ? 'Unmute desktop audio' : 'Mute desktop audio',
                     visualDensity: VisualDensity.compact,
-                    onPressed: _toggleTrackpadMode,
+                    onPressed: _toggleAudio,
                     icon: Icon(
-                      _trackpadMode
+                      _audioMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                      size: 16,
+                    ),
+                    color: _audioMuted ? MicroColors.red : MicroColors.subtle,
+                  ),
+                  IconButton(
+                    tooltip: _pointerMode.title,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _cyclePointerMode,
+                    icon: Icon(
+                      _pointerMode.usesVisibleCursor
                           ? Icons.track_changes_rounded
                           : Icons.touch_app_rounded,
                       size: 16,
                     ),
-                    color: _trackpadMode
+                    color: _pointerMode.usesVisibleCursor
                         ? MicroColors.accent
                         : MicroColors.subtle,
                   ),
@@ -526,7 +496,7 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
             ),
           ),
           Expanded(
-            child: controller == null
+            child: !_displayReady || socketPath == null
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(28),
@@ -563,8 +533,34 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                       ),
                     ),
                   )
-                : WebViewWidget(controller: controller),
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      NativeX11View(
+                        key: ValueKey<int>(_sessionGeneration),
+                        socketPath: socketPath,
+                        pointerMode: _pointerMode,
+                        cursorSpeed: _cursorSpeed,
+                        onStatus: _onNativeStatus,
+                        onThreeFingerTap: _onThreeFingerTap,
+                      ),
+                      DesktopControlsOverlay(
+                        pointerMode: _pointerMode,
+                        keyBarVisible: showKeyBar,
+                        onKeyboard: _showRemoteKeyboard,
+                        onCyclePointerMode: _cyclePointerMode,
+                        onToggleKeyBar: _toggleKeyBar,
+                      ),
+                    ],
+                  ),
           ),
+          if (showKeyBar)
+            DesktopKeyBar(
+              key: _keyBarKey,
+              onKeyEvent: _sendDesktopKey,
+              onText: _typeDesktopText,
+              onHide: () => unawaited(_hideDesktopKeyBar()),
+            ),
         ],
       ),
     );

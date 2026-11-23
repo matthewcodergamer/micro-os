@@ -36,6 +36,8 @@ flutter:
     # The guest provisioning script is bundled verbatim so the app can install
     # it into the rootfs on first boot.
     - tool/setup.sh
+    - tool/x11_bridge.c
+    - tool/audio_bridge.c
     - assets/rootfs/
     - assets/proot/
     - assets/fonts/OFL.txt

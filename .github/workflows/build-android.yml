@@ -50,7 +50,7 @@ jobs:
           docker info >/dev/null
           docker pull --platform linux/arm64 ubuntu:24.04
 
-      # Native ARM64 Chromium and the X11/noVNC stack are smoke-tested in the rootfs.
+      # Native ARM64 Chromium and the native X11 bridge are smoke-tested in the rootfs.
       - name: Build the fully provisioned ARM64 rootfs
         run: |
           bash -n tool/prebake_rootfs.sh
@@ -79,6 +79,15 @@ jobs:
           grep -q 'window-maximize' tool/setup.sh
           grep -q 'window-restore' tool/setup.sh
           grep -q 'start-desktop.sh' tool/setup.sh
+          grep -q 'microos-xbridge' tool/setup.sh
+          grep -q 'x11_bridge.c' tool/setup.sh
+          grep -q 'x11_bridge.c' tool/prebake_rootfs.sh
+          grep -q 'microos-audio' tool/setup.sh
+          grep -q 'audio_bridge.c' tool/setup.sh
+          grep -q 'audio_bridge.c' tool/prebake_rootfs.sh
+          grep -q 'module-pipe-sink' tool/setup.sh
+          grep -q 'blender' tool/setup.sh
+          grep -q 'git-cola' tool/setup.sh
           grep -q 'openbox --sm-disable' tool/prebake_rootfs.sh
           grep -q '_NET_SUPPORTING_WM_CHECK' tool/prebake_rootfs.sh
           chmod +x tool/prebake_rootfs.sh
@@ -106,6 +115,19 @@ jobs:
           grep -qxE '(\./)?usr/bin/xdotool' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/bin/xprop' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/.microos/start-desktop.sh' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-xbridge' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-audio' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/chrome' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-chrome-headless' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/microos-youtube' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/local/bin/playwright-mcp' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/\.config/opencode/opencode.json' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?etc/pulse/microos.pa' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/blender' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/gimp' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/git-cola' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/pcmanfm' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/bin/libreoffice' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox' /tmp/rootfs-archive.list
           grep -qxE '(\./)?opt/firefox/firefox-bin' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/microos-browse' /tmp/rootfs-archive.list
@@ -240,6 +262,12 @@ jobs:
           bash -n tool/setup.sh
           bash -n tool/prebake_rootfs.sh
           bash -n tool/bootstrap_android.sh
+          test -f tool/android/com/matthewcodergamer/micro_os/MicroOSX11View.java
+          test -f tool/android/com/matthewcodergamer/micro_os/MicroOSAudio.java
+          grep -q 'microos/audio' tool/android/com/matthewcodergamer/micro_os/MicroOSAudio.java
+          grep -q 'microos-chrome-headless' tool/setup.sh
+          grep -q 'git-cola' tool/setup.sh
+          grep -q 'blender' tool/setup.sh
           bash -n tool/fetch_thanasos_wallpapers.sh
 
       - name: Unit tests

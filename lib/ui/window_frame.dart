@@ -40,7 +40,7 @@ class WindowFrame extends StatelessWidget {
       child: IgnorePointer(
         ignoring: window.minimized,
         // No Opacity/Transform animation here: both break Android platform
-        // views (the noVNC WebView) and turn the window into a blank surface.
+        // views (the native X11 TextureView) and turn the window into a blank surface.
         // Entry motion is handled by AnimatedPositioned and the shadow.
         child: Listener(
           onPointerDown: (_) => desktop.focus(window.id),

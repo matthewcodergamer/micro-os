@@ -14,6 +14,8 @@ import 'services/system_stats.dart';
 import 'state/desktop_state.dart';
 import 'ui/desktop_screen.dart';
 
+bool _appStarted = false;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -60,6 +62,88 @@ Future<void> main() async {
     ),
   );
 
+  final future = runZonedGuarded(_startMistyOS, _handleUncaughtError);
+  if (future != null) await future;
+}
+
+void _handleUncaughtError(Object error, StackTrace stack) {
+  FlutterError.reportError(FlutterErrorDetails(
+    exception: error,
+    stack: stack,
+    library: 'Misty OS',
+    context: ErrorDescription('while starting or running Misty OS'),
+  ));
+  if (_appStarted) return;
+  _appStarted = true;
+  runApp(_StartupErrorApp(
+    error: error,
+    onRetry: () {
+      _appStarted = false;
+      runZonedGuarded(_startMistyOS, _handleUncaughtError);
+    },
+  ));
+}
+
+class _StartupErrorApp extends StatelessWidget {
+  const _StartupErrorApp({required this.error, required this.onRetry});
+
+  final Object error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Misty OS',
+      debugShowCheckedModeBanner: false,
+      theme: buildMicroTheme(),
+      home: Scaffold(
+        backgroundColor: const Color(0xFF0F131B),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.restart_alt_rounded,
+                      color: Color(0xFFFFB86B), size: 36),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Misty OS could not finish starting',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton.tonal(
+                    onPressed: onRetry,
+                    child: const Text('Try again'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _startMistyOS() async {
   // A desktop should own the whole screen, including the gesture areas.
   await SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
@@ -95,6 +179,7 @@ Future<void> main() async {
   }
   unawaited(stats.start());
 
+  _appStarted = true;
   runApp(
     MistyOSApp(
       runtime: runtime,

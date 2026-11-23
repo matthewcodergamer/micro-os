@@ -59,8 +59,8 @@ class _StatusBarState extends State<StatusBar> {
       color: Colors.transparent,
       // Tint only, deliberately no BackdropFilter: the menu bar spans the same
       // pixels as maximised windows, and blurring a region that contains an
-      // Android platform view (the noVNC surface) blanks that region on some
-      // GPUs. A translucent gradient gives the Sequoia look without the risk.
+      // Android platform view (the native X11 TextureView) blanks that region
+      // on some GPUs. A translucent gradient gives the Sequoia look without the risk.
       child: Container(
         height: widget.height,
         padding: const EdgeInsets.symmetric(horizontal: 10),

@@ -20,6 +20,19 @@ flutter create \
 
 rm -f test/widget_test.dart
 
+# ---- Native X11 surface -----------------------------------------------------
+# The desktop renderer is ordinary Android/Java code that talks to the guest's
+# X11 bridge over a Unix socket. Keeping it in tool/android makes the generated
+# Android project small and reproducible.
+X11_VIEW_DIR="android/app/src/main/java/com/matthewcodergamer/micro_os"
+mkdir -p "$X11_VIEW_DIR"
+install -m 644 \
+  tool/android/com/matthewcodergamer/micro_os/MicroOSX11View.java \
+  "$X11_VIEW_DIR/MicroOSX11View.java"
+install -m 644 \
+  tool/android/com/matthewcodergamer/micro_os/MicroOSAudio.java \
+  "$X11_VIEW_DIR/MicroOSAudio.java"
+
 # ---- Stream large bundled assets through Android AssetManager ---------------
 # Flutter's rootBundle.load() materializes a whole asset in Dart memory. The
 # pre-baked rootfs is hundreds of MB, so copy it to app-private storage using a
@@ -41,9 +54,15 @@ import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private val assetCopyExecutor = Executors.newSingleThreadExecutor()
+    private var audio: MicroOSAudio? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "microos/x11",
+            MicroOSX11View.Factory(flutterEngine.dartExecutor.binaryMessenger),
+        )
+        audio = MicroOSAudio(flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "microos/rootfs")
             .setMethodCallHandler { call, result ->
                 if (call.method != "copyAssetToFile") {
@@ -107,6 +126,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        audio?.dispose()
+        audio = null
         assetCopyExecutor.shutdown()
         super.onDestroy()
     }

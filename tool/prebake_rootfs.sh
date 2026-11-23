@@ -18,13 +18,23 @@ command -v zstd >/dev/null 2>&1 || {
 echo "==> Provisioning Ubuntu 24.04 ARM64 in Docker"
 docker run --platform linux/arm64 --name "$NAME" \
   -v "$ROOT/tool/setup.sh:/tmp/microos-setup.sh:ro" \
+  -v "$ROOT/tool/x11_bridge.c:/tmp/microos-x11-bridge.c:ro" \
+  -v "$ROOT/tool/audio_bridge.c:/tmp/microos-audio-bridge.c:ro" \
   ubuntu:24.04 /bin/bash -lc '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
     mkdir -p /root/.microos
     cp /tmp/microos-setup.sh /root/.microos/setup.sh
+    cp /tmp/microos-x11-bridge.c /root/.microos/x11_bridge.c
+    cp /tmp/microos-audio-bridge.c /root/.microos/audio_bridge.c
     chmod 755 /root/.microos/setup.sh
     bash /root/.microos/setup.sh
+    test -x /usr/local/bin/microos-xbridge
+    test -x /usr/local/bin/microos-audio
+    ldd /usr/local/bin/microos-xbridge | grep -q libXdamage
+    ldd /usr/local/bin/microos-xbridge | grep -q libjpeg
+    test -f /etc/pulse/microos.pa
+    grep -q 'module-pipe-sink' /etc/pulse/microos.pa
 
     echo "==> Installing Hugging Face CLI in an isolated Python environment"
     python3 -m venv /opt/huggingface-cli
@@ -39,7 +49,7 @@ docker run --platform linux/arm64 --name "$NAME" \
     # secure storage. Do not persist access tokens in the rootfs or shell files.
 
     echo "==> Verifying the pre-baked developer workstation"
-    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop; do
+    for tool in git gh hf python3 node npm rustc cargo java javac jar unzip zip microos-jar microos-run xdotool xprop blender gimp inkscape vlc mpv git-cola gitg pcmanfm mousepad galculator file-roller libreoffice geany sqlitebrowser; do
       command -v "$tool" >/dev/null 2>&1 || {
         echo "Required pre-baked tool is missing: $tool" >&2
         exit 1
@@ -92,6 +102,39 @@ TORRENT
     test -L /root/Downloads
     test "$(readlink /root/Downloads)" = /mnt/android/Download
 
+    echo "==> Verifying the native audio handshake"
+    /usr/local/bin/microos-audio --socket /tmp/microos-audio-smoke.sock \
+      --fifo /tmp/microos-audio-smoke.pcm >/tmp/microos-audio-smoke.log 2>&1 &
+    AUDIO_SMOKE_PID=$!
+    python3 - <<'PYAUDIO'
+import os, socket, struct, time
+path = "/tmp/microos-audio-smoke.sock"
+for _ in range(50):
+    if os.path.exists(path):
+        break
+    time.sleep(0.1)
+else:
+    raise SystemExit("audio bridge did not create its socket")
+client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+client.settimeout(3)
+client.connect(path)
+header = b""
+while len(header) < 8:
+    header += client.recv(8 - len(header))
+message_type, _, _, length = struct.unpack(">BBHI", header)
+payload = b""
+while len(payload) < length:
+    payload += client.recv(length - len(payload))
+assert message_type == 5 and payload[:4] == b"MXAU", (message_type, payload)
+assert struct.unpack(">H", payload[4:6])[0] == 1
+assert struct.unpack(">H", payload[6:8])[0] == 48000
+assert payload[8] == 2 and payload[9] == 16
+print("native audio bridge handshake passed")
+PYAUDIO
+    kill "$AUDIO_SMOKE_PID" 2>/dev/null || true
+    wait "$AUDIO_SMOKE_PID" 2>/dev/null || true
+    rm -f /tmp/microos-audio-smoke.sock /tmp/microos-audio-smoke.pcm /tmp/microos-audio-smoke.log
+
     echo "==> Installing Playwright and its headless Chromium runtime"
     npm install --global playwright
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright install chromium --with-deps
@@ -131,6 +174,18 @@ PLAYWRIGHT_SMOKE
     runuser -u microos-browser -- env HOME=/home/microos-browser timeout 90 "$CHROMIUM_BIN" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --dump-dom "data:text/html,<title>MicroOS Chromium smoke test</title><h1>Chromium is ready</h1>" > /tmp/microos-chromium-smoke.html
     grep -q "Chromium is ready" /tmp/microos-chromium-smoke.html
     echo "==> Chromium ARM64 startup and DOM rendering test passed"
+
+    echo "==> Installing the Playwright MCP server used by OpenCode"
+    npm install --global @playwright/mcp
+    PLAYWRIGHT_MCP_BIN="$(command -v playwright-mcp)"
+    test -n "$PLAYWRIGHT_MCP_BIN"
+    ln -sfn "$PLAYWRIGHT_MCP_BIN" /usr/local/bin/playwright-mcp
+    test -x /usr/local/bin/playwright-mcp
+    timeout 30 /usr/local/bin/playwright-mcp --help >/tmp/microos-playwright-mcp-help.txt
+    grep -qi "playwright" /tmp/microos-playwright-mcp-help.txt
+    test -f /root/.config/opencode/opencode.json
+    grep -q 'playwright-mcp' /root/.config/opencode/opencode.json
+    echo "==> OpenCode headless Chromium automation is configured"
 
     # Exercise the actual Linux desktop browser window, not only headless DOM
     # rendering. This runs the same launcher used by the Android PRoot guest.
@@ -208,6 +263,58 @@ PLAYWRIGHT_SMOKE
     /usr/local/bin/microos-browser-control window-close || true
     wait "$MICROOS_BROWSER_PID" 2>/dev/null || true
     MICROOS_BROWSER_PID=""
+
+    echo "==> Testing the native X11 bridge and JPEG frame stream"
+    BRIDGE_SOCKET=/tmp/microos-bridge-smoke.sock
+    BRIDGE_SMOKE_PID=""
+    rm -f "$BRIDGE_SOCKET"
+    /usr/local/bin/microos-xbridge --display :99 --socket "$BRIDGE_SOCKET" \
+      >/tmp/microos-bridge-smoke.log 2>&1 &
+    BRIDGE_SMOKE_PID=$!
+    python3 - <<'PYBRIDGE'
+import os, socket, struct, time
+path = "/tmp/microos-bridge-smoke.sock"
+for _ in range(60):
+    if os.path.exists(path):
+        break
+    time.sleep(0.1)
+else:
+    raise SystemExit("native X11 bridge did not create its socket")
+client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+client.settimeout(5)
+client.connect(path)
+def receive(size):
+    data = b""
+    while len(data) < size:
+        chunk = client.recv(size - len(data))
+        if not chunk:
+            raise EOFError
+        data += chunk
+    return data
+header = receive(8)
+message_type, _, _, length = struct.unpack(">BBHI", header)
+payload = receive(length)
+assert message_type == 5 and payload[:4] == b"MX11", (message_type, payload[:8])
+assert struct.unpack(">H", payload[4:6])[0] == 1
+print("native X11 bridge handshake", struct.unpack(">HH", payload[6:10]))
+saw_jpeg = False
+deadline = time.time() + 5
+while time.time() < deadline and not saw_jpeg:
+    header = receive(8)
+    message_type, _, _, length = struct.unpack(">BBHI", header)
+    body = receive(length)
+    if message_type == 4:
+        x, y, width, height = struct.unpack(">HHHH", body[:8])
+        assert width > 0 and height > 0 and body[8:10] == b"\xff\xd8"
+        print("native X11 JPEG frame", x, y, width, height, "bytes", length - 8)
+        saw_jpeg = True
+assert saw_jpeg, "native X11 bridge never produced a JPEG frame"
+client.close()
+PYBRIDGE
+    kill -9 "$BRIDGE_SMOKE_PID" 2>/dev/null || true
+    wait "$BRIDGE_SMOKE_PID" 2>/dev/null || true
+    rm -f "$BRIDGE_SOCKET" /tmp/microos-bridge-smoke.log
+
     cleanup_x11_smoke
     trap - EXIT
 
@@ -265,10 +372,12 @@ PLAYWRIGHT_SMOKE
     install -d -o microos-browser -g microos-browser -m 700 "$BROWSER_HOME"
     rm -f /tmp/microos-firefox-smoke.png /tmp/firefox-ldd.txt
 
-    rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html /root/.microos/setup.sh
+    rm -f /tmp/firefox.tar.xz /tmp/chromium-ldd.txt /tmp/microos-chromium-smoke.html \
+      /tmp/microos-playwright-mcp-help.txt
+    rm -f /root/.microos/setup.sh /root/.microos/x11_bridge.c /root/.microos/audio_bridge.c
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "12\\n" > /root/.microos/image-version
+    printf "14\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '
@@ -328,6 +437,19 @@ require_archive_path 'usr/local/bin/start-browser.sh'
 require_archive_path 'usr/local/bin/microos-browser-control'
 require_archive_path 'usr/bin/xdotool'
 require_archive_path 'root/.microos/start-desktop.sh'
+require_archive_path 'usr/local/bin/microos-xbridge'
+require_archive_path 'usr/local/bin/microos-audio'
+require_archive_path 'usr/local/bin/chrome'
+require_archive_path 'usr/local/bin/microos-chrome-headless'
+require_archive_path 'usr/local/bin/microos-youtube'
+require_archive_path 'usr/local/bin/playwright-mcp'
+require_archive_path 'root/\.config/opencode/opencode.json'
+require_archive_path 'etc/pulse/microos.pa'
+require_archive_path 'usr/bin/blender'
+require_archive_path 'usr/bin/gimp'
+require_archive_path 'usr/bin/git-cola'
+require_archive_path 'usr/bin/pcmanfm'
+require_archive_path 'usr/bin/libreoffice'
 require_archive_path 'opt/firefox/firefox'
 require_archive_path 'opt/firefox/firefox-bin'
 require_archive_path 'opt/ms-playwright'

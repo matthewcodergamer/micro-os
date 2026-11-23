@@ -149,18 +149,62 @@ fi
 command -v npm >/dev/null && npm config set fund false --global 2>/dev/null
 
 # -----------------------------------------------------------------------------
-# 4. X11 stack + window manager + VNC bridge
+# 4. Native X11 stack + window manager
+#    The Android app talks to Xvfb through MicroOS's own MIT-licensed bridge
+#    (tool/x11_bridge.c). There is no VNC server or browser-based client.
 # -----------------------------------------------------------------------------
-stage 76 "Installing X11 and VNC"
+stage 76 "Installing native X11"
 apt-get install "${APT_OPTS[@]}" \
-  xvfb openbox xterm x11-utils x11-xserver-utils x11vnc novnc websockify xauth dbus-x11 xdotool \
+  xvfb openbox xterm x11-utils x11-xserver-utils xauth dbus-x11 xdotool \
+  libx11-dev libxtst-dev libxdamage-dev libxfixes-dev libjpeg-turbo8-dev \
+  pulseaudio pulseaudio-utils libasound2-plugins \
   libgl1-mesa-dri mesa-utils \
   fonts-dejavu-core fonts-liberation \
-  || warn "some X11 packages failed to install"
+  || warn "some X11/audio packages failed to install"
+
+stage 78 "Building native X11 and audio bridges"
+if [ -f /root/.microos/x11_bridge.c ]; then
+  if gcc -O2 -Wall -Wextra \
+      -o /usr/local/bin/microos-xbridge /root/.microos/x11_bridge.c \
+      -lX11 -lXtst -lXdamage -lXfixes -ljpeg; then
+    chmod 755 /usr/local/bin/microos-xbridge
+    log "native X11 bridge compiled (JPEG fast path)"
+  else
+    warn "native X11 bridge compilation failed; the desktop will not start"
+  fi
+else
+  warn "native X11 bridge source is missing from /root/.microos"
+fi
+if [ -f /root/.microos/audio_bridge.c ]; then
+  if gcc -O2 -Wall -Wextra \
+      -o /usr/local/bin/microos-audio /root/.microos/audio_bridge.c; then
+    chmod 755 /usr/local/bin/microos-audio
+    log "native audio bridge compiled"
+  else
+    warn "native audio bridge compilation failed; desktop audio is unavailable"
+  fi
+else
+  warn "native audio bridge source is missing from /root/.microos"
+fi
+
+# PulseAudio writes the complete mixed desktop signal into a FIFO. The audio
+# bridge mirrors that FIFO to Android at 48 kHz stereo s16le, so apps do not
+# resample on the phone and YouTube/VLC/Firefox all share one low-latency path.
+stage 79 "Configuring low-latency desktop audio"
+mkdir -p /etc/pulse
+cat > /etc/pulse/microos.pa <<'PULSE'
+load-module module-native-protocol-unix socket=/tmp/microos-pulse.sock auth-anonymous=1
+load-module module-pipe-sink sink_name=microos file=/tmp/microos-audio.pcm format=s16le rate=48000 channels=2
+set-default-sink microos
+PULSE
+cat > /etc/pulse/client.conf <<'PULSECLIENT'
+default-server = unix:/tmp/microos-pulse.sock
+autospawn = no
+PULSECLIENT
 
 # macOS-inspired X11 pointer theme (WhiteSur Cursors, upstream GPL-3.0).
-# This affects X11 applications in the VNC desktop; it does not change the
-# Android host pointer or create a pointer overlay for touch-only screens.
+# This affects X11 applications in the desktop; it does not change the
+# Android host pointer, which Misty draws on the native X11 surface.
 stage 80 "Installing WhiteSur X11 cursor theme"
 apt-get install "${APT_OPTS[@]}" git x11-xserver-utils || warn "cursor prerequisites failed"
 if [ ! -d /usr/share/icons/WhiteSur-cursors/cursors ]; then
@@ -203,7 +247,8 @@ fi
 cat > /usr/local/bin/start-browser.sh <<'BROWSER'
 #!/usr/bin/env bash
 set -euo pipefail
-export DISPLAY="${DISPLAY:-:1}"
+export DISPLAY="${DISPLAY:-:0}"
+export PULSE_SERVER="${PULSE_SERVER:-unix:/tmp/microos-pulse.sock}"
 BROWSER_HOME=/home/microos-browser
 CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || true)"
 if [ -z "$CHROMIUM_BIN" ]; then echo "[microos] Chromium .deb is not installed" >&2; exit 127; fi
@@ -280,6 +325,7 @@ sleep 0.4
 CHROMIUM_EXTRA_ARGS=(
   --ignore-gpu-blocklist
   --canvas-oop-rasterization
+  --enable-features=CanvasOopRasterization,ParallelDownloading
 )
 if [ "${MICROOS_DISABLE_GPU:-0}" = "1" ]; then
   # Used only by the CI Xvfb window test. Phone launches keep acceleration enabled.
@@ -290,13 +336,20 @@ if [ "${MICROOS_HARDWARE_GPU_ONLY:-0}" = "1" ]; then
   # devices where PRoot cannot expose a usable host GPU. Enable after device test.
   CHROMIUM_EXTRA_ARGS+=(--disable-software-rasterizer)
 fi
-exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
+exec runuser -u microos-browser -- env DISPLAY="$DISPLAY" PULSE_SERVER="$PULSE_SERVER" HOME="$BROWSER_HOME" XDG_CONFIG_HOME="$BROWSER_HOME/.config" XDG_CACHE_HOME="$BROWSER_HOME/.cache" "$CHROMIUM_BIN" \
   "${CHROMIUM_EXTRA_ARGS[@]}" \
   --no-sandbox \
   --disable-gpu-sandbox \
   --process-per-site \
   --disable-background-networking \
-  --disable-features=Translate,OptimizationHints \
+  --disable-features=Translate,OptimizationHints,MediaRouter,CalculateNativeWinOcclusion \
+  --disable-background-timer-throttling \
+  --disable-renderer-backgrounding \
+  --disable-backgrounding-occluded-windows \
+  --autoplay-policy=no-user-gesture-required \
+  --enable-quic \
+  --force-device-scale-factor=1 \
+  --renderer-process-limit=3 \
   --js-flags="--max-old-space-size=512" \
   --disable-dev-shm-usage --no-first-run \
   --disable-crash-reporter \
@@ -310,7 +363,8 @@ chmod 755 /usr/local/bin/start-browser.sh
 cat > /usr/local/bin/start-firefox.sh <<'BROWSER'
 #!/usr/bin/env bash
 set -euo pipefail
-export DISPLAY="${DISPLAY:-:1}"
+export DISPLAY="${DISPLAY:-:0}"
+export PULSE_SERVER="${PULSE_SERVER:-unix:/tmp/microos-pulse.sock}"
 BROWSER_HOME=/home/microos-browser
 FIREFOX_BIN="$(command -v firefox || true)"
 if [ -z "$FIREFOX_BIN" ]; then
@@ -342,7 +396,7 @@ pkill -u microos-browser -f '[c]hromium|[c]hrome' 2>/dev/null || true
 sleep 0.4
 # Run a regular Firefox window (not kiosk/app mode), then maximize it through
 # Openbox once its real X11 window is available.
-runuser -u microos-browser -- env DISPLAY="$DISPLAY" HOME="$BROWSER_HOME" \
+runuser -u microos-browser -- env DISPLAY="$DISPLAY" PULSE_SERVER="$PULSE_SERVER" HOME="$BROWSER_HOME" \
   MOZ_ENABLE_WAYLAND=0 MOZ_DISABLE_CONTENT_SANDBOX=1 MOZ_DISABLE_GMP_SANDBOX=1 \
   "$FIREFOX_BIN" --profile "$FIREFOX_PROFILE" --new-window "$@" &
 FIREFOX_PID=$!
@@ -370,7 +424,7 @@ chmod 755 /usr/local/bin/microos-browse
 cat > /usr/local/bin/microos-browser-control <<'BROWSER'
 #!/usr/bin/env bash
 set -euo pipefail
-export DISPLAY="${DISPLAY:-:1}"
+export DISPLAY="${DISPLAY:-:0}"
 ACTION="${1:-}"
 case "$ACTION" in
   back)          KEY='alt+Left' ;;
@@ -423,7 +477,70 @@ case "$ACTION" in
 esac
 BROWSER
 chmod 755 /usr/local/bin/microos-browser-control
-# 6. ZRAM
+
+# -----------------------------------------------------------------------------
+# 6. Desktop applications
+#    Preinstall the everyday Linux software set so the desktop is useful on the
+#    first launch, not an empty shell. Blender, the creative suite and the Git
+#    GUIs are installed explicitly. --no-install-recommends keeps the image
+#    small enough for a phone while still installing every required runtime.
+# -----------------------------------------------------------------------------
+stage 86 "Installing desktop applications"
+# Install in small groups so one unavailable package cannot block Blender or
+# the rest of the desktop suite.
+for group in \
+  "blender" \
+  "gimp inkscape" \
+  "vlc mpv ffmpeg" \
+  "pcmanfm mousepad galculator file-roller ristretto evince" \
+  "git-cola gitg geany sqlitebrowser" \
+  "libreoffice-writer libreoffice-calc" \
+  "fonts-noto-core fonts-noto-color-emoji"; do
+  # shellcheck disable=SC2086
+  apt-get install "${APT_OPTS[@]}" $group \
+    || warn "desktop application group failed: $group"
+done
+
+# Small automation-friendly Chromium launcher shared by OpenCode, Playwright
+# and Puppeteer. It always runs headless-safe flags; callers may add their own
+# --headless flag. The desktop still uses start-browser.sh directly.
+cat > /usr/local/bin/chrome <<'CHROME'
+#!/usr/bin/env bash
+set -euo pipefail
+BIN="$(command -v chromium || command -v chromium-browser || true)"
+if [ -z "$BIN" ]; then
+  echo "[microos] Chromium is not installed" >&2
+  exit 127
+fi
+exec "$BIN" \
+  --no-sandbox \
+  --disable-gpu-sandbox \
+  --disable-dev-shm-usage \
+  --disable-crash-reporter \
+  --no-first-run \
+  --no-default-browser-check \
+  "$@"
+CHROME
+chmod 755 /usr/local/bin/chrome
+ln -sfn /usr/local/bin/chrome /usr/local/bin/google-chrome
+ln -sfn /usr/local/bin/chrome /usr/local/bin/google-chrome-stable
+ln -sfn /usr/local/bin/chrome /usr/local/bin/chromium-browser
+ln -sfn /usr/local/bin/chrome /usr/local/bin/chromium-headless
+
+cat > /usr/local/bin/microos-chrome-headless <<'CHROME_HEADLESS'
+#!/usr/bin/env bash
+exec /usr/local/bin/chrome --headless=new --disable-gpu "$@"
+CHROME_HEADLESS
+chmod 755 /usr/local/bin/microos-chrome-headless
+
+cat > /usr/local/bin/microos-youtube <<'YOUTUBE'
+#!/usr/bin/env bash
+exec /usr/local/bin/start-browser.sh --new-window https://www.youtube.com/
+YOUTUBE
+chmod 755 /usr/local/bin/microos-youtube
+
+# -----------------------------------------------------------------------------
+# 7. ZRAM
 #    ZRAM is a kernel feature owned by Android. A proot guest shares the host
 #    kernel and cannot create or re-configure swap devices (swapon returns
 #    EPERM). We install the tools and report the real numbers rather than
@@ -458,7 +575,7 @@ EOF
 chmod 755 /usr/local/bin/microos-mem
 
 # -----------------------------------------------------------------------------
-# 7. TLS certificates + OpenCode agent
+# 8. TLS certificates + OpenCode agent
 # -----------------------------------------------------------------------------
 stage 90 "Refreshing TLS certificates"
 apt-get install "${APT_OPTS[@]}" ca-certificates || warn "ca-certificates package failed"
@@ -516,8 +633,42 @@ else
   warn "OpenCode verification failed: executable not found; Linux setup will continue without it"
 fi
 
+# Give OpenCode a ready-to-use headless browser. The Playwright MCP server is
+# installed into the pre-baked image by prebake_rootfs.sh; this configuration
+# points it at the native Chromium wrapper and never needs a desktop window.
+# Chromium runs with --no-sandbox because Android PRoot has no user namespaces.
+mkdir -p /root/.config/opencode
+cat > /root/.config/opencode/opencode.json <<'OPENCODE'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "playwright": {
+        "type": "local",
+        "command": [
+          "/usr/local/bin/playwright-mcp",
+          "--headless",
+          "--browser",
+          "chromium",
+          "--executable-path",
+          "/usr/local/bin/chrome",
+          "--no-sandbox",
+          "--viewport-size",
+          "1280x720"
+        ],
+        "timeout": {
+          "startup": 60000,
+          "catalog": 60000
+        }
+      }
+    }
+  }
+}
+OPENCODE
+chmod 644 /root/.config/opencode/opencode.json
+
 # -----------------------------------------------------------------------------
-# 8. Local JAR / Minecraft inspection helper
+# 9. Local JAR / Minecraft inspection helper
 #    Works on files the user has downloaded to Android shared storage. It does
 #    not download, bundle, or redistribute Minecraft game assets.
 # -----------------------------------------------------------------------------
@@ -596,7 +747,7 @@ JAR
 chmod 755 /usr/local/bin/microos-jar
 
 # -----------------------------------------------------------------------------
-# 9. Shell defaults, git, projects
+# 10. Shell defaults, git, projects
 # -----------------------------------------------------------------------------
 stage 94 "Finalising shell"
 cat > /etc/profile.d/microos.sh <<'EOF'
@@ -604,7 +755,14 @@ export PATH="/root/.opencode/bin:/root/.local/bin:$PATH"
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 export TERM=xterm-256color
-export DISPLAY=:1
+export DISPLAY=:0
+export PULSE_SERVER=unix:/tmp/microos-pulse.sock
+export CHROME_BIN=/usr/local/bin/chrome
+export CHROME_PATH=/usr/local/bin/chrome
+export CHROMIUM_BIN=/usr/local/bin/chrome
+export PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chrome
+export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+export NODE_PATH=/opt/node-global
 [ -d /mnt/android ] && export MICROOS_STORAGE=/mnt/android
 EOF
 chmod 644 /etc/profile.d/microos.sh
@@ -619,7 +777,12 @@ cat >> /root/.bashrc <<'EOF'
 
 # --- MicroOS ---------------------------------------------------------------
 export PATH="/root/.opencode/bin:/root/.local/bin:$PATH"
-export DISPLAY=:1
+export DISPLAY=:0
+export PULSE_SERVER=unix:/tmp/microos-pulse.sock
+export CHROME_BIN=/usr/local/bin/chrome
+export CHROME_PATH=/usr/local/bin/chrome
+export CHROMIUM_BIN=/usr/local/bin/chrome
+export PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chrome
 export XCURSOR_THEME=WhiteSur-cursors
 export XCURSOR_SIZE=24
 export PS1='\[\e[38;5;39m\]\u@microos\[\e[0m\]:\[\e[38;5;114m\]\w\[\e[0m\]\$ '
@@ -634,26 +797,63 @@ alias ll='ls -alF'
 EOF
 
 # -----------------------------------------------------------------------------
-# 10. Display bridge + browser launcher
+# 11. Display bridge + browser launcher
 # -----------------------------------------------------------------------------
 stage 96 "Writing display bridge"
 cat > /root/.microos/start-gui.sh <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-export DISPLAY=:1 XCURSOR_THEME=WhiteSur-cursors XCURSOR_SIZE=24
+export DISPLAY="${DISPLAY:-:0}"
+export XCURSOR_THEME=WhiteSur-cursors
+export XCURSOR_SIZE=24
+export PULSE_SERVER=unix:/tmp/microos-pulse.sock
 export XDG_RUNTIME_DIR=/tmp/microos-runtime
-GEOMETRY="1280x720x24"
+GEOMETRY="${MICROOS_DESKTOP_GEOMETRY:-1280x720x24}"
+SOCKET=/tmp/microos-x11.sock
+AUDIO_SOCKET=/tmp/microos-audio.sock
+AUDIO_FIFO=/tmp/microos-audio.pcm
 LOG=/tmp/.microos
 mkdir -p "$LOG" "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
-for process in websockify x11vnc openbox Xvfb; do pkill -9 -x "$process" 2>/dev/null || true; done
+for process in microos-audio microos-xbridge pulseaudio openbox Xvfb; do
+  pkill -9 -x "$process" 2>/dev/null || true
+done
+# Chromium/Firefox keep separate processes and a singleton profile lock. Kill
+# them with the old X server so a restarted desktop always gets a fresh window.
+pkill -9 -u microos-browser -f 'chromium|firefox' 2>/dev/null || true
 sleep 0.5
-Xvfb :1 -screen 0 "$GEOMETRY" -nolisten tcp -ac -noreset -dpi 96 >"$LOG/xvfb.log" 2>&1 &
+rm -f "$SOCKET" "$AUDIO_SOCKET" "$AUDIO_FIFO" /tmp/microos-pulse.sock
+
+# Audio comes up first: the bridge creates the FIFO, then PulseAudio opens its
+# pipe sink. This order prevents the sink from blocking on a missing reader.
+if [ -x /usr/local/bin/microos-audio ]; then
+  microos-audio --socket "$AUDIO_SOCKET" --fifo "$AUDIO_FIFO" >"$LOG/audio.log" 2>&1 &
+  AUDIO_PID=$!
+  for _ in $(seq 1 40); do
+    [ -S "$AUDIO_SOCKET" ] && [ -p "$AUDIO_FIFO" ] && break
+    sleep 0.1
+  done
+fi
+if command -v pulseaudio >/dev/null 2>&1; then
+  pulseaudio -n -F /etc/pulse/microos.pa --daemonize=no --exit-idle-time=-1 \
+    --disable-shm --log-target=stderr >"$LOG/pulse.log" 2>&1 &
+  PULSE_PID=$!
+  for _ in $(seq 1 40); do
+    [ -S /tmp/microos-pulse.sock ] && break
+    sleep 0.1
+  done
+  if [ ! -S /tmp/microos-pulse.sock ]; then
+    echo "[microos] WARN: PulseAudio did not start; inspect $LOG/pulse.log" >&2
+  fi
+fi
+
+Xvfb "$DISPLAY" -screen 0 "$GEOMETRY" -nolisten tcp -ac -noreset -dpi 96 >"$LOG/xvfb.log" 2>&1 &
 XVFB_PID=$!
-cleanup() { kill "${WEBSOCKIFY_PID:-}" "${VNC_PID:-}" "${OPENBOX_PID:-}" "$XVFB_PID" 2>/dev/null || true; }
+cleanup() {
+  kill ${PULSE_PID:-} ${AUDIO_PID:-} ${BRIDGE_PID:-} ${OPENBOX_PID:-} "$XVFB_PID" 2>/dev/null || true
+}
 trap cleanup EXIT INT TERM
-wait_for_x() { for _ in $(seq 1 60); do xset -display :1 q >/dev/null 2>&1 && return 0; kill -0 "$XVFB_PID" 2>/dev/null || { cat "$LOG/xvfb.log" >&2 || true; return 1; }; sleep 0.2; done; return 1; }
-wait_for_port() { local port="$1" attempts="$2"; for ((i=0;i<attempts;i++)); do (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && return 0; sleep 0.25; done; return 1; }
-if ! wait_for_x; then echo "[microos] ERROR: Xvfb :1 did not become usable" >&2; exit 1; fi
+wait_for_x() { for _ in $(seq 1 60); do xset -display "$DISPLAY" q >/dev/null 2>&1 && return 0; kill -0 "$XVFB_PID" 2>/dev/null || { cat "$LOG/xvfb.log" >&2 || true; return 1; }; sleep 0.2; done; return 1; }
+if ! wait_for_x; then echo "[microos] ERROR: Xvfb $DISPLAY did not become usable" >&2; exit 1; fi
 xrdb -merge /root/.Xresources 2>/dev/null || true
 xsetroot -solid '#0f131b' -cursor_name left_ptr 2>/dev/null || true
 mkdir -p /root/.config/openbox
@@ -661,28 +861,50 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_menu><menu id="root-menu" label="MicroOS">
 <item label="Chromium"><action name="Execute"><command>/usr/local/bin/start-browser.sh</command></action></item>
+<item label="YouTube"><action name="Execute"><command>/usr/local/bin/microos-youtube</command></action></item>
 <item label="Terminal"><action name="Execute"><command>xterm -fa Monospace -fs 10</command></action></item>
+<separator/>
+<item label="Files"><action name="Execute"><command>pcmanfm</command></action></item>
+<item label="Text Editor"><action name="Execute"><command>mousepad</command></action></item>
+<item label="Calculator"><action name="Execute"><command>galculator</command></action></item>
+<item label="Archive Manager"><action name="Execute"><command>file-roller</command></action></item>
+<item label="Image Viewer"><action name="Execute"><command>ristretto</command></action></item>
+<item label="Document Viewer"><action name="Execute"><command>evince</command></action></item>
+<separator/>
+<item label="Blender"><action name="Execute"><command>blender</command></action></item>
+<item label="GIMP"><action name="Execute"><command>gimp</command></action></item>
+<item label="Inkscape"><action name="Execute"><command>inkscape</command></action></item>
+<item label="VLC"><action name="Execute"><command>vlc</command></action></item>
+<item label="LibreOffice Writer"><action name="Execute"><command>libreoffice --writer</command></action></item>
+<item label="LibreOffice Calc"><action name="Execute"><command>libreoffice --calc</command></action></item>
+<separator/>
+<item label="Git Cola"><action name="Execute"><command>git-cola</command></action></item>
+<item label="Gitg"><action name="Execute"><command>gitg</command></action></item>
+<item label="Geany"><action name="Execute"><command>geany</command></action></item>
+<item label="SQLite Browser"><action name="Execute"><command>sqlitebrowser</command></action></item>
 </menu></openbox_menu>
 MENU
-openbox --display :1 >"$LOG/openbox.log" 2>&1 &
+DISPLAY="$DISPLAY" openbox --sm-disable >"$LOG/openbox.log" 2>&1 &
 OPENBOX_PID=$!
-# Keep the RFB listener loopback-only: websockify is the only exposed bridge.
-# Use low defer/wait for interactive latency and the LAN profile because the
-# VNC client and server are on the same device (Starlink does not carry VNC).
-# ncache is bounded to 10 framebuffer rows and is verified in the X11 smoke test.
-x11vnc -display :1 -forever -shared -nopw -rfbport 5900 -localhost \
-  -noxdamage -noshm -repeat -ncache 10 -ncache_cr \
-  -wait 1 -defer 1 -speeds 6,5000,1 >"$LOG/x11vnc.log" 2>&1 &
-VNC_PID=$!
-if ! wait_for_port 5900 80 || ! kill -0 "$VNC_PID" 2>/dev/null; then echo "[microos] ERROR: x11vnc failed to open port 5900" >&2; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
-if [ ! -f /usr/share/novnc/vnc.html ]; then echo "[microos] ERROR: noVNC client is missing" >&2; exit 1; fi
-websockify --web /usr/share/novnc 6080 localhost:5900 >"$LOG/websockify.log" 2>&1 &
-WEBSOCKIFY_PID=$!
-if ! wait_for_port 6080 80 || ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then echo "[microos] ERROR: websockify failed to open port 6080" >&2; cat "$LOG/websockify.log" >&2 || true; cat "$LOG/x11vnc.log" >&2 || true; exit 1; fi
+if [ ! -x /usr/local/bin/microos-xbridge ]; then
+  echo "[microos] ERROR: native X11 bridge is missing" >&2
+  exit 1
+fi
+microos-xbridge --display "$DISPLAY" --socket "$SOCKET" >"$LOG/xbridge.log" 2>&1 &
+BRIDGE_PID=$!
+for _ in $(seq 1 80); do
+  [ -S "$SOCKET" ] && kill -0 "$BRIDGE_PID" 2>/dev/null && break
+  sleep 0.25
+done
+if [ ! -S "$SOCKET" ] || ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
+  echo "[microos] ERROR: native X11 bridge did not create $SOCKET" >&2
+  cat "$LOG/xbridge.log" >&2 || true
+  exit 1
+fi
 if ! pgrep -u microos-browser -f 'chromium|firefox' >/dev/null 2>&1; then /usr/local/bin/start-browser.sh --new-window chrome://newtab/ >"$LOG/chromium.log" 2>&1 & fi
-echo "[microos] display :1 ready (Xvfb 1280x720, Openbox, VNC 5900, noVNC 6080)"
-while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$VNC_PID" 2>/dev/null && kill -0 "$WEBSOCKIFY_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
-echo "[microos] ERROR: X11/VNC/noVNC process exited; inspect $LOG/*.log" >&2
+echo "[microos] native display $DISPLAY ready (Xvfb $GEOMETRY, Openbox, socket $SOCKET, audio $AUDIO_SOCKET)"
+while kill -0 "$XVFB_PID" 2>/dev/null && kill -0 "$BRIDGE_PID" 2>/dev/null && kill -0 "$OPENBOX_PID" 2>/dev/null; do sleep 2; done
+echo "[microos] ERROR: native X11 process exited; inspect $LOG/*.log" >&2
 exit 1
 EOF
 chmod 755 /root/.microos/start-gui.sh
@@ -690,11 +912,13 @@ ln -sf /root/.microos/start-gui.sh /root/.microos/start-desktop.sh
 
 cat > /root/.microos/stop-gui.sh <<'EOF'
 #!/usr/bin/env bash
-pkill -x websockify 2>/dev/null || true
-pkill -x x11vnc 2>/dev/null || true
+pkill -x microos-audio 2>/dev/null || true
+pkill -x pulseaudio 2>/dev/null || true
+pkill -x microos-xbridge 2>/dev/null || true
 pkill -x openbox 2>/dev/null || true
 pkill -x Xvfb 2>/dev/null || true
-echo "[microos] display stopped"
+rm -f /tmp/microos-x11.sock /tmp/microos-audio.sock /tmp/microos-audio.pcm /tmp/microos-pulse.sock
+echo "[microos] display and audio stopped"
 EOF
 chmod 755 /root/.microos/stop-gui.sh
 
@@ -730,7 +954,7 @@ STEAMCHECK
 chmod 755 /usr/local/bin/microos-steam-check
 
 # -----------------------------------------------------------------------------
-# 11. Trim the image
+# 12. Trim the image
 # -----------------------------------------------------------------------------
 stage 98 "Cleaning up"
 apt-get autoremove -y >/dev/null 2>&1 || true

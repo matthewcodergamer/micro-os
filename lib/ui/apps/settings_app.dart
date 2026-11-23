@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../app_scope.dart';
+import '../../core/desktop_input.dart';
 import '../../core/macos_design.dart';
 import '../../core/terminal_profiles.dart';
 import '../../core/theme.dart';
@@ -134,7 +135,7 @@ class _SettingsAppState extends State<SettingsApp> {
 
 class _DesktopPage extends StatelessWidget {
   const _DesktopPage({required this.settings});
-  final dynamic settings;
+  final SettingsStore settings;
 
   @override
   Widget build(BuildContext context) {
@@ -176,6 +177,65 @@ class _DesktopPage extends StatelessWidget {
             );
           },
         ),
+        const Divider(height: 28),
+        const Text(
+          'Linux desktop input',
+          style: TextStyle(
+            color: MicroColors.text,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Choose how touches drive the X11 desktop inside the Linux Desktop '
+          'window. Both modes still support the floating keyboard and extra '
+          'keys bar.',
+          style: TextStyle(color: MicroColors.subtle, fontSize: 12, height: 1.4),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final mode in DesktopPointerMode.values)
+              ChoiceChip(
+                label: Text(mode.title),
+                selected: settings.desktopPointerMode == mode,
+                onSelected: (_) => settings.setDesktopPointerMode(mode),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          settings.desktopPointerMode.description,
+          style: const TextStyle(
+            color: MicroColors.subtle,
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+        if (settings.desktopPointerMode == DesktopPointerMode.trackpad) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Pointer speed: ${settings.desktopCursorSpeed.toStringAsFixed(2)}×',
+            style: const TextStyle(color: MicroColors.text),
+          ),
+          Slider(
+            value: settings.desktopCursorSpeed,
+            min: 0.8,
+            max: 2.0,
+            divisions: 12,
+            label: '${settings.desktopCursorSpeed.toStringAsFixed(2)}×',
+            onChanged: (value) => settings.setDesktopCursorSpeed(value),
+          ),
+          const Text(
+            'Tap the trackpad with one finger to click, two fingers to scroll, '
+            'or long-press to right-click. Long-press then drag to move '
+            'windows and files.',
+            style: TextStyle(color: MicroColors.subtle, fontSize: 12, height: 1.4),
+          ),
+        ],
       ],
     );
   }
