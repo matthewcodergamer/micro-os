@@ -122,6 +122,9 @@ jobs:
           grep -qxE '(\./)?usr/local/bin/microos-youtube' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/local/bin/playwright-mcp' /tmp/rootfs-archive.list
           grep -qxE '(\./)?root/\.config/opencode/opencode.json' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/\.config/opencode/cli\.json' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?root/Desktop/blender\.desktop' /tmp/rootfs-archive.list
+          grep -qxE '(\./)?usr/share/icons/hicolor/256x256/apps/microos-blender\.png' /tmp/rootfs-archive.list
           grep -qxE '(\./)?etc/pulse/microos.pa' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/bin/blender' /tmp/rootfs-archive.list
           grep -qxE '(\./)?usr/bin/gimp' /tmp/rootfs-archive.list
@@ -268,6 +271,8 @@ jobs:
           grep -q 'microos-chrome-headless' tool/setup.sh
           grep -q 'git-cola' tool/setup.sh
           grep -q 'blender' tool/setup.sh
+          grep -q 'microos-blender' tool/setup.sh
+          grep -q 'OPENCODE_CLI_CONFIG_CONTENT' lib/ui/apps/terminal_app.dart
           bash -n tool/fetch_thanasos_wallpapers.sh
 
       - name: Unit tests

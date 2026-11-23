@@ -16,6 +16,8 @@ macos/
 linux/
 windows/
 web/
+!assets/icons/linux/
+!assets/icons/linux/*.png
 
 # Binary payloads fetched at build time
 assets/rootfs/*.tar.gz

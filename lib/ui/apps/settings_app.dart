@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../app_scope.dart';
 import '../../core/desktop_input.dart';
 import '../../core/macos_design.dart';
+import '../../core/opencode_themes.dart';
 import '../../core/terminal_profiles.dart';
 import '../../services/github_auth.dart';
 import '../../services/linux_runtime.dart';
@@ -322,7 +323,9 @@ class _TerminalPage extends StatelessWidget {
         ),
         _Section(
           title: 'Colour profile',
-          caption: 'Every terminal tab and shell preview uses this palette.',
+          caption:
+              'Every shell and new OpenCode session follows this macOS '
+              'palette. Light profiles also switch OpenCode to a light theme.',
           children: [
             _ProfileGrid(
               selected: settings.terminalProfile,
@@ -331,10 +334,46 @@ class _TerminalPage extends StatelessWidget {
             _TerminalPreview(profile: profile),
           ],
         ),
+        _Section(
+          title: 'OpenCode',
+          caption:
+              'The AI Hub and every new terminal tab use this palette. White '
+              'keeps OpenCode bright even when the shell is black.',
+          children: [
+            _ChoiceGroup<String>(
+              value: settings.openCodeTheme,
+              onChanged: settings.setOpenCodeTheme,
+              options: [
+                for (final theme in kOpenCodeThemes)
+                  _Choice(
+                    value: theme.id,
+                    title: theme.title,
+                    description: theme.description,
+                    icon: _openCodeIcon(theme.id),
+                  ),
+              ],
+            ),
+            _OpenCodePreview(
+              preference: settings.openCodeTheme,
+              profile: profile,
+            ),
+          ],
+        ),
       ],
     );
   }
 }
+
+IconData _openCodeIcon(String id) => switch (id) {
+  'light' => Icons.light_mode_rounded,
+  'dark' => Icons.dark_mode_rounded,
+  'system' => Icons.terminal_rounded,
+  'ocean' => Icons.water_rounded,
+  'forest' => Icons.forest_rounded,
+  'rose' => Icons.local_florist_rounded,
+  'sand' => Icons.wb_sunny_rounded,
+  _ => Icons.palette_rounded,
+};
 
 class _BrowserPage extends StatelessWidget {
   const _BrowserPage({required this.settings});
@@ -1830,12 +1869,11 @@ class _Section extends StatelessWidget {
 }
 
 class _Card extends StatelessWidget {
-  const _Card({this.children, this.child, this.padding = EdgeInsets.zero})
+  const _Card({this.children, this.child})
     : assert(children != null || child != null);
 
   final List<Widget>? children;
   final Widget? child;
-  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
@@ -1863,7 +1901,7 @@ class _Card extends StatelessWidget {
           width: 0.8,
         ),
       ),
-      child: Padding(padding: padding, child: content),
+      child: content,
     );
   }
 }
@@ -1900,7 +1938,6 @@ class _SettingsRow extends StatelessWidget {
     this.leadingColor,
     this.trailing,
     this.onTap,
-    this.showChevron = false,
     this.enabled = true,
   });
 
@@ -1910,7 +1947,6 @@ class _SettingsRow extends StatelessWidget {
   final Color? leadingColor;
   final Widget? trailing;
   final VoidCallback? onTap;
-  final bool showChevron;
   final bool enabled;
 
   @override
@@ -1964,14 +2000,6 @@ class _SettingsRow extends StatelessWidget {
             const SizedBox(width: 10),
             trailing!,
           ],
-          if (showChevron) ...[
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: Sequoia.labelTertiary,
-            ),
-          ],
         ],
       ),
     );
@@ -1992,7 +2020,6 @@ class _SwitchRow extends StatelessWidget {
     this.subtitle,
     this.icon,
     this.iconColor,
-    this.enabled = true,
   });
 
   final String title;
@@ -2001,7 +2028,6 @@ class _SwitchRow extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final IconData? icon;
   final Color? iconColor;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -2010,13 +2036,12 @@ class _SwitchRow extends StatelessWidget {
       subtitle: subtitle,
       leadingIcon: icon,
       leadingColor: iconColor,
-      enabled: enabled,
-      onTap: enabled ? () => onChanged(!value) : null,
+      onTap: () => onChanged(!value),
       trailing: Transform.scale(
         scale: 0.92,
         child: Switch(
           value: value,
-          onChanged: enabled ? onChanged : null,
+          onChanged: onChanged,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),
@@ -2467,6 +2492,135 @@ class _TerminalPreview extends StatelessWidget {
   }
 }
 
+class _OpenCodePreview extends StatelessWidget {
+  const _OpenCodePreview({required this.preference, required this.profile});
+
+  final String preference;
+  final TerminalProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final choice = openCodeThemeChoice(preference);
+    final followsTerminal = choice.followsTerminal;
+    final background = followsTerminal ? profile.background : choice.background;
+    final foreground = followsTerminal ? profile.foreground : choice.foreground;
+    final accent = followsTerminal ? profile.cursor : choice.accent;
+    final resolved = resolveOpenCodeTheme(preference, profile);
+    final light = background.computeLuminance() > 0.55;
+    final dim = foreground.withValues(alpha: 0.58);
+    final hairline = light
+        ? Colors.black.withValues(alpha: 0.12)
+        : Colors.white.withValues(alpha: 0.10);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 13),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: hairline, width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              for (final color in const [
+                Sequoia.closeLight,
+                Sequoia.miniLight,
+                Sequoia.zoomLight,
+              ])
+                Container(
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(right: 5),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.85),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              const Spacer(),
+              Text(
+                '${choice.title} · ${resolved.name}',
+                style: TextStyle(color: dim, fontSize: 9.5),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: light ? 0.16 : 0.22),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(Icons.auto_awesome_rounded, size: 14, color: accent),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                'OpenCode',
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: light ? 0.12 : 0.18),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  resolved.mode == 'light' ? 'Light' : 'Dark',
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              color: light
+                  ? Colors.black.withValues(alpha: 0.045)
+                  : Colors.white.withValues(alpha: 0.055),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: hairline, width: 0.7),
+            ),
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 10.5,
+                  height: 1.4,
+                  color: foreground,
+                ),
+                children: [
+                  TextSpan(
+                    text: '> ',
+                    style: TextStyle(color: accent, fontWeight: FontWeight.w700),
+                  ),
+                  const TextSpan(text: 'what should we build today?'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AccountCard extends StatelessWidget {
   const _AccountCard({
     required this.icon,
@@ -2543,6 +2697,14 @@ class _AccountCard extends StatelessWidget {
   }
 }
 
+class _RuntimeLook {
+  const _RuntimeLook(this.label, this.color, this.description);
+
+  final String label;
+  final Color color;
+  final String description;
+}
+
 class _LinuxHero extends StatelessWidget {
   const _LinuxHero({required this.runtime});
 
@@ -2550,31 +2712,34 @@ class _LinuxHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    late final String label;
-    late final Color color;
-    late final String description;
-    switch (runtime.status) {
-      case RuntimeStatus.checking:
-        label = 'Checking';
-        color = Sequoia.graphite;
-        description = 'Looking for the installed workstation image.';
-      case RuntimeStatus.missing:
-        label = 'Not installed';
-        color = Sequoia.orange;
-        description = 'Install the Ubuntu ARM64 workstation to begin.';
-      case RuntimeStatus.installing:
-        label = 'Installing';
-        color = Sequoia.blue;
-        description = runtime.stage;
-      case RuntimeStatus.ready:
-        label = 'Ready';
-        color = Sequoia.green;
-        description = 'Terminals, the X11 desktop, and Linux apps are ready.';
-      case RuntimeStatus.failed:
-        label = 'Needs attention';
-        color = Sequoia.red;
-        description = 'The last setup attempt did not finish.';
-    }
+    final look = switch (runtime.status) {
+      RuntimeStatus.checking => const _RuntimeLook(
+        'Checking',
+        Sequoia.graphite,
+        'Looking for the installed workstation image.',
+      ),
+      RuntimeStatus.missing => const _RuntimeLook(
+        'Not installed',
+        Sequoia.orange,
+        'Install the Ubuntu ARM64 workstation to begin.',
+      ),
+      RuntimeStatus.installing => _RuntimeLook(
+        'Installing',
+        Sequoia.blue,
+        runtime.stage,
+      ),
+      RuntimeStatus.ready => const _RuntimeLook(
+        'Ready',
+        Sequoia.green,
+        'Terminals, the X11 desktop, and Linux apps are ready.',
+      ),
+      RuntimeStatus.failed => const _RuntimeLook(
+        'Needs attention',
+        Sequoia.red,
+        'The last setup attempt did not finish.',
+      ),
+    };
+    final color = look.color;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -2625,12 +2790,12 @@ class _LinuxHero extends StatelessWidget {
                   ],
                 ),
               ),
-              _StatusPill(label: label, color: color),
+              _StatusPill(label: look.label, color: color),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            description,
+            look.description,
             style: const TextStyle(
               color: Sequoia.labelSecondary,
               fontSize: 11.5,

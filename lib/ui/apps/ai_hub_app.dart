@@ -13,11 +13,9 @@ class AiHubApp extends StatelessWidget {
   final LinuxRuntime runtime;
   final SettingsStore settings;
 
-  static String _command(String theme) => '''
+  static const String _command = '''
 export PATH="/root/.opencode/bin:/root/.local/bin:\$PATH"
 if command -v opencode >/dev/null 2>&1; then
-  mkdir -p /root/.config/opencode
-  printf '{"\$schema":"https://opencode.ai/config.json","theme":"$theme"}' > /root/.config/opencode/opencode.json
   exec opencode
 fi
 printf '\n\033[1mOpenCode is not installed in this guest yet.\033[0m\n'
@@ -27,7 +25,6 @@ exec bash -l
 
   @override
   Widget build(BuildContext context) {
-    const theme = 'github';
     return Container(
       color: const Color(0xFF0B0E14),
       child: Column(
@@ -53,7 +50,7 @@ exec bash -l
             child: TerminalTabsApp(
               runtime: runtime,
               settings: settings,
-              argv: <String>['/bin/bash', '-lc', _command(theme)],
+              argv: const <String>['/bin/bash', '-lc', _command],
             ),
           ),
         ],

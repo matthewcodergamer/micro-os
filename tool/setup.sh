@@ -501,6 +501,60 @@ for group in \
     || warn "desktop application group failed: $group"
 done
 
+# The same artwork used by Launchpad is copied into the guest by the app (or
+# mounted by prebake_rootfs.sh). Installing it into hicolor guarantees that
+# pcmanfm and Openbox show Blender, Chrome, GIMP, ... with their real icons
+# instead of generic application glyphs.
+stage 87 "Installing desktop shortcuts and icons"
+ICON_DIR=/usr/share/icons/hicolor/256x256/apps
+DESKTOP_DIR=/root/Desktop
+install -d "$ICON_DIR" "$DESKTOP_DIR"
+for icon in blender calc chrome files geany gimp gitcola inkscape texteditor vlc writer; do
+  if [ -f "/root/.microos/icons/$icon.png" ]; then
+    install -m 644 "/root/.microos/icons/$icon.png" "$ICON_DIR/microos-$icon.png"
+  fi
+done
+icon_for() {
+  if [ -f "$ICON_DIR/microos-$1.png" ]; then
+    printf 'microos-%s' "$1"
+  else
+    printf '%s' "$2"
+  fi
+}
+write_shortcut() {
+  local file="$1"
+  local label="$2"
+  local exec_line="$3"
+  local icon="$4"
+  cat > "$DESKTOP_DIR/$file.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=$label
+Exec=$exec_line
+Icon=$icon
+Terminal=false
+StartupNotify=true
+DESKTOP
+  chmod 755 "$DESKTOP_DIR/$file.desktop"
+  if command -v gio >/dev/null 2>&1; then
+    gio set "$DESKTOP_DIR/$file.desktop" metadata::trusted true 2>/dev/null || true
+  fi
+}
+write_shortcut chrome 'Chrome' '/usr/local/bin/start-browser.sh' "$(icon_for chrome chromium-browser)"
+write_shortcut blender 'Blender' 'blender' "$(icon_for blender blender)"
+write_shortcut files 'Files' 'pcmanfm' "$(icon_for files system-file-manager)"
+write_shortcut texteditor 'Text Editor' 'mousepad' "$(icon_for texteditor accessories-text-editor)"
+write_shortcut gimp 'GIMP' 'gimp' "$(icon_for gimp gimp)"
+write_shortcut inkscape 'Inkscape' 'inkscape' "$(icon_for inkscape inkscape)"
+write_shortcut vlc 'VLC' 'vlc' "$(icon_for vlc vlc)"
+write_shortcut writer 'LibreOffice Writer' 'libreoffice --writer' "$(icon_for writer libreoffice-writer)"
+write_shortcut calc 'LibreOffice Calc' 'libreoffice --calc' "$(icon_for calc libreoffice-calc)"
+write_shortcut geany 'Geany' 'geany' "$(icon_for geany geany)"
+write_shortcut gitcola 'Git Cola' 'git-cola' "$(icon_for gitcola git-cola)"
+# The runtime can re-supply the PNGs on the next setup run.
+rm -rf /root/.microos/icons
+
 # Small automation-friendly Chromium launcher shared by OpenCode, Playwright
 # and Puppeteer. It always runs headless-safe flags; callers may add their own
 # --headless flag. The desktop still uses start-browser.sh directly.
@@ -666,6 +720,21 @@ cat > /root/.config/opencode/opencode.json <<'OPENCODE'
 }
 OPENCODE
 chmod 644 /root/.config/opencode/opencode.json
+
+# The TUI uses the same macOS Terminal profile as the shell that launched it.
+# The terminal app supplies OPENCODE_CLI_CONFIG_CONTENT per tab; this file is
+# the safe default for X11 terminals and for a first `opencode` run.
+cat > /root/.config/opencode/cli.json <<'OPENCODE_CLI'
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "theme": {
+    "name": "github",
+    "mode": "light"
+  },
+  "highlights": false
+}
+OPENCODE_CLI
+chmod 644 /root/.config/opencode/cli.json
 
 # -----------------------------------------------------------------------------
 # 9. Local JAR / Minecraft inspection helper
@@ -849,7 +918,7 @@ fi
 Xvfb "$DISPLAY" -screen 0 "$GEOMETRY" -nolisten tcp -ac -noreset -dpi 96 >"$LOG/xvfb.log" 2>&1 &
 XVFB_PID=$!
 cleanup() {
-  kill ${PULSE_PID:-} ${AUDIO_PID:-} ${BRIDGE_PID:-} ${OPENBOX_PID:-} "$XVFB_PID" 2>/dev/null || true
+  kill ${PULSE_PID:-} ${AUDIO_PID:-} ${BRIDGE_PID:-} ${OPENBOX_PID:-} ${PCMANFM_PID:-} "$XVFB_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 wait_for_x() { for _ in $(seq 1 60); do xset -display "$DISPLAY" q >/dev/null 2>&1 && return 0; kill -0 "$XVFB_PID" 2>/dev/null || { cat "$LOG/xvfb.log" >&2 || true; return 1; }; sleep 0.2; done; return 1; }
@@ -886,6 +955,23 @@ cat > /root/.config/openbox/menu.xml <<'MENU'
 MENU
 DISPLAY="$DISPLAY" openbox --sm-disable >"$LOG/openbox.log" 2>&1 &
 OPENBOX_PID=$!
+# Draw the real application icons from /root/Desktop. pcmanfm uses the
+# hicolor artwork installed by setup.sh, so the X11 desktop matches Launchpad.
+mkdir -p /root/.config/pcmanfm/default
+cat > /root/.config/pcmanfm/default/pcmanfm.conf <<'PCMANFM'
+[desktop]
+wallpaper_mode=color
+bg_color=#0F131B
+show_desktop=1
+show_wm_menu=1
+PCMANFM
+PCMANFM_PID=
+if command -v pcmanfm >/dev/null 2>&1; then
+  DISPLAY="$DISPLAY" pcmanfm --desktop --profile=default --wallpaper-mode=color \
+    >"$LOG/pcmanfm.log" 2>&1 &
+  PCMANFM_PID=$!
+  sleep 0.8
+fi
 if [ ! -x /usr/local/bin/microos-xbridge ]; then
   echo "[microos] ERROR: native X11 bridge is missing" >&2
   exit 1

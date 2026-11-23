@@ -10,8 +10,10 @@ class TerminalProfile {
     this.foreground,
     this.cursor,
     this.selection,
-    this.ansi,
-  );
+    this.ansi, {
+    this.opencodeTheme = 'opencode',
+    this.opencodeMode = 'dark',
+  });
 
   final String id;
   final String name;
@@ -20,6 +22,15 @@ class TerminalProfile {
   final Color cursor;
   final Color selection;
   final List<Color> ansi; // 16 colors
+
+  /// OpenCode TUI theme that matches this macOS Terminal profile.
+  ///
+  /// The terminal passes this to OpenCode through
+  /// OPENCODE_CLI_CONFIG_CONTENT, so the TUI does not have to guess the
+  /// terminal background. A white/cream profile gets a light OpenCode theme;
+  /// every dark profile gets a matching dark theme.
+  final String opencodeTheme;
+  final String opencodeMode;
 
   TerminalTheme toXterm() {
     return TerminalTheme(
@@ -56,12 +67,12 @@ final List<TerminalProfile> kTerminalProfiles = [
   TerminalProfile(
     'basic',
     'Basic',
-    const Color(0xFF1E1E1E),
-    const Color(0xFFF2F2F7),
-    const Color(0xFF0A84FF),
-    const Color(0x553A86FF),
+    const Color(0xFF000000),
+    const Color(0xFFF5F5F7),
+    const Color(0xFFFFFFFF),
+    const Color(0x550A84FF),
     const [
-      Color(0xFF000000),
+      Color(0xFF2C2C2E),
       Color(0xFFFF5F57),
       Color(0xFF28C840),
       Color(0xFFFEBC2E),
@@ -78,6 +89,36 @@ final List<TerminalProfile> kTerminalProfiles = [
       Color(0xFF5AC8FA),
       Color(0xFFFFFFFF),
     ],
+    opencodeTheme: 'opencode',
+    opencodeMode: 'dark',
+  ),
+  TerminalProfile(
+    'basic-light',
+    'Basic Light',
+    const Color(0xFFFFFFFF),
+    const Color(0xFF1C1C1E),
+    const Color(0xFF0A84FF),
+    const Color(0x330A84FF),
+    const [
+      Color(0xFF3A3A3C),
+      Color(0xFFC41A16),
+      Color(0xFF007400),
+      Color(0xFF826B28),
+      Color(0xFF0000FF),
+      Color(0xFFA90D91),
+      Color(0xFF0F7B7B),
+      Color(0xFF8E8E93),
+      Color(0xFF6E6E73),
+      Color(0xFFE53935),
+      Color(0xFF2E7D32),
+      Color(0xFF9E7B00),
+      Color(0xFF0A84FF),
+      Color(0xFFBF5AF2),
+      Color(0xFF00A6A6),
+      Color(0xFF1C1C1E),
+    ],
+    opencodeTheme: 'github',
+    opencodeMode: 'light',
   ),
   TerminalProfile(
     'grass',
@@ -104,6 +145,8 @@ final List<TerminalProfile> kTerminalProfiles = [
       Color(0xFF26C6DA),
       Color(0xFFFFFFFF),
     ],
+    opencodeTheme: 'everforest',
+    opencodeMode: 'dark',
   ),
   TerminalProfile(
     'homebrew',
@@ -130,6 +173,8 @@ final List<TerminalProfile> kTerminalProfiles = [
       Color(0xFF00E5E5),
       Color(0xFFE5E5E5),
     ],
+    opencodeTheme: 'matrix',
+    opencodeMode: 'dark',
   ),
   TerminalProfile(
     'ocean',
@@ -156,6 +201,8 @@ final List<TerminalProfile> kTerminalProfiles = [
       Color(0xFF26C6DA),
       Color(0xFFFFFFFF),
     ],
+    opencodeTheme: 'tokyonight',
+    opencodeMode: 'dark',
   ),
   TerminalProfile(
     'pro',
@@ -165,7 +212,7 @@ final List<TerminalProfile> kTerminalProfiles = [
     const Color(0xFF0A84FF),
     const Color(0x553A86FF),
     const [
-      Color(0xFF000000),
+      Color(0xFF2C2C2E),
       Color(0xFFFF453A),
       Color(0xFF32D74B),
       Color(0xFFFFD60A),
@@ -182,6 +229,64 @@ final List<TerminalProfile> kTerminalProfiles = [
       Color(0xFF64D2FF),
       Color(0xFFFFFFFF),
     ],
+    opencodeTheme: 'one-dark',
+    opencodeMode: 'dark',
+  ),
+  TerminalProfile(
+    'red-sands',
+    'Red Sands',
+    const Color(0xFF2A1C19),
+    const Color(0xFFF5E6D3),
+    const Color(0xFFFF6B4A),
+    const Color(0x55FF6B4A),
+    const [
+      Color(0xFF3B2925),
+      Color(0xFFE06C5A),
+      Color(0xFF8FBF6A),
+      Color(0xFFE0B15A),
+      Color(0xFF6A9FD1),
+      Color(0xFFC98BC4),
+      Color(0xFF6FC3C3),
+      Color(0xFFE7D8C7),
+      Color(0xFF8D7268),
+      Color(0xFFFF8A75),
+      Color(0xFFA8D18A),
+      Color(0xFFF2C97A),
+      Color(0xFF8AB8E6),
+      Color(0xFFDDA8D8),
+      Color(0xFF8FD9D9),
+      Color(0xFFFFF7EE),
+    ],
+    opencodeTheme: 'gruvbox',
+    opencodeMode: 'dark',
+  ),
+  TerminalProfile(
+    'solarized-light',
+    'Solarized Light',
+    const Color(0xFFFDF6E3),
+    const Color(0xFF586E75),
+    const Color(0xFF268BD2),
+    const Color(0x33268BD2),
+    const [
+      Color(0xFF073642),
+      Color(0xFFDC322F),
+      Color(0xFF859900),
+      Color(0xFFB58900),
+      Color(0xFF268BD2),
+      Color(0xFFD33682),
+      Color(0xFF2AA198),
+      Color(0xFF586E75),
+      Color(0xFF002B36),
+      Color(0xFFCB4B16),
+      Color(0xFF657B83),
+      Color(0xFF839496),
+      Color(0xFF6C71C4),
+      Color(0xFF93A1A1),
+      Color(0xFF2AA198),
+      Color(0xFFFDF6E3),
+    ],
+    opencodeTheme: 'solarized',
+    opencodeMode: 'light',
   ),
 ];
 

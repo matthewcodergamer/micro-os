@@ -42,6 +42,7 @@ flutter:
     - assets/proot/
     - assets/fonts/OFL.txt
     - assets/icons/dock/
+    - assets/icons/linux/
     - assets/wallpapers/
   fonts:
     - family: Inter

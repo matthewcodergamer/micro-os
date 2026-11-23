@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
+import '../core/desktop_input.dart';
+import '../core/linux_apps.dart';
 import '../core/theme.dart';
 import '../core/wallpapers.dart';
 import '../models/window_state.dart';
@@ -105,6 +107,26 @@ class _DesktopScreenState extends State<DesktopScreen>
       math.max(vp.top, p.top),
       math.max(vp.right, p.right),
       math.max(vp.bottom, p.bottom),
+    );
+  }
+
+  /// Opens the native X11 desktop and starts a real Linux program inside it.
+  ///
+  /// Launchpad shows the program's own artwork, so tapping Blender or Chrome
+  /// must not fall back to a Flutter placeholder. The desktop window is brought
+  /// up first; the process then maps its own X11 window on the shared display.
+  void _launchLinux(LinuxApp app) {
+    final scope = AppScope.of(context);
+    final size = MediaQuery.sizeOf(context);
+    _hideDock();
+    scope.desktop.open(AppId.desktop, screen: size);
+    unawaited(
+      scope.runtime.launchLinuxApp(app).catchError((Object error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${app.title} could not start: $error')),
+        );
+      }),
     );
   }
 
@@ -297,6 +319,10 @@ class _DesktopScreenState extends State<DesktopScreen>
                       setState(() => _spotlight = false);
                       desktop.open(app, screen: size);
                     },
+                    onOpenLinux: (app) {
+                      setState(() => _spotlight = false);
+                      _launchLinux(app);
+                    },
                   ),
                 ),
               if (_launchpad)
@@ -307,6 +333,10 @@ class _DesktopScreenState extends State<DesktopScreen>
                     onOpen: (app) {
                       setState(() => _launchpad = false);
                       desktop.open(app, screen: size);
+                    },
+                    onOpenLinux: (app) {
+                      setState(() => _launchpad = false);
+                      _launchLinux(app);
                     },
                   ),
                 ),

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'package:xterm/xterm.dart';
 
+import '../../core/opencode_themes.dart';
 import '../../core/terminal_profiles.dart';
 import '../../core/terminal_paste.dart';
 import '../../core/theme.dart';
@@ -46,12 +47,31 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
   void _addTab() {
     final terminal = Terminal(maxLines: 1000);
     final controller = TerminalController();
+    final profile = profileById(widget.settings.terminalProfile);
+    final openCode = resolveOpenCodeTheme(
+      widget.settings.openCodeTheme,
+      profile,
+    );
     Pty? pty;
     late final _Tab tab;
 
     if (widget.runtime.isReady) {
       try {
-        pty = widget.runtime.startShell(argv: widget.argv);
+        pty = widget.runtime.startShell(
+          argv: widget.argv,
+          extraEnv: <String, String>{
+            // OpenCode reads this inline CLI config on every launch. The user
+            // can choose White/Graphite/Ocean/Forest/... independently of the
+            // shell, or follow the selected macOS Terminal profile.
+            'OPENCODE_CLI_CONFIG_CONTENT': jsonEncode(<String, Object>{
+              'theme': <String, String>{
+                'name': openCode.name,
+                'mode': openCode.mode,
+              },
+              'highlights': false,
+            }),
+          },
+        );
         // Decode byte chunks incrementally, retaining partial UTF-8 sequences.
         pty.output
             .map<List<int>>((chunk) => chunk)
@@ -340,10 +360,25 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
 
         return Column(
           children: [
-            // Tab strip
+            // macOS Terminal-style tab strip: graphite chrome, a selected tab
+            // painted in the profile's own background, and a compact new-tab
+            // button. The window's traffic lights stay in the title bar above.
             Container(
-              height: 36,
-              color: MicroColors.windowHeader,
+              height: 38,
+              padding: const EdgeInsets.only(left: 7, right: 4),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF313136), Color(0xFF242428)],
+                ),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.07),
+                    width: 0.7,
+                  ),
+                ),
+              ),
               child: Row(
                 children: [
                   Expanded(
@@ -357,39 +392,79 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                             setState(() => _active = i);
                             _tabs[i].focusNode.requestFocus();
                           },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            alignment: Alignment.center,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            curve: Curves.easeOutCubic,
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 5,
+                            ),
+                            padding: const EdgeInsets.only(
+                              left: 10,
+                              right: 4,
+                            ),
                             decoration: BoxDecoration(
-                              color: selected ? MicroColors.windowBody : Colors.transparent,
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: selected ? MicroColors.accent : Colors.transparent,
-                                  width: 2,
-                                ),
+                              color: selected
+                                  ? profile.background
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(7),
+                              border: Border.all(
+                                color: selected
+                                    ? Colors.white.withValues(alpha: 0.16)
+                                    : Colors.transparent,
+                                width: 0.7,
                               ),
+                              boxShadow: selected
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.30,
+                                        ),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                Icon(
+                                  Icons.terminal_rounded,
+                                  size: 12,
+                                  color: selected
+                                      ? profile.foreground.withValues(
+                                          alpha: 0.82,
+                                        )
+                                      : Colors.white38,
+                                ),
+                                const SizedBox(width: 6),
                                 Text(
                                   _tabs[i].title,
                                   style: TextStyle(
-                                    color: selected ? MicroColors.text : MicroColors.subtle,
-                                    fontSize: 12,
-                                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                                    color: selected
+                                        ? profile.foreground
+                                        : Colors.white54,
+                                    fontSize: 11.5,
+                                    fontWeight: selected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
                                   ),
                                 ),
-                                const SizedBox(width: 7),
+                                const SizedBox(width: 4),
                                 InkWell(
                                   borderRadius: BorderRadius.circular(20),
                                   onTap: () => _closeTab(i),
                                   child: Padding(
-                                    padding: const EdgeInsets.all(3),
+                                    padding: const EdgeInsets.all(4),
                                     child: Icon(
                                       Icons.close_rounded,
-                                      size: 13,
-                                      color: selected ? MicroColors.text : MicroColors.subtle,
+                                      size: 12,
+                                      color: selected
+                                          ? profile.foreground.withValues(
+                                              alpha: 0.65,
+                                            )
+                                          : Colors.white38,
                                     ),
                                   ),
                                 ),
@@ -400,47 +475,65 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                       },
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    color: MicroColors.text,
-                    onPressed: _addTab,
+                  Tooltip(
+                    message: 'New tab',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: _addTab,
+                      child: const SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: Icon(
+                          Icons.add_rounded,
+                          size: 17,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            // Terminal body
+            // Terminal body. Padding inside the black canvas gives the same
+            // breathing room as Terminal.app without changing the PTY grid.
             Expanded(
-              child: IndexedStack(
-                index: _active,
-                children: [
-                  for (var i = 0; i < _tabs.length; i++)
-                    Builder(builder: (context) {
-                      final tab = _tabs[i];
-                      return Listener(
-                        key: ObjectKey(tab),
-                        behavior: HitTestBehavior.translucent,
-                        onPointerDown: _onTerminalPointerDown,
-                        onPointerUp: _onTerminalPointerUp,
-                        onPointerCancel: _onTerminalPointerUp,
-                        child: TerminalView(
-                          tab.terminal,
-                          controller: tab.controller,
-                          focusNode: tab.focusNode,
-                          scrollController: tab.scrollController,
-                          theme: profile.toXterm(),
-                          cursorType: TerminalCursorType.block,
-                          alwaysShowCursor: true,
-                          textStyle: TerminalStyle(
-                            fontSize: widget.settings.terminalFontSize,
-                            fontFamily: 'JetBrains Mono',
-                          ),
-                          // Only the first tab autofocuses. Every hidden tab
-                          // must not compete for the phone keyboard.
-                          autofocus: i == 0,
-                        ),
-                      );
-                    }),
-                ],
+              child: ColoredBox(
+                color: profile.background,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(9, 7, 9, 5),
+                  child: IndexedStack(
+                    index: _active,
+                    children: [
+                      for (var i = 0; i < _tabs.length; i++)
+                        Builder(builder: (context) {
+                          final tab = _tabs[i];
+                          return Listener(
+                            key: ObjectKey(tab),
+                            behavior: HitTestBehavior.translucent,
+                            onPointerDown: _onTerminalPointerDown,
+                            onPointerUp: _onTerminalPointerUp,
+                            onPointerCancel: _onTerminalPointerUp,
+                            child: TerminalView(
+                              tab.terminal,
+                              controller: tab.controller,
+                              focusNode: tab.focusNode,
+                              scrollController: tab.scrollController,
+                              theme: profile.toXterm(),
+                              cursorType: TerminalCursorType.block,
+                              alwaysShowCursor: true,
+                              textStyle: TerminalStyle(
+                                fontSize: widget.settings.terminalFontSize,
+                                fontFamily: 'JetBrains Mono',
+                              ),
+                              // Only the first tab autofocuses. Every hidden
+                              // tab must not compete for the phone keyboard.
+                              autofocus: i == 0,
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                ),
               ),
             ),
             _TerminalKeyBar(
@@ -484,7 +577,15 @@ class _TerminalKeyBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 38,
-      color: MicroColors.windowHeader,
+      decoration: BoxDecoration(
+        color: MicroColors.windowHeader,
+        border: Border(
+          top: BorderSide(
+            color: Colors.white.withValues(alpha: 0.06),
+            width: 0.7,
+          ),
+        ),
+      ),
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -521,7 +622,7 @@ class _KeyChip extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 4),
       child: Material(
-        color: MicroColors.windowBody,
+        color: Colors.white.withValues(alpha: 0.075),
         borderRadius: BorderRadius.circular(6),
         child: InkWell(
           borderRadius: BorderRadius.circular(6),

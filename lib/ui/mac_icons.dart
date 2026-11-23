@@ -1,7 +1,6 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
+import '../core/linux_apps.dart';
 import '../models/window_state.dart';
 
 ShapeBorder _squircle(double size, {BorderSide side = BorderSide.none}) {
@@ -229,6 +228,53 @@ class MacAppIcon extends StatelessWidget {
     }
     return Center(
       child: Icon(icon, color: Colors.white, size: iconSize),
+    );
+  }
+}
+
+/// Real artwork for a Linux desktop application.
+///
+/// The PNG is the program's own icon (Blender, Chrome, GIMP, ...), not a
+/// recoloured Material glyph. A faint glass plate keeps dark artwork readable
+/// on the Launchpad while leaving the original logo untouched.
+class LinuxAppIcon extends StatelessWidget {
+  const LinuxAppIcon({super.key, required this.app, required this.size});
+
+  final LinuxApp app;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = size * 0.22;
+    return Container(
+      width: size,
+      height: size,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        color: Colors.white.withValues(alpha: 0.055),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.10),
+          width: 0.7,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: size * 0.10,
+            offset: Offset(0, size * 0.045),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.055),
+        child: Image.asset(
+          app.iconAsset,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          cacheWidth: (size * 2.4).round(),
+          cacheHeight: (size * 2.4).round(),
+        ),
+      ),
     );
   }
 }

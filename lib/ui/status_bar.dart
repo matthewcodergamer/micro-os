@@ -5,9 +5,6 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../core/format.dart';
 import '../core/macos_design.dart';
-import '../core/theme.dart';
-import '../models/window_state.dart';
-import '../state/desktop_state.dart';
 
 /// The macOS-style menu bar (Apple menu, app menus, status items, clock).
 class StatusBar extends StatefulWidget {

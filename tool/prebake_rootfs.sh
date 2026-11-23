@@ -20,13 +20,15 @@ docker run --platform linux/arm64 --name "$NAME" \
   -v "$ROOT/tool/setup.sh:/tmp/microos-setup.sh:ro" \
   -v "$ROOT/tool/x11_bridge.c:/tmp/microos-x11-bridge.c:ro" \
   -v "$ROOT/tool/audio_bridge.c:/tmp/microos-audio-bridge.c:ro" \
+  -v "$ROOT/assets/icons/linux:/tmp/microos-icons:ro" \
   ubuntu:24.04 /bin/bash -lc '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
-    mkdir -p /root/.microos
+    mkdir -p /root/.microos /root/.microos/icons
     cp /tmp/microos-setup.sh /root/.microos/setup.sh
     cp /tmp/microos-x11-bridge.c /root/.microos/x11_bridge.c
     cp /tmp/microos-audio-bridge.c /root/.microos/audio_bridge.c
+    cp /tmp/microos-icons/*.png /root/.microos/icons/
     chmod 755 /root/.microos/setup.sh
     bash /root/.microos/setup.sh
     test -x /usr/local/bin/microos-xbridge
@@ -381,7 +383,7 @@ PYBRIDGE
     rm -f /root/.microos/setup.sh /root/.microos/x11_bridge.c /root/.microos/audio_bridge.c
     apt-get clean
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
-    printf "14\n" > /root/.microos/image-version
+    printf "15\n" > /root/.microos/image-version
     touch /root/.microos/ready
     echo "==> Pre-baked guest ready"
   '

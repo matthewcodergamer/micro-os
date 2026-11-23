@@ -33,7 +33,7 @@ class ControlCenterOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.sizeOf(context);
+    final media = MediaQuery.of(context);
     final panelWidth = math.min(360.0, media.size.width - 20);
     final top = topPadding + 8;
     final maxHeight = math.max(

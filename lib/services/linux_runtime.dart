@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:zstd_dart/zstd_dart.dart';
 
 import '../core/browser_navigation.dart';
+import '../core/linux_apps.dart';
 import 'background_session.dart';
 
 enum RuntimeStatus { checking, missing, installing, ready, failed }
@@ -30,8 +31,23 @@ class LinuxRuntime extends ChangeNotifier {
   static const String _readyMarker = 'root/.microos/ready';
   // Bump this whenever the bundled Linux image changes. It forces upgrades to
   // replace an older extracted rootfs instead of silently reusing stale files.
-  static const String _rootfsVersion = '14';
+  static const String _rootfsVersion = '15';
   static const String _imageVersionPath = 'root/.microos/image-version';
+
+  /// Real application artwork copied into the guest for the X11 desktop.
+  static const List<String> _desktopIconAssets = <String>[
+    'blender',
+    'calc',
+    'chrome',
+    'files',
+    'geany',
+    'gimp',
+    'gitcola',
+    'inkscape',
+    'texteditor',
+    'vlc',
+    'writer',
+  ];
 
   /// proot and the pieces it needs at runtime. They are extracted next to the
   /// rootfs instead of being executed straight out of the APK, because Android
@@ -116,6 +132,7 @@ class LinuxRuntime extends ChangeNotifier {
         'LD_LIBRARY_PATH': p.join(base.path, 'proot'),
         'HOME': '/root',
         'TERM': 'xterm-256color',
+        'COLORTERM': 'truecolor',
         'LANG': 'en_US.UTF-8',
         'LC_ALL': 'en_US.UTF-8',
         'PLAYWRIGHT_BROWSERS_PATH': '/opt/ms-playwright',
@@ -420,6 +437,21 @@ class LinuxRuntime extends ChangeNotifier {
     await audio.writeAsString(audioSource);
     await _chmod(audio.path, '644');
 
+    // Carry the same real icons used by Launchpad into the guest. setup.sh
+    // installs them into the hicolor theme and points the X11 desktop
+    // shortcuts at them, so Blender and Chrome look identical in both places.
+    final icons = Directory(p.join(dir.path, 'icons'));
+    await icons.create(recursive: true);
+    for (final name in _desktopIconAssets) {
+      final data = await rootBundle.load('assets/icons/linux/$name.png');
+      final icon = File(p.join(icons.path, '$name.png'));
+      await icon.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        flush: true,
+      );
+      await _chmod(icon.path, '644');
+    }
+
     // apt refuses to run as a non-root sandbox user under proot.
     final aptConf = File(p.join(rootfsPath, 'etc/apt/apt.conf.d/99microos'));
     await aptConf.parent.create(recursive: true);
@@ -499,12 +531,15 @@ class LinuxRuntime extends ChangeNotifier {
   }
 
   /// Starts an interactive shell (or [argv]) inside the guest.
-  Pty startShell({List<String>? argv}) {
+  Pty startShell({
+    List<String>? argv,
+    Map<String, String> extraEnv = const <String, String>{},
+  }) {
     unawaited(_ensureBackgroundSession());
     final pty = Pty.start(
       prootPath,
       arguments: _prootArgs(argv ?? <String>['/bin/bash', '-l']),
-      environment: _prootEnv,
+      environment: <String, String>{..._prootEnv, ...extraEnv},
     );
     _trackPty(pty);
     return pty;
@@ -676,6 +711,32 @@ class LinuxRuntime extends ChangeNotifier {
   }
 
   String _shellQuote(String value) => BrowserNavigation.shellQuote(value);
+
+  /// Starts one of the real Linux desktop programs with its own artwork.
+  ///
+  /// Only the bundled [kLinuxApps] catalogue is accepted, so the UI cannot use
+  /// this path to execute arbitrary shell text.
+  Future<void> launchLinuxApp(LinuxApp app) async {
+    if (!isReady) return;
+    final known = kLinuxApps.any(
+      (candidate) =>
+          candidate.id == app.id && candidate.command == app.command,
+    );
+    if (!known) {
+      throw ArgumentError.value(app.id, 'app', 'Unknown Linux application');
+    }
+    final displayUp = await ensureDisplay();
+    if (!displayUp) {
+      _appendLog(
+        '[microos] ${app.title} launch blocked: the native X11 display is not healthy',
+      );
+      return;
+    }
+    runDetached(
+      <String>['/bin/bash', '-lc', 'exec ${app.command}'],
+      extraEnv: const <String, String>{'DISPLAY': ':0'},
+    );
+  }
 
   /// Send a native X11 keyboard shortcut to the focused Linux browser window.
   /// Only predefined actions are accepted; arbitrary key strings never reach X.

@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/desktop_input.dart';
+import '../core/opencode_themes.dart';
 import '../core/terminal_profiles.dart';
 import '../core/wallpapers.dart';
 
@@ -32,7 +33,7 @@ class SettingsStore extends ChangeNotifier {
 
   bool singleProcessBrowser = false;
   String? installedAt;
-  String openCodeTheme = 'light';
+  String openCodeTheme = kDefaultOpenCodeTheme;
   double terminalFontSize = 13;
   String terminalProfile = kDefaultTerminalProfile;
   String userName = 'Misty OS User';
@@ -56,7 +57,8 @@ class SettingsStore extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     singleProcessBrowser = prefs.getBool(_kSingleProcess) ?? false;
     installedAt = prefs.getString(_kInstalledAt);
-    openCodeTheme = prefs.getString(_kOpenCodeTheme) ?? 'light';
+    openCodeTheme =
+        prefs.getString(_kOpenCodeTheme) ?? kDefaultOpenCodeTheme;
     terminalFontSize =
         (prefs.getDouble(_kTerminalFontSize) ?? 13).clamp(10, 18).toDouble();
     terminalProfile =
@@ -179,10 +181,11 @@ class SettingsStore extends ChangeNotifier {
   }
 
   Future<void> setOpenCodeTheme(String value) async {
-    openCodeTheme = value;
+    final known = kOpenCodeThemes.any((choice) => choice.id == value);
+    openCodeTheme = known ? value : kDefaultOpenCodeTheme;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kOpenCodeTheme, value);
+    await prefs.setString(_kOpenCodeTheme, openCodeTheme);
   }
 
   Future<void> setWallpaper(String value) async {

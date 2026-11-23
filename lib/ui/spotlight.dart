@@ -2,10 +2,42 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../core/linux_apps.dart';
 import '../core/macos_design.dart';
 import '../core/theme.dart';
 import '../models/window_state.dart';
 import 'mac_icons.dart';
+
+/// One searchable Launchpad/Spotlight result, native or a real Linux app.
+class _LauncherEntry {
+  const _LauncherEntry.native(AppId app)
+    : native = app,
+      linux = null;
+
+  const _LauncherEntry.linux(LinuxApp app)
+    : native = null,
+      linux = app;
+
+  final AppId? native;
+  final LinuxApp? linux;
+
+  String get title => native?.title ?? linux!.title;
+  String get subtitle => native?.subtitle ?? linux!.subtitle;
+
+  bool get available => native == null || isAppAvailable(native!);
+
+  String get label =>
+      native != null && !isAppAvailable(native!) ? '$title · soon' : title;
+
+  Widget icon(double size) {
+    final linuxApp = linux;
+    if (linuxApp != null) {
+      return LinuxAppIcon(app: linuxApp, size: size);
+    }
+    return MacAppIcon(app: native!, size: size);
+  }
+}
+
 
 /// Spotlight: tap the magnifier in the menu bar, type, hit Return to launch.
 class SpotlightOverlay extends StatefulWidget {
@@ -14,11 +46,13 @@ class SpotlightOverlay extends StatefulWidget {
     required this.topPadding,
     required this.onClose,
     required this.onOpen,
+    required this.onOpenLinux,
   });
 
   final double topPadding;
   final VoidCallback onClose;
   final ValueChanged<AppId> onOpen;
+  final ValueChanged<LinuxApp> onOpenLinux;
 
   @override
   State<SpotlightOverlay> createState() => _SpotlightOverlayState();
@@ -34,16 +68,29 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
     super.dispose();
   }
 
-  List<AppId> get _results {
+  List<_LauncherEntry> get _results {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return AppId.values;
-    return AppId.values
+    final all = <_LauncherEntry>[
+      for (final app in AppId.values) _LauncherEntry.native(app),
+      for (final app in kLinuxApps) _LauncherEntry.linux(app),
+    ];
+    if (q.isEmpty) return all;
+    return all
         .where(
-          (a) =>
-              a.title.toLowerCase().contains(q) ||
-              a.subtitle.toLowerCase().contains(q),
+          (entry) =>
+              entry.title.toLowerCase().contains(q) ||
+              entry.subtitle.toLowerCase().contains(q),
         )
-        .toList();
+        .toList(growable: false);
+  }
+
+  void _open(_LauncherEntry entry) {
+    final linuxApp = entry.linux;
+    if (linuxApp != null) {
+      widget.onOpenLinux(linuxApp);
+    } else {
+      widget.onOpen(entry.native!);
+    }
   }
 
   @override
@@ -104,7 +151,7 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
                               onChanged: (v) => setState(() => _query = v),
                               onSubmitted: (_) {
                                 if (results.isNotEmpty) {
-                                  widget.onOpen(results.first);
+                                  _open(results.first);
                                 }
                               },
                             ),
@@ -135,10 +182,10 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
     );
   }
 
-  Widget _row(AppId app, {required bool highlighted}) {
+  Widget _row(_LauncherEntry entry, {required bool highlighted}) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => widget.onOpen(app),
+      onTap: () => _open(entry),
       child: Container(
         height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -150,7 +197,7 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
         ),
         child: Row(
           children: [
-            MacAppIcon(app: app, size: 30),
+            entry.icon(30),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -158,7 +205,7 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    app.title,
+                    entry.title,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 15,
@@ -167,7 +214,7 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
                     ),
                   ),
                   Text(
-                    app.subtitle,
+                    entry.subtitle,
                     style: const TextStyle(
                       color: Colors.white60,
                       fontSize: 12,
@@ -215,11 +262,13 @@ class LaunchpadOverlay extends StatefulWidget {
     required this.topPadding,
     required this.onClose,
     required this.onOpen,
+    required this.onOpenLinux,
   });
 
   final double topPadding;
   final VoidCallback onClose;
   final ValueChanged<AppId> onOpen;
+  final ValueChanged<LinuxApp> onOpenLinux;
 
   @override
   State<LaunchpadOverlay> createState() => _LaunchpadOverlayState();
@@ -234,15 +283,27 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
     super.dispose();
   }
 
+  void _open(_LauncherEntry entry) {
+    final linuxApp = entry.linux;
+    if (linuxApp != null) {
+      widget.onOpenLinux(linuxApp);
+    } else {
+      widget.onOpen(entry.native!);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final query = _search.text.trim().toLowerCase();
-    final apps = AppId.values
+    final apps = <_LauncherEntry>[
+      for (final app in AppId.values) _LauncherEntry.native(app),
+      for (final app in kLinuxApps) _LauncherEntry.linux(app),
+    ]
         .where(
-          (app) =>
+          (entry) =>
               query.isEmpty ||
-              app.title.toLowerCase().contains(query) ||
-              app.subtitle.toLowerCase().contains(query),
+              entry.title.toLowerCase().contains(query) ||
+              entry.subtitle.toLowerCase().contains(query),
         )
         .toList(growable: false);
     return Stack(
@@ -344,13 +405,13 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
                                 ),
                             itemCount: apps.length,
                             itemBuilder: (context, index) {
-                              final app = apps[index];
+                              final entry = apps[index];
                               return Semantics(
                                 button: true,
-                                label: app.title,
+                                label: entry.title,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(18),
-                                  onTap: () => widget.onOpen(app),
+                                  onTap: () => _open(entry),
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 3,
@@ -361,16 +422,12 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
                                           MainAxisAlignment.center,
                                       children: [
                                         Opacity(
-                                          opacity: isAppAvailable(app)
-                                              ? 1
-                                              : 0.42,
-                                          child: MacAppIcon(app: app, size: 58),
+                                          opacity: entry.available ? 1.0 : 0.42,
+                                          child: entry.icon(58),
                                         ),
                                         const SizedBox(height: 9),
                                         Text(
-                                          isAppAvailable(app)
-                                              ? app.title
-                                              : '${app.title} · soon',
+                                          entry.label,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           textAlign: TextAlign.center,

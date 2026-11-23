@@ -292,6 +292,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final screen = MediaQuery.sizeOf(context);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     final shortScreen = screen.height < 620;
     final clockSize = math.min(
       84.0,
@@ -333,7 +334,12 @@ class _LoginScreenState extends State<LoginScreen>
                         minHeight: constraints.maxHeight,
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+                        padding: EdgeInsets.fromLTRB(
+                          24,
+                          12,
+                          24,
+                          18 + keyboard,
+                        ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
