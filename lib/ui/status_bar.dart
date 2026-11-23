@@ -133,8 +133,8 @@ class _StatusBarState extends State<StatusBar> {
             ),
             IconButton(
               icon: const Icon(
-                Icons.toggle_on_rounded,
-                size: 20,
+                Icons.tune_rounded,
+                size: 19,
                 color: Colors.white,
               ),
               padding: EdgeInsets.zero,

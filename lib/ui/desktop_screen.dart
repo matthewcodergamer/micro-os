@@ -46,10 +46,19 @@ class _DesktopScreenState extends State<DesktopScreen> {
   bool _dockRevealed = false;
   Timer? _dockTimer;
 
+  // The Android keyboard reports a new inset on every animation frame. Sync
+  // the desktop once the keyboard has settled; resizing windows on every frame
+  // makes the terminal reflow and repaint in a visible flicker loop.
+  double _keyboardInset = 0;
+  double _rawKeyboardInset = 0;
+  Timer? _keyboardTimer;
+
   void _revealDock() {
     _dockTimer?.cancel();
     if (!_dockRevealed) setState(() => _dockRevealed = true);
-    _dockTimer = Timer(const Duration(milliseconds: 3800), _hideDock);
+    // Keep the Dock up long enough to read it and pick an app. Interacting
+    // with the Dock calls this again, so the timer restarts on every touch.
+    _dockTimer = Timer(const Duration(seconds: 6), _hideDock);
   }
 
   void _hideDock() {
@@ -60,6 +69,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
   @override
   void dispose() {
     _dockTimer?.cancel();
+    _keyboardTimer?.cancel();
     super.dispose();
   }
 
@@ -88,7 +98,17 @@ class _DesktopScreenState extends State<DesktopScreen> {
         final insets = _insets(context);
         final media = MediaQuery.of(context);
         final size = media.size;
-        final keyboard = media.viewInsets.bottom;
+        final rawKeyboard = media.viewInsets.bottom;
+        if ((rawKeyboard - _rawKeyboardInset).abs() > 0.5) {
+          _rawKeyboardInset = rawKeyboard;
+          _keyboardTimer?.cancel();
+          _keyboardTimer = Timer(const Duration(milliseconds: 140), () {
+            if (!mounted) return;
+            if ((_rawKeyboardInset - _keyboardInset).abs() <= 0.5) return;
+            setState(() => _keyboardInset = _rawKeyboardInset);
+          });
+        }
+        final keyboard = _keyboardInset;
 
         final top = insets.top + kMenuBarHeight;
         // Keep the Dock above Android's mandatory system-gesture strip. This
@@ -189,7 +209,13 @@ class _DesktopScreenState extends State<DesktopScreen> {
                 bottom: dockBottom,
                 child: Dock(
                   visible: !hideDock,
-                  onOpen: (app) => desktop.open(app, screen: size),
+                  onInteraction: _revealDock,
+                  onOpen: (app) {
+                    // A picked app owns the screen; collapse the Dock at once
+                    // instead of leaving it floating over the new window.
+                    _hideDock();
+                    desktop.open(app, screen: size);
+                  },
                 ),
               ),
               if (hideDock)
@@ -197,12 +223,33 @@ class _DesktopScreenState extends State<DesktopScreen> {
                   left: 0,
                   right: 0,
                   bottom: dockBottom,
-                  height: 28,
+                  height: 40,
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
+                    onTap: _revealDock,
+                    onVerticalDragStart: (_) => _revealDock(),
                     onVerticalDragUpdate: (d) {
-                      if (d.delta.dy < -4) _revealDock();
+                      if (d.delta.dy < -2) _revealDock();
                     },
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Container(
+                        width: 54,
+                        height: 5,
+                        margin: const EdgeInsets.only(bottom: 9),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.52),
+                          borderRadius: BorderRadius.circular(3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.32),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               if (_spotlight)
@@ -234,6 +281,14 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     onClose: () => setState(() => _control = false),
                     runtime: runtime,
                     stats: stats,
+                    onOpenDesktop: () {
+                      setState(() => _control = false);
+                      desktop.open(AppId.desktop, screen: size);
+                    },
+                    onLock: () {
+                      setState(() => _control = false);
+                      desktop.lock();
+                    },
                   ),
                 ),
             ],

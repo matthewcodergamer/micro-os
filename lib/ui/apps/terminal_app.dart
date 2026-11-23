@@ -58,7 +58,9 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
             .transform(utf8.decoder)
             .listen((text) => terminal.write(text));
         terminal.onOutput = (data) => _sendTerminalInput(tab, data);
-        terminal.onResize = (w, h, pw, ph) => pty?.resize(h, w);
+        // The shell should see one stable window size after the keyboard and
+        // window animation settle, not a SIGWINCH storm on every layout frame.
+        terminal.onResize = (w, h, pw, ph) => tab.scheduleResize(h, w);
       } catch (_) {}
     }
 
@@ -72,21 +74,31 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
       _tabs.add(tab);
       _active = _tabs.length - 1;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || tab.disposed) return;
+      tab.focusNode.requestFocus();
+    });
     widget.onTitle?.call('root - bash - 80x24');
   }
 
   void _closeTab(int index) {
     if (index < 0 || index >= _tabs.length) return;
     final tab = _tabs.removeAt(index);
-    tab.dispose();
     if (_tabs.isEmpty) {
       setState(() => _active = 0);
       _addTab();
+      WidgetsBinding.instance.addPostFrameCallback((_) => tab.dispose());
       return;
     }
     setState(() {
       if (_active > index) _active--;
       if (_active >= _tabs.length) _active = _tabs.length - 1;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      tab.dispose();
+      if (!mounted || _tabs.isEmpty) return;
+      _tabs[_active.clamp(0, _tabs.length - 1).toInt()].focusNode
+          .requestFocus();
     });
   }
 
@@ -341,7 +353,10 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
                       itemBuilder: (_, i) {
                         final selected = i == _active;
                         return GestureDetector(
-                          onTap: () => setState(() => _active = i),
+                          onTap: () {
+                            setState(() => _active = i);
+                            _tabs[i].focusNode.requestFocus();
+                          },
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14),
                             alignment: Alignment.center,
@@ -398,26 +413,33 @@ class _TerminalTabsAppState extends State<TerminalTabsApp> {
               child: IndexedStack(
                 index: _active,
                 children: [
-                  for (final tab in _tabs)
-                    Listener(
-                      behavior: HitTestBehavior.translucent,
-                      onPointerDown: _onTerminalPointerDown,
-                      onPointerUp: _onTerminalPointerUp,
-                      onPointerCancel: _onTerminalPointerUp,
-                      child: TerminalView(
-                        tab.terminal,
-                        controller: tab.controller,
-                        scrollController: tab.scrollController,
-                        theme: profile.toXterm(),
-                        cursorType: TerminalCursorType.block,
-                        alwaysShowCursor: true,
-                        textStyle: TerminalStyle(
-                          fontSize: widget.settings.terminalFontSize,
-                          fontFamily: 'JetBrains Mono',
+                  for (var i = 0; i < _tabs.length; i++)
+                    Builder(builder: (context) {
+                      final tab = _tabs[i];
+                      return Listener(
+                        key: ObjectKey(tab),
+                        behavior: HitTestBehavior.translucent,
+                        onPointerDown: _onTerminalPointerDown,
+                        onPointerUp: _onTerminalPointerUp,
+                        onPointerCancel: _onTerminalPointerUp,
+                        child: TerminalView(
+                          tab.terminal,
+                          controller: tab.controller,
+                          focusNode: tab.focusNode,
+                          scrollController: tab.scrollController,
+                          theme: profile.toXterm(),
+                          cursorType: TerminalCursorType.block,
+                          alwaysShowCursor: true,
+                          textStyle: TerminalStyle(
+                            fontSize: widget.settings.terminalFontSize,
+                            fontFamily: 'JetBrains Mono',
+                          ),
+                          // Only the first tab autofocuses. Every hidden tab
+                          // must not compete for the phone keyboard.
+                          autofocus: i == 0,
                         ),
-                        autofocus: true,
-                      ),
-                    ),
+                      );
+                    }),
                 ],
               ),
             ),
@@ -557,16 +579,39 @@ class _Tab {
   final TerminalController controller;
   final Pty? pty;
   final ScrollController scrollController = ScrollController();
+  final FocusNode focusNode = FocusNode(debugLabel: 'Misty terminal');
   String title;
   Future<void> pasteQueue = Future<void>.value();
   int pendingPasteCodeUnits = 0;
   bool disposed = false;
+  Timer? _resizeTimer;
+  int? _pendingRows;
+  int? _pendingCols;
+
+  void scheduleResize(int rows, int cols) {
+    if (disposed) return;
+    _pendingRows = rows;
+    _pendingCols = cols;
+    _resizeTimer?.cancel();
+    _resizeTimer = Timer(const Duration(milliseconds: 90), () {
+      final targetRows = _pendingRows;
+      final targetCols = _pendingCols;
+      if (disposed || targetRows == null || targetCols == null) return;
+      try {
+        pty?.resize(targetRows, targetCols);
+      } catch (_) {
+        // The PTY may already have exited.
+      }
+    });
+  }
 
   void dispose() {
     if (disposed) return;
     disposed = true;
     pendingPasteCodeUnits = 0;
+    _resizeTimer?.cancel();
     scrollController.dispose();
+    focusNode.dispose();
     try {
       pty?.kill();
     } catch (_) {
