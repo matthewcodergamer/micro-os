@@ -271,7 +271,7 @@ jobs:
           grep -q 'microos-chrome-headless' tool/setup.sh
           grep -q 'git-cola' tool/setup.sh
           grep -q 'blender' tool/setup.sh
-          grep -q 'microos-blender' tool/setup.sh
+          grep -q 'microos-$icon' tool/setup.sh
           grep -q 'OPENCODE_CLI_CONFIG_CONTENT' lib/ui/apps/terminal_app.dart
           bash -n tool/fetch_thanasos_wallpapers.sh
 
