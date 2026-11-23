@@ -179,7 +179,7 @@ PLAYWRIGHT_SMOKE
     npm install --global @playwright/mcp
     PLAYWRIGHT_MCP_BIN="$(command -v playwright-mcp)"
     test -n "$PLAYWRIGHT_MCP_BIN"
-    # npm's global prefix is normally /usr/local, so the binary is already at
+    # The npm global prefix is normally /usr/local, so the binary is already at
     # the path used by the OpenCode config. Only link when npm chose /usr.
     if [ "$PLAYWRIGHT_MCP_BIN" != "/usr/local/bin/playwright-mcp" ]; then
       ln -sfn "$PLAYWRIGHT_MCP_BIN" /usr/local/bin/playwright-mcp
