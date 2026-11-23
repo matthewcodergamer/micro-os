@@ -593,7 +593,7 @@ class _Tab {
     _pendingRows = rows;
     _pendingCols = cols;
     _resizeTimer?.cancel();
-    _resizeTimer = Timer(const Duration(milliseconds: 90), () {
+    _resizeTimer = Timer(const Duration(milliseconds: 260), () {
       final targetRows = _pendingRows;
       final targetCols = _pendingCols;
       if (disposed || targetRows == null || targetCols == null) return;

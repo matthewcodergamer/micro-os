@@ -254,6 +254,24 @@ if "MicroOSSessionService" not in xml:
 
 xml = xml.replace('android:label="micro_os"', 'android:label="Misty OS"')
 
+# The mobile keyboard must not resize the Android activity frame by frame.
+# Flutter still receives viewInsets and lays the desktop out once the keyboard
+# settles (see DesktopScreen), so windows stay visible above the keyboard
+# without the terminal reflowing on every animation frame.
+if "windowSoftInputMode" not in xml:
+    xml = xml.replace(
+        'android:name=".MainActivity"',
+        'android:name=".MainActivity"\n            android:windowSoftInputMode="adjustNothing"',
+        1,
+    )
+else:
+    xml = re.sub(
+        r'android:windowSoftInputMode="[^"]*"',
+        'android:windowSoftInputMode="adjustNothing"',
+        xml,
+        count=1,
+    )
+
 if "usesCleartextTraffic" not in xml:
     xml = xml.replace(
         "<application",

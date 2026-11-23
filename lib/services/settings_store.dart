@@ -18,6 +18,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kTerminalFontSize = 'terminal.font_size';
   static const _kTerminalProfile = 'terminal.profile';
   static const _kDockAutoHide = 'dock.auto_hide';
+  static const _kDockVisibility = 'dock.visibility';
   static const _kSystemBarsVisible = 'system.bars_visible';
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
@@ -39,8 +40,8 @@ class SettingsStore extends ChangeNotifier {
   String? loginPassword;
   bool loginPasswordStorageUnavailable = false;
   bool loginPasswordMigrationPending = false;
-  bool dockAutoHide = true;
   bool systemBarsVisible = false;
+  DockVisibilityMode dockVisibilityMode = DockVisibilityMode.automatic;
   DesktopPointerMode desktopPointerMode = DesktopPointerMode.trackpad;
   double desktopCursorSpeed = 1.35;
 
@@ -61,7 +62,14 @@ class SettingsStore extends ChangeNotifier {
     terminalProfile =
         prefs.getString(_kTerminalProfile) ?? kDefaultTerminalProfile;
     userName = prefs.getString(_kUserName) ?? 'Misty OS User';
-    dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
+    final storedDockVisibility = prefs.getString(_kDockVisibility);
+    dockVisibilityMode = storedDockVisibility == null
+        // Migrate the old boolean: auto-hide was on by default, so it maps to
+        // Automatic (which keeps the Dock visible on desktop-size screens).
+        ? (prefs.getBool(_kDockAutoHide) ?? true
+              ? DockVisibilityMode.automatic
+              : DockVisibilityMode.alwaysVisible)
+        : DockVisibilityModeInfo.fromStorage(storedDockVisibility);
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
     desktopPointerMode = DesktopPointerModeInfo.fromStorage(
@@ -162,11 +170,12 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setBool(_kSystemBarsVisible, value);
   }
 
-  Future<void> setDockAutoHide(bool value) async {
-    dockAutoHide = value;
+  Future<void> setDockVisibilityMode(DockVisibilityMode value) async {
+    if (dockVisibilityMode == value) return;
+    dockVisibilityMode = value;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kDockAutoHide, value);
+    await prefs.setString(_kDockVisibility, value.storageValue);
   }
 
   Future<void> setOpenCodeTheme(String value) async {

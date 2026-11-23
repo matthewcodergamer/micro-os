@@ -46,3 +46,47 @@ extension DesktopPointerModeInfo on DesktopPointerMode {
         _ => DesktopPointerMode.trackpad,
       };
 }
+
+/// How the Dock behaves across phone and desktop-size screens.
+///
+/// Automatic is the Misty default: large screens keep a centred, always-on
+/// Dock, while phones hide it until you swipe up from the bottom edge.
+enum DockVisibilityMode { automatic, alwaysVisible, autoHide }
+
+extension DockVisibilityModeInfo on DockVisibilityMode {
+  String get storageValue => switch (this) {
+        DockVisibilityMode.automatic => 'automatic',
+        DockVisibilityMode.alwaysVisible => 'always_visible',
+        DockVisibilityMode.autoHide => 'auto_hide',
+      };
+
+  String get title => switch (this) {
+        DockVisibilityMode.automatic => 'Automatic',
+        DockVisibilityMode.alwaysVisible => 'Always visible',
+        DockVisibilityMode.autoHide => 'Auto-hide',
+      };
+
+  String get description => switch (this) {
+        DockVisibilityMode.automatic =>
+          'Keep the Dock centred on tablets and desktops. On phones, swipe up '
+              'from the bottom edge to reveal it.',
+        DockVisibilityMode.alwaysVisible =>
+          'Keep the Dock centred at all times, except while an app is '
+              'full-screen.',
+        DockVisibilityMode.autoHide =>
+          'Hide the Dock everywhere. Swipe up from the bottom edge to bring '
+              'it back.',
+      };
+
+  bool shouldAutoHide({required bool desktopMode}) => switch (this) {
+        DockVisibilityMode.automatic => !desktopMode,
+        DockVisibilityMode.alwaysVisible => false,
+        DockVisibilityMode.autoHide => true,
+      };
+
+  static DockVisibilityMode fromStorage(String? value) => switch (value) {
+        'always_visible' => DockVisibilityMode.alwaysVisible,
+        'auto_hide' => DockVisibilityMode.autoHide,
+        _ => DockVisibilityMode.automatic,
+      };
+}

@@ -116,15 +116,17 @@ class _DockState extends State<Dock> with SingleTickerProviderStateMixin {
     final iconSize = landscape
         ? (screen.height < 420 ? 34.0 : 40.0)
         : compact
-        ? (screen.width < 380 ? 42.0 : 46.0)
+        ? (screen.width < 360 ? 38.0 : (screen.width < 380 ? 42.0 : 46.0))
         : 54.0;
-    final spacing = landscape
-        ? 5.0
-        : compact
-        ? 7.0
-        : 10.0;
+    final spacing = landscape ? 5.0 : (compact ? 7.0 : 10.0);
     final horizontalPadding = landscape ? 10.0 : 12.0;
-    final dockWidth = math.min(screen.width - 20, 720.0);
+    // Hug the artwork instead of stretching a mostly empty bar across a
+    // tablet. Six icons and their gaps define the Dock's natural width.
+    final contentWidth =
+        iconSize * Dock._apps.length +
+        spacing * (Dock._apps.length - 1) +
+        horizontalPadding * 2;
+    final dockWidth = math.min(screen.width - 20, contentWidth);
 
     return AnimatedBuilder(
       animation: _controller,

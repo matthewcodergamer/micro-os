@@ -32,7 +32,8 @@ class DesktopScreen extends StatefulWidget {
   State<DesktopScreen> createState() => _DesktopScreenState();
 }
 
-class _DesktopScreenState extends State<DesktopScreen> {
+class _DesktopScreenState extends State<DesktopScreen>
+    with WidgetsBindingObserver {
   Size _lastArea = Size.zero;
   double _lastTop = -1;
   double _lastBottom = -1;
@@ -53,6 +54,28 @@ class _DesktopScreenState extends State<DesktopScreen> {
   double _rawKeyboardInset = 0;
   Timer? _keyboardTimer;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    final view = View.maybeOf(context);
+    if (view == null) return;
+    final raw = view.viewInsets.bottom / view.devicePixelRatio;
+    if ((raw - _rawKeyboardInset).abs() <= 0.5) return;
+    _rawKeyboardInset = raw;
+    _keyboardTimer?.cancel();
+    _keyboardTimer = Timer(const Duration(milliseconds: 140), () {
+      if (!mounted) return;
+      if ((_rawKeyboardInset - _keyboardInset).abs() <= 0.5) return;
+      setState(() => _keyboardInset = _rawKeyboardInset);
+    });
+  }
+
   void _revealDock() {
     _dockTimer?.cancel();
     if (!_dockRevealed) setState(() => _dockRevealed = true);
@@ -68,6 +91,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _dockTimer?.cancel();
     _keyboardTimer?.cancel();
     super.dispose();
@@ -98,16 +122,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
         final insets = _insets(context);
         final media = MediaQuery.of(context);
         final size = media.size;
-        final rawKeyboard = media.viewInsets.bottom;
-        if ((rawKeyboard - _rawKeyboardInset).abs() > 0.5) {
-          _rawKeyboardInset = rawKeyboard;
-          _keyboardTimer?.cancel();
-          _keyboardTimer = Timer(const Duration(milliseconds: 140), () {
-            if (!mounted) return;
-            if ((_rawKeyboardInset - _keyboardInset).abs() <= 0.5) return;
-            setState(() => _keyboardInset = _rawKeyboardInset);
-          });
-        }
         final keyboard = _keyboardInset;
 
         final top = insets.top + kMenuBarHeight;
@@ -115,9 +129,21 @@ class _DesktopScreenState extends State<DesktopScreen> {
         // avoids placing interactive controls directly under Home/Back swipes.
         final gestureBottom = media.systemGestureInsets.bottom;
         final dockBottom = math.max(insets.bottom, gestureBottom);
-        final bottomReserve = settings.dockAutoHide && desktop.focused != null
-            ? 0.0
-            : kDockReserved;
+        final desktopMode = size.shortestSide >= 600;
+        final dockAutoHides = settings.dockVisibilityMode.shouldAutoHide(
+          desktopMode: desktopMode,
+        );
+        final fullScreenApp =
+            desktop.focused?.maximized == true ||
+            desktop.focused?.pinned == true;
+        // An auto-hidden Dock starts tucked away on phones, even before a
+        // window opens, so the home screen stays calm and the wallpaper has
+        // room to breathe. Swiping up reveals it.
+        final hideDock = !_dockRevealed && (fullScreenApp || dockAutoHides);
+        // Auto-hidden Docks float over the workspace; a visible, centred Dock
+        // reserves space so windows never sit underneath it.
+        final reserveForDock = !fullScreenApp && !dockAutoHides;
+        final bottomReserve = reserveForDock ? kDockReserved : 0.0;
         final bottom = math.max(0.0, dockBottom + bottomReserve);
 
         // Sync geometry
@@ -141,10 +167,6 @@ class _DesktopScreenState extends State<DesktopScreen> {
             }
           });
         }
-
-        final hideDock = settings.dockAutoHide &&
-            desktop.focused != null &&
-            !_dockRevealed;
 
         return Stack(
           fit: StackFit.expand,
@@ -233,20 +255,34 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     },
                     child: Align(
                       alignment: Alignment.bottomCenter,
-                      child: Container(
-                        width: 54,
-                        height: 5,
-                        margin: const EdgeInsets.only(bottom: 9),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.52),
-                          borderRadius: BorderRadius.circular(3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.32),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: 1),
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, t, child) {
+                          return Opacity(
+                            opacity: t,
+                            child: Transform.translate(
+                              offset: Offset(0, (1 - t) * 8),
+                              child: child,
                             ),
-                          ],
+                          );
+                        },
+                        child: Container(
+                          width: 58,
+                          height: 4.5,
+                          margin: const EdgeInsets.only(bottom: 9),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.58),
+                            borderRadius: BorderRadius.circular(3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.32),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
