@@ -64,7 +64,7 @@ class SettingsStore extends ChangeNotifier {
     dockAutoHide = prefs.getBool(_kDockAutoHide) ?? true;
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
-    desktopPointerMode = DesktopPointerMode.fromStorage(
+    desktopPointerMode = DesktopPointerModeInfo.fromStorage(
       prefs.getString(_kDesktopPointerMode),
     );
     desktopCursorSpeed =

@@ -22,15 +22,15 @@ rm -f test/widget_test.dart
 
 # ---- Native X11 surface -----------------------------------------------------
 # The desktop renderer is ordinary Android/Java code that talks to the guest's
-# X11 bridge over a Unix socket. Keeping it in tool/android makes the generated
+# X11 bridge over a Unix socket. Keeping it in tool/android-src makes the generated
 # Android project small and reproducible.
 X11_VIEW_DIR="android/app/src/main/java/com/matthewcodergamer/micro_os"
 mkdir -p "$X11_VIEW_DIR"
 install -m 644 \
-  tool/android/com/matthewcodergamer/micro_os/MicroOSX11View.java \
+  tool/android-src/com/matthewcodergamer/micro_os/MicroOSX11View.java \
   "$X11_VIEW_DIR/MicroOSX11View.java"
 install -m 644 \
-  tool/android/com/matthewcodergamer/micro_os/MicroOSAudio.java \
+  tool/android-src/com/matthewcodergamer/micro_os/MicroOSAudio.java \
   "$X11_VIEW_DIR/MicroOSAudio.java"
 
 # ---- Stream large bundled assets through Android AssetManager ---------------

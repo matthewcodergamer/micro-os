@@ -262,9 +262,9 @@ jobs:
           bash -n tool/setup.sh
           bash -n tool/prebake_rootfs.sh
           bash -n tool/bootstrap_android.sh
-          test -f tool/android/com/matthewcodergamer/micro_os/MicroOSX11View.java
-          test -f tool/android/com/matthewcodergamer/micro_os/MicroOSAudio.java
-          grep -q 'microos/audio' tool/android/com/matthewcodergamer/micro_os/MicroOSAudio.java
+          test -f tool/android-src/com/matthewcodergamer/micro_os/MicroOSX11View.java
+          test -f tool/android-src/com/matthewcodergamer/micro_os/MicroOSAudio.java
+          grep -q 'microos/audio' tool/android-src/com/matthewcodergamer/micro_os/MicroOSAudio.java
           grep -q 'microos-chrome-headless' tool/setup.sh
           grep -q 'git-cola' tool/setup.sh
           grep -q 'blender' tool/setup.sh
