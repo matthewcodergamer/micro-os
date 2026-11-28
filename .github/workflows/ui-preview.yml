@@ -1,0 +1,97 @@
+name: UI preview
+
+# Fast feedback for shell/UI work: analyze, unit tests and real Flutter
+# screenshots of the desktop at phone, landscape and tablet sizes. The full
+# Android APK (rootfs + Gradle) still comes from build-android.yml.
+
+on:
+  push:
+    branches-ignore: [main, "ci/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ui-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.9"
+          channel: stable
+          architecture: x64
+          cache: true
+
+      - name: Fetch fonts and wallpapers
+        run: |
+          bash tool/fetch_fonts.sh
+          bash tool/fetch_thanasos_wallpapers.sh
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        id: analyze
+        continue-on-error: true
+        run: |
+          mkdir -p build/report
+          set -o pipefail
+          flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee build/report/analyze.txt
+
+      - name: Unit tests
+        id: unit
+        continue-on-error: true
+        run: |
+          mkdir -p build/report
+          set -o pipefail
+          flutter test test/ --reporter expanded 2>&1 | tee build/report/unit-tests.txt
+
+      - name: Screenshots
+        id: screens
+        continue-on-error: true
+        run: |
+          mkdir -p build/report build/screenshots
+          set -o pipefail
+          flutter test test_screens/ --reporter expanded 2>&1 | tee build/report/screenshot-tests.txt
+
+      - name: Publish screenshots and reports
+        if: always() && github.event_name != 'pull_request'
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/ui-screenshots"
+          rm -rf "$OUT" && mkdir -p "$OUT"
+          cp -r build/screenshots/. "$OUT/" 2>/dev/null || true
+          cp build/report/*.txt "$OUT/" 2>/dev/null || true
+          {
+            echo "source_sha=$GITHUB_SHA"
+            echo "source_ref=$GITHUB_REF_NAME"
+            echo "analyze=${{ steps.analyze.outcome }}"
+            echo "unit_tests=${{ steps.unit.outcome }}"
+            echo "screenshots=${{ steps.screens.outcome }}"
+            echo "run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$OUT/SOURCE.txt"
+          cd "$OUT"
+          git init -q
+          git checkout -q -b ci/ui-screenshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "UI screenshots for ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:ci/ui-screenshots
+
+      - name: Fail when a check failed
+        if: steps.analyze.outcome == 'failure' || steps.unit.outcome == 'failure' || steps.screens.outcome == 'failure'
+        run: |
+          echo "analyze=${{ steps.analyze.outcome }} unit=${{ steps.unit.outcome }} screenshots=${{ steps.screens.outcome }}"
+          exit 1
