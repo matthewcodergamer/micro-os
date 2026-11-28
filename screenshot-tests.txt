@@ -1,0 +1,15 @@
+00:00 +0: loading /home/runner/work/micro-os/micro-os/test_screens/screens_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: 01-phone-login
+00:01 +1: 02-phone-home
+00:01 +2: 03-phone-dock
+00:02 +3: 04-phone-terminal
+00:02 +4: 05-phone-ai-hub
+00:02 +5: 06-phone-finder
+00:03 +6: 07-phone-settings
+00:03 +7: 08-phone-launchpad
+00:04 +8: 09-phone-control-center
+00:04 +9: 10-landscape-desktop-mode
+00:05 +10: 11-tablet-desktop
+00:05 +11: (tearDownAll)
+00:05 +11: All tests passed!

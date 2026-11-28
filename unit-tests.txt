@@ -1,0 +1,52 @@
+No Visual Studio installation found with the requested Microsoft.VisualStudio.Component.VC.Tools.x86.x64 component.
+
+00:00 +0: loading /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart
+00:00 +0: /home/runner/work/micro-os/micro-os/test/performance_monitor_test.dart: parseMeminfo reads total, available and swap in KiB
+00:00 +1: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +2: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +3: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +4: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +5: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +6: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +7: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +8: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +9: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +10: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +11: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +12: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +13: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +14: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: extra keys send paired down/up events and release one-shot modifiers
+00:00 +15: /home/runner/work/micro-os/micro-os/test/desktop_key_bar_test.dart: modifier lock holds Ctrl until tapped a third time
+00:00 +16: /home/runner/work/micro-os/micro-os/test/shell_mode_test.dart: ShellMode automatic uses full-screen apps on phones and windows on tablets
+00:00 +17: /home/runner/work/micro-os/micro-os/test/shell_mode_test.dart: ShellMode explicit modes ignore the screen size
+00:00 +18: /home/runner/work/micro-os/micro-os/test/shell_mode_test.dart: ShellMode storage values round-trip and unknown values fall back
+00:00 +19: /home/runner/work/micro-os/micro-os/test/shell_mode_test.dart: DesktopState presentation a phone opens apps edge to edge
+00:00 +20: /home/runner/work/micro-os/micro-os/test/shell_mode_test.dart: DesktopState presentation desktop mode keeps a floating, screen-sized window on a phone
+00:00 +21: /home/runner/work/micro-os/micro-os/test/shell_mode_test.dart: DesktopState presentation switching modes full-screens and restores windows losslessly
+00:01 +22: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:01 +23: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:01 +24: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:01 +25: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:01 +26: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:01 +27: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:01 +28: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:01 +29: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:01 +30: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: animated login screen continues when no password is configured
+00:02 +31: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: password field stays hidden until the profile is revealed
+00:02 +32: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: password field stays hidden until the profile is revealed
+00:02 +33: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: password field stays hidden until the profile is revealed
+00:02 +34: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: password field stays hidden until the profile is revealed
+00:02 +35: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: password field stays hidden until the profile is revealed
+00:02 +36: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: password field stays hidden until the profile is revealed
+00:02 +37: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: password login rejects wrong input and accepts the saved password
+00:02 +38: /home/runner/work/micro-os/micro-os/test/login_screen_test.dart: password visibility control is available after revealing
+00:02 +39: /home/runner/work/micro-os/micro-os/test/desktop_input_test.dart: DesktopPointerMode defaults to trackpad for unknown or missing values
+00:02 +40: /home/runner/work/micro-os/micro-os/test/desktop_input_test.dart: DesktopPointerMode round-trips both modes through storage
+00:02 +41: /home/runner/work/micro-os/micro-os/test/desktop_input_test.dart: DesktopPointerMode cycles through both pointer profiles
+00:02 +42: /home/runner/work/micro-os/micro-os/test/desktop_input_test.dart: DesktopPointerMode only trackpad mode draws the virtual cursor
+00:03 +43: /home/runner/work/micro-os/micro-os/test/desktop_state_test.dart: DesktopState geometry a window opened before the screen is measured is never zero-sized
+00:03 +44: /home/runner/work/micro-os/micro-os/test/desktop_state_test.dart: DesktopState geometry a compact screen pins the window to the usable area
+00:03 +45: /home/runner/work/micro-os/micro-os/test/desktop_state_test.dart: DesktopState geometry rotation clamps a floating window back inside the usable area
+00:03 +46: /home/runner/work/micro-os/micro-os/test/desktop_state_test.dart: Wallpapers the approved Misty sky is the default wallpaper
+00:03 +47: /home/runner/work/micro-os/micro-os/test/desktop_state_test.dart: Wallpapers an unknown wallpaper id falls back to the default
+00:03 +48: All tests passed!

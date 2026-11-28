@@ -1,0 +1,17 @@
+Analyzing micro-os...                                           
+
+   info • Use interpolation to compose strings and values. Try using string interpolation to build the composite string • lib/core/browser_navigation.dart:36:7 • prefer_interpolation_to_compose_strings
+   info • The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart'. Try removing the import directive • lib/services/linux_runtime.dart:4:8 • unnecessary_import
+   info • The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/scheduler.dart'. Try removing the import directive • lib/services/performance_monitor.dart:4:8 • unnecessary_import
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/services/performance_monitor.dart:466:5 • curly_braces_in_flow_control_structures
+   info • Unnecessary 'this.' qualifier. Try removing 'this.' • lib/state/desktop_state.dart:192:5 • unnecessary_this
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/state/desktop_state.dart:417:25 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/state/desktop_state.dart:418:12 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/state/desktop_state.dart:421:24 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block. Try wrapping the statement in a block • lib/state/desktop_state.dart:422:12 • curly_braces_in_flow_control_structures
+   info • Unnecessary escape in string literal. Remove the '\' escape • lib/ui/apps/ai_hub_app.dart:21:11 • unnecessary_string_escapes
+   info • Unnecessary escape in string literal. Remove the '\' escape • lib/ui/apps/ai_hub_app.dart:21:62 • unnecessary_string_escapes
+   info • The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/services.dart'. Try removing the import directive • test_screens/harness.dart:15:8 • unnecessary_import
+warning • The member 'setMockInitialValues' can only be used within 'package:shared_preferences/src/shared_preferences_legacy.dart' or a test • test_screens/screens_test.dart:15:23 • invalid_use_of_visible_for_testing_member
+
+13 issues found. (ran in 6.7s)
