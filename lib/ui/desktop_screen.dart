@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../core/desktop_input.dart';
 import '../core/linux_apps.dart';
+import '../core/shell_mode.dart';
 import '../core/theme.dart';
 import '../core/wallpapers.dart';
 import '../models/window_state.dart';
@@ -151,19 +152,27 @@ class _DesktopScreenState extends State<DesktopScreen>
         // avoids placing interactive controls directly under Home/Back swipes.
         final gestureBottom = media.systemGestureInsets.bottom;
         final dockBottom = math.max(insets.bottom, gestureBottom);
-        final desktopMode = size.shortestSide >= 600;
+        final mobile = resolveMobileShell(settings.shellMode, size);
+        final desktopMode = settings.shellMode == ShellMode.desktop ||
+            (settings.shellMode == ShellMode.automatic &&
+                size.shortestSide >= 600);
         final dockAutoHides = settings.dockVisibilityMode.shouldAutoHide(
           desktopMode: desktopMode,
         );
         final fullScreenApp =
             desktop.focused?.maximized == true ||
             desktop.focused?.pinned == true;
+        final alwaysVisibleDock =
+            settings.dockVisibilityMode == DockVisibilityMode.alwaysVisible;
         // An auto-hidden Dock starts tucked away on phones, even before a
         // window opens, so the home screen stays calm and the wallpaper has
-        // room to breathe. Swiping up reveals it.
-        final hideDock = !_dockRevealed && (fullScreenApp || dockAutoHides);
+        // room to breathe. Swiping up reveals it. An always-visible Dock is
+        // honoured even over a full-screen app, exactly as the setting says.
+        final hideDock = !_dockRevealed &&
+            (dockAutoHides || (fullScreenApp && !alwaysVisibleDock));
         // Auto-hidden Docks float over the workspace; a visible, centred Dock
-        // reserves space so windows never sit underneath it.
+        // reserves space so windows never sit underneath it. A full-screen app
+        // owns the screen, so the Dock floats above it only when revealed.
         final reserveForDock = !fullScreenApp && !dockAutoHides;
         final bottomReserve = reserveForDock ? kDockReserved : 0.0;
         final bottom = math.max(0.0, dockBottom + bottomReserve);
@@ -173,7 +182,8 @@ class _DesktopScreenState extends State<DesktopScreen>
         if (area != _lastArea ||
             top != _lastTop ||
             bottom != _lastBottom ||
-            keyboard != _lastInset) {
+            keyboard != _lastInset ||
+            settings.shellMode != desktop.shellMode) {
           _lastArea = area;
           _lastTop = top;
           _lastBottom = bottom;
@@ -185,6 +195,7 @@ class _DesktopScreenState extends State<DesktopScreen>
                 topReserve: top,
                 bottomReserve: bottom,
                 bottomInset: keyboard,
+                shellMode: settings.shellMode,
               );
             }
           });
@@ -218,6 +229,7 @@ class _DesktopScreenState extends State<DesktopScreen>
                     window: window,
                     desktop: desktop,
                     screen: size,
+                    mobile: mobile,
                     child: _contentFor(window, scope),
                   ),
 

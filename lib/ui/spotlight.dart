@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../core/linux_apps.dart';
@@ -238,17 +236,17 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Container(
-            decoration: Sequoia.glass(
-              radius: radius,
-              tint: 0.74,
-              borderAlpha: 0.24,
-              base: const Color(0xFF202024),
-            ),
-            child: child,
+        // Deliberately no BackdropFilter. Spotlight can open above the native
+        // X11 TextureView, and blurring that surface can produce a flat grey
+        // rectangle on some GPUs. A tinted glass gradient stays stable.
+        child: Container(
+          decoration: Sequoia.glass(
+            radius: radius,
+            tint: 0.86,
+            borderAlpha: 0.24,
+            base: const Color(0xFF202024),
           ),
+          child: child,
         ),
       ),
     );
@@ -310,9 +308,15 @@ class _LaunchpadOverlayState extends State<LaunchpadOverlay> {
       children: [
         Positioned.fill(
           child: Material(
-            color: const Color(0xD9101014),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            color: Colors.transparent,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xF21B1B20), Color(0xF20C0C10)],
+                ),
+              ),
               child: SafeArea(
                 child: Column(
                   children: [

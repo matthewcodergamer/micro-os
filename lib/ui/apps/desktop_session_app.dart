@@ -418,6 +418,10 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final showKeyBar = _displayReady && (_keyBarPinned || keyboardVisible);
     final socketPath = _socketPath;
+    // The browser toolbar carries more actions than the plain desktop. On a
+    // phone, keep the essentials and let the More menu expose the rest instead
+    // of overflowing the row.
+    final compact = MediaQuery.sizeOf(context).width < 420;
 
     return Container(
       color: const Color(0xFF0B0E14),
@@ -451,13 +455,16 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                   ),
                   const SizedBox(width: 6),
                 ],
-                Expanded(
-                  child: Text(
-                    _status,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
-                  ),
-                ),
+                if (!compact)
+                  Expanded(
+                    child: Text(
+                      _status,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: MicroColors.subtle, fontSize: 11),
+                    ),
+                  )
+                else
+                  const Spacer(),
                 if (_displayReady) ...[
                   IconButton(
                     tooltip: _audioMuted ? 'Unmute desktop audio' : 'Mute desktop audio',
@@ -469,29 +476,31 @@ class _DesktopSessionAppState extends State<DesktopSessionApp> {
                     ),
                     color: _audioMuted ? MicroColors.red : MicroColors.subtle,
                   ),
-                  IconButton(
-                    tooltip: _pointerMode.title,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _cyclePointerMode,
-                    icon: Icon(
-                      _pointerMode.usesVisibleCursor
-                          ? Icons.track_changes_rounded
-                          : Icons.touch_app_rounded,
-                      size: 16,
+                  if (!compact)
+                    IconButton(
+                      tooltip: _pointerMode.title,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _cyclePointerMode,
+                      icon: Icon(
+                        _pointerMode.usesVisibleCursor
+                            ? Icons.track_changes_rounded
+                            : Icons.touch_app_rounded,
+                        size: 16,
+                      ),
+                      color: _pointerMode.usesVisibleCursor
+                          ? MicroColors.accent
+                          : MicroColors.subtle,
                     ),
-                    color: _pointerMode.usesVisibleCursor
-                        ? MicroColors.accent
-                        : MicroColors.subtle,
-                  ),
                   _moreControlsButton(),
                 ],
-                IconButton(
-                  tooltip: 'Restart desktop session',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _boot,
-                  icon: const Icon(Icons.restart_alt, size: 16),
-                  color: MicroColors.subtle,
-                ),
+                if (!compact)
+                  IconButton(
+                    tooltip: 'Restart desktop session',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _boot,
+                    icon: const Icon(Icons.restart_alt, size: 16),
+                    color: MicroColors.subtle,
+                  ),
               ],
             ),
           ),

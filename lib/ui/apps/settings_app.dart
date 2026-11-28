@@ -6,6 +6,7 @@ import '../../app_scope.dart';
 import '../../core/desktop_input.dart';
 import '../../core/macos_design.dart';
 import '../../core/opencode_themes.dart';
+import '../../core/shell_mode.dart';
 import '../../core/terminal_profiles.dart';
 import '../../services/github_auth.dart';
 import '../../services/linux_runtime.dart';
@@ -37,7 +38,8 @@ String _pageTitle(_Page page) => switch (page) {
 };
 
 String _pageSubtitle(_Page page) => switch (page) {
-  _Page.desktop => 'Shape the Dock and how Misty OS uses your screen.',
+  _Page.desktop =>
+    'Choose your window style, the Dock, and Linux desktop input.',
   _Page.performance => 'Live, on-device telemetry for this phone or tablet.',
   _Page.linux => 'Manage the PRoot Ubuntu runtime and storage access.',
   _Page.terminal => 'Type, colour, and cursor preferences for every shell.',
@@ -107,6 +109,7 @@ class _SettingsAppState extends State<SettingsApp> {
     final wide = MediaQuery.sizeOf(context).width >= 680;
 
     final content = ListenableBuilder(
+      key: ValueKey(_page),
       listenable: Listenable.merge([settings, runtime]),
       builder: (context, _) {
         return switch (_page) {
@@ -121,6 +124,27 @@ class _SettingsAppState extends State<SettingsApp> {
           _Page.about => const _AboutPage(),
         };
       },
+    );
+
+    // A short cross-fade makes switching panes feel like System Settings
+    // instead of a hard list rebuild.
+    final animatedContent = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.015),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: content,
     );
 
     return DecoratedBox(
@@ -138,7 +162,7 @@ class _SettingsAppState extends State<SettingsApp> {
                   page: _page,
                   onSelect: (page) => setState(() => _page = page),
                 ),
-                Expanded(child: content),
+                Expanded(child: animatedContent),
               ],
             )
           : Column(
@@ -147,7 +171,7 @@ class _SettingsAppState extends State<SettingsApp> {
                   page: _page,
                   onSelect: (page) => setState(() => _page = page),
                 ),
-                Expanded(child: content),
+                Expanded(child: animatedContent),
               ],
             ),
     );
@@ -171,6 +195,46 @@ class _DesktopPage extends StatelessWidget {
       title: _pageTitle(_Page.desktop),
       subtitle: _pageSubtitle(_Page.desktop),
       children: [
+        _Section(
+          title: 'Window style',
+          caption:
+              'Two kinds of people use Misty OS: the ones who want the full '
+              'desktop on their phone, and the ones who want that desktop to '
+              'feel mobile. Pick your side — or let Misty choose for you.',
+          children: [
+            _ChoiceGroup<ShellMode>(
+              value: settings.shellMode,
+              options: const [
+                _Choice(
+                  value: ShellMode.automatic,
+                  title: 'Automatic',
+                  description:
+                      'Full-screen, touch-friendly apps on phones. Floating '
+                      'macOS windows on tablets and larger screens.',
+                  icon: Icons.auto_awesome_rounded,
+                ),
+                _Choice(
+                  value: ShellMode.desktop,
+                  title: 'Desktop',
+                  description:
+                      'The complete macOS experience everywhere: movable, '
+                      'resizable windows on every device.',
+                  icon: Icons.desktop_windows_rounded,
+                ),
+                _Choice(
+                  value: ShellMode.mobile,
+                  title: 'Mobile',
+                  description:
+                      'Every app opens edge to edge with a compact header and '
+                      'thumb-sized controls. Best for one-handed use.',
+                  icon: Icons.smartphone_rounded,
+                ),
+              ],
+              onChanged: settings.setShellMode,
+            ),
+            _ShellModePreview(mode: settings.shellMode),
+          ],
+        ),
         _Section(
           title: 'Dock',
           caption:
@@ -279,6 +343,302 @@ class _DesktopPage extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _ShellModePreview extends StatelessWidget {
+  const _ShellModePreview({required this.mode});
+
+  final ShellMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final automatic = mode == ShellMode.automatic;
+    final mobile = mode == ShellMode.mobile;
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.08),
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 134,
+            child: Row(
+              children: [
+                if (automatic) ...[
+                  const Expanded(
+                    child: _PreviewStage(label: 'Phone', fullScreen: true),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: _PreviewStage(label: 'Tablet', fullScreen: false),
+                  ),
+                ] else
+                  Expanded(
+                    child: _PreviewStage(
+                      label: mobile ? 'Phone' : 'Desktop',
+                      fullScreen: mobile,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 9),
+          Text(
+            switch (mode) {
+              ShellMode.automatic =>
+                'Your phone gets full-screen apps; a tablet keeps the '
+                    'floating window desktop.',
+              ShellMode.desktop =>
+                'Windows stay movable and resizable everywhere, exactly like '
+                    'macOS.',
+              ShellMode.mobile =>
+                'Apps fill the screen and the header is sized for thumbs.',
+            },
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Sequoia.labelTertiary,
+              fontSize: 10.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewStage extends StatelessWidget {
+  const _PreviewStage({required this.label, required this.fullScreen});
+
+  final String label;
+  final bool fullScreen;
+
+  Widget _line(double fraction, {bool accent = false}) {
+    return FractionallySizedBox(
+      widthFactor: fraction,
+      child: Container(
+        height: 3,
+        margin: const EdgeInsets.only(bottom: 3),
+        decoration: BoxDecoration(
+          color: accent
+              ? Sequoia.blue.withValues(alpha: 0.85)
+              : Colors.white.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final windowRadius = fullScreen ? 0.0 : 6.0;
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF2B4C73), Color(0xFF111D2F)],
+              ),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.10),
+                width: 0.7,
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Mini menu bar.
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 7,
+                  child: Container(color: const Color(0xCC2A2A2E)),
+                ),
+                // App window.
+                Positioned(
+                  left: fullScreen ? 0 : 16,
+                  right: fullScreen ? 0 : 16,
+                  top: fullScreen ? 7 : 24,
+                  bottom: fullScreen ? 0 : 23,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF26262B),
+                      borderRadius: BorderRadius.circular(windowRadius),
+                      border: Border.all(
+                        color: Colors.white.withValues(
+                          alpha: fullScreen ? 0.04 : 0.14,
+                        ),
+                        width: 0.6,
+                      ),
+                      boxShadow: fullScreen
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          height: 13,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF3A3A40),
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(windowRadius),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              if (fullScreen)
+                                const Icon(
+                                  Icons.close_rounded,
+                                  size: 7,
+                                  color: Colors.white54,
+                                )
+                              else
+                                Row(
+                                  children: [
+                                    _dot(Sequoia.closeLight),
+                                    _dot(Sequoia.miniLight),
+                                    _dot(Sequoia.zoomLight),
+                                  ],
+                                ),
+                              const Spacer(),
+                              Container(
+                                width: 22,
+                                height: 2,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.24),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const Spacer(),
+                              if (fullScreen)
+                                const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 8,
+                                  color: Colors.white38,
+                                )
+                              else
+                                const SizedBox(width: 12),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              if (!fullScreen)
+                                Container(
+                                  width: 26,
+                                  color: const Color(0xFF2D2D33),
+                                  padding: const EdgeInsets.fromLTRB(5, 6, 5, 0),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _line(1),
+                                      _line(0.72),
+                                      _line(0.9),
+                                      _line(0.6),
+                                    ],
+                                  ),
+                                ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _line(0.55, accent: true),
+                                      _line(0.92),
+                                      _line(0.76),
+                                      _line(0.46),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Floating Dock only exists in the desktop presentation.
+                if (!fullScreen)
+                  Positioned(
+                    left: 13,
+                    right: 13,
+                    bottom: 4,
+                    height: 14,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xE62E2E33),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          for (var i = 0; i < 4; i++)
+                            Container(
+                              width: 6,
+                              height: 6,
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.72),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Sequoia.labelSecondary,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dot(Color color) {
+    return Container(
+      width: 3.5,
+      height: 3.5,
+      margin: const EdgeInsets.only(right: 2),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

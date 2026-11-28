@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../core/format.dart';
 import '../core/macos_design.dart';
+import '../core/shell_mode.dart';
+import '../core/theme.dart';
 
 /// The macOS-style menu bar (Apple menu, app menus, status items, clock).
 class StatusBar extends StatefulWidget {
@@ -50,6 +53,7 @@ class _StatusBarState extends State<StatusBar> {
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
     final desktop = scope.desktop;
+    final settings = scope.settings;
     final focused = desktop.focused;
 
     return Material(
@@ -60,7 +64,13 @@ class _StatusBarState extends State<StatusBar> {
       // on some GPUs. A translucent gradient gives the Sequoia look without the risk.
       child: Container(
         height: widget.height,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        // The status bar includes the cutout inset, but the menu items must sit
+        // in the clear strip below a notch or camera island.
+        padding: EdgeInsets.only(
+          top: math.max(0, widget.height - kMenuBarHeight),
+          left: 10,
+          right: 10,
+        ),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -81,12 +91,31 @@ class _StatusBarState extends State<StatusBar> {
           children: [
             // Apple menu
             _MenuButton(
-              label: '',
+              label: '\uF8FF',
               items: [
                 PopupMenuItem(
                   onTap: () {},
                   child: const Text('About Misty OS'),
                 ),
+                const PopupMenuDivider(),
+                PopupMenuItem<void>(
+                  enabled: false,
+                  child: Text(
+                    'Window Style',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+                for (final mode in ShellMode.values)
+                  CheckedPopupMenuItem(
+                    checked: settings.shellMode == mode,
+                    onTap: () => settings.setShellMode(mode),
+                    child: Text(mode.title),
+                  ),
                 const PopupMenuDivider(),
                 PopupMenuItem(
                   onTap: widget.onLock,
@@ -94,14 +123,18 @@ class _StatusBarState extends State<StatusBar> {
                 ),
               ],
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             // Focused app name
-            Text(
-              focused?.title ?? 'Finder',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                focused?.title ?? 'Finder',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const Spacer(),

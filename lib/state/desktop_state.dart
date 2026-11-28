@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/shell_mode.dart';
 import '../core/theme.dart';
 import '../models/window_state.dart';
 import '../services/linux_runtime.dart';
@@ -42,7 +43,25 @@ class DesktopState extends ChangeNotifier {
   double bottomInset = 0;
   Size _screen = Size.zero;
 
+  /// User-selected window presentation. [ShellMode.automatic] is resolved
+  /// against the screen size on every sync, so rotating or resizing never
+  /// leaves a phone in the wrong layout.
+  ShellMode shellMode = ShellMode.automatic;
+
+  /// The resolved layout for the last measured screen.
+  bool _mobileLayout = false;
+  bool _layoutResolved = false;
+
   Size get screen => _screen;
+
+  /// True when apps should use the edge-to-edge mobile presentation.
+  bool get mobileMode => _layoutResolved
+      ? _mobileLayout
+      : resolveMobileShell(
+          shellMode,
+          _screen.isEmpty ? const Size(600, 600) : _screen,
+        );
+
   bool get isCompact => _screen.width > 0 && _screen.width < kCompactBreakpoint;
 
   ManagedWindow? get focused {
@@ -82,8 +101,6 @@ class DesktopState extends ChangeNotifier {
 
   // ---------------------------------------------------------------- geometry
 
-  bool _compactFor(Size s) => s.width < kCompactBreakpoint;
-
   /// Floating-window area: below the menu bar, above the Dock.
   Rect _area(Size screen) {
     final bottom = math.max(
@@ -93,10 +110,13 @@ class DesktopState extends ChangeNotifier {
     return Rect.fromLTRB(0, topReserve, screen.width, bottom);
   }
 
-  /// Where a maximized window sits. On phones the Dock is hidden while a
-  /// window is maximized, so it runs to the bottom edge.
+  /// Where a maximized window sits.
+  ///
+  /// The mobile layout is truly full screen: it ignores the Dock reserve and
+  /// runs to the bottom gesture edge. The Dock floats above it only when the
+  /// user asks for an always-visible Dock.
   Rect _maxRect(Size screen) {
-    if (_compactFor(screen)) {
+    if (resolveMobileShell(shellMode, screen)) {
       return Rect.fromLTRB(
         0,
         topReserve,
@@ -107,23 +127,83 @@ class DesktopState extends ChangeNotifier {
     return _area(screen);
   }
 
+  /// Size for a floating window, clamped so classic desktop windows still fit
+  /// a phone when the user explicitly chooses [ShellMode.desktop].
+  Size _floatingSize(AppId app, Rect area) {
+    final preferred = app.defaultSize;
+    final maxWidth = math.max(160.0, area.width - 24);
+    final maxHeight = math.max(160.0, area.height - 24);
+    return Size(
+      math.min(preferred.width, maxWidth),
+      math.min(preferred.height, maxHeight),
+    );
+  }
+
+  void _enterMobileLayout(Size screen) {
+    for (final w in windows) {
+      // Remember how the window looked in the desktop layout so switching
+      // back is lossless.
+      if (!w.maximized) w.restoreRect = w.rect;
+      w.maximized = true;
+      w.pinned = true;
+      w.rect = _maxRect(screen);
+    }
+  }
+
+  void _leaveMobileLayout(Size screen) {
+    for (final w in windows) {
+      if (!w.pinned) continue;
+      w.pinned = false;
+      final restore = w.restoreRect;
+      if (restore != null) {
+        w.maximized = false;
+        w.rect = restore;
+        w.restoreRect = null;
+      } else {
+        // The window was already maximized in the desktop layout; keep it
+        // maximized there instead of shrinking it as a surprise.
+        w.maximized = true;
+        w.rect = _area(screen);
+      }
+    }
+  }
+
   void syncToScreen(
     Size screen, {
     double topReserve = kMenuBarHeight,
     double bottomReserve = kDockReserved,
     double bottomInset = 0,
+    ShellMode? shellMode,
   }) {
-    final changed = _screen != screen ||
+    final nextMode = shellMode ?? this.shellMode;
+    final mobile = resolveMobileShell(nextMode, screen);
+    final modeChanged = !_layoutResolved || mobile != _mobileLayout;
+    final changed = modeChanged ||
+        _screen != screen ||
         this.topReserve != topReserve ||
         this.bottomReserve != bottomReserve ||
-        this.bottomInset != bottomInset;
+        this.bottomInset != bottomInset ||
+        this.shellMode != nextMode;
     _screen = screen;
     this.topReserve = topReserve;
     this.bottomReserve = bottomReserve;
     this.bottomInset = bottomInset;
+    this.shellMode = nextMode;
+    this._mobileLayout = mobile;
+    _layoutResolved = true;
+
+    if (modeChanged) {
+      if (mobile) {
+        _enterMobileLayout(screen);
+      } else {
+        _leaveMobileLayout(screen);
+      }
+    }
+
     if (changed) {
       // Keep every window inside the usable area when the keyboard,
-      // orientation or Dock changes. Maximized windows are glued to it.
+      // orientation, Dock or presentation mode changes. Mobile and maximized
+      // windows are glued to the workspace.
       for (final w in windows) {
         if (w.maximized || w.pinned) {
           w.rect = _maxRect(screen);
@@ -167,8 +247,8 @@ class DesktopState extends ChangeNotifier {
     }
 
     final id = ++_sequence;
-    final size = app.defaultSize;
     final area = _area(layoutScreen);
+    final size = _floatingSize(app, area);
     final origin = Offset(
       area.left + (area.width - size.width) / 2 + (id % 5) * 24,
       area.top + (area.height - size.height) / 2 + (id % 5) * 24,
@@ -180,8 +260,15 @@ class DesktopState extends ChangeNotifier {
       size.height,
     );
 
-    // Phone portrait: open maximized so the app owns the whole workspace.
-    final maximize = _compactFor(layoutScreen);
+    // Clamp the floating window inside the workspace before it is ever shown.
+    final left = _clampD(rect.left, area.left, area.right - rect.width);
+    final top = _clampD(rect.top, area.top, area.bottom - rect.height);
+    rect = Rect.fromLTWH(left, top, rect.width, rect.height);
+
+    // Phones use edge-to-edge windows. The floating rect is retained so the
+    // user can switch to the desktop layout without losing their place.
+    final maximize = resolveMobileShell(shellMode, layoutScreen);
+    final floatingRect = rect;
     if (maximize) {
       rect = _maxRect(layoutScreen);
     }
@@ -209,6 +296,7 @@ class DesktopState extends ChangeNotifier {
     if (maximize) {
       w.maximized = true;
       w.pinned = true;
+      w.restoreRect = floatingRect;
     }
     windows.add(w);
     notifyListeners();
@@ -253,6 +341,9 @@ class DesktopState extends ChangeNotifier {
   }
 
   void toggleMaximize(int id, Size screen) {
+    // Full-screen windows have no desktop chrome to restore. Switching
+    // presentation mode is an explicit user choice in Settings.
+    if (resolveMobileShell(shellMode, screen)) return;
     final w = windows.cast<ManagedWindow?>().firstWhere(
           (x) => x!.id == id,
           orElse: () => null,
@@ -266,15 +357,15 @@ class DesktopState extends ChangeNotifier {
     } else {
       w.restoreRect = w.rect;
       w.maximized = true;
-      w.pinned = _compactFor(screen);
+      w.pinned = false;
       w.rect = _maxRect(screen);
     }
     focus(id);
   }
 
   Rect appDefaultRect(AppId app, Size screen) {
-    final size = app.defaultSize;
     final area = _area(screen);
+    final size = _floatingSize(app, area);
     return Rect.fromLTWH(
       area.left + (area.width - size.width) / 2,
       area.top + (area.height - size.height) / 2,
@@ -288,7 +379,7 @@ class DesktopState extends ChangeNotifier {
           (x) => x!.id == id,
           orElse: () => null,
         );
-    if (w == null || w.maximized) return;
+    if (w == null || w.maximized || w.pinned) return;
     final area = _area(screen);
     var left = w.rect.left + delta.dx;
     var top = w.rect.top + delta.dy;
@@ -311,7 +402,7 @@ class DesktopState extends ChangeNotifier {
           (x) => x!.id == id,
           orElse: () => null,
         );
-    if (w == null || w.maximized) return;
+    if (w == null || w.maximized || w.pinned) return;
     final area = _area(screen);
     var l = w.rect.left;
     var t = w.rect.top;

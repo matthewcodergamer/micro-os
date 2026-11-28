@@ -627,7 +627,10 @@ class _KeyChip extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(6),
           canRequestFocus: false,
-          onTap: onTap,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
             child: Row(

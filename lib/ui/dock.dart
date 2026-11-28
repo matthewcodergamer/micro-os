@@ -1,9 +1,13 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
+import '../core/macos_design.dart';
+import '../core/theme.dart';
 import '../models/window_state.dart';
+import '../state/desktop_state.dart';
 import 'mac_icons.dart';
 
 /// Floating macOS-style Dock with touch-sized artwork.
@@ -95,6 +99,136 @@ class _DockState extends State<Dock> with SingleTickerProviderStateMixin {
     if (_hoveredIndex == index) return;
     setState(() => _hoveredIndex = index);
     if (index != null) widget.onInteraction?.call();
+  }
+
+  /// Long-press menu for a running app. Quitting is destructive, so it should
+  /// never be a one-finger slip on the Dock.
+  Future<void> _showAppMenu(
+    BuildContext context,
+    DesktopState desktop,
+    AppId app,
+  ) async {
+    if (!desktop.isRunning(app)) return;
+    HapticFeedback.mediumImpact();
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        void run(VoidCallback action) {
+          Navigator.of(sheetContext).pop();
+          action();
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xF71C1C1F),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.10),
+                width: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 32,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 38,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 9, bottom: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
+                  child: Row(
+                    children: [
+                      MacAppIcon(app: app, size: 34),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              app.title,
+                              style: const TextStyle(
+                                color: MicroColors.text,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              'Running',
+                              style: TextStyle(
+                                color: Sequoia.green.withValues(alpha: 0.9),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close menu',
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: MicroColors.subtle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(
+                  height: 1,
+                  color: Colors.white.withValues(alpha: 0.07),
+                ),
+                const SizedBox(height: 4),
+                _DockMenuItem(
+                  icon: Icons.open_in_new_rounded,
+                  label: 'Bring to front',
+                  onTap: () => run(() {
+                    final window = desktop.windowFor(app);
+                    if (window != null) desktop.focus(window.id);
+                  }),
+                ),
+                _DockMenuItem(
+                  icon: Icons.keyboard_arrow_down_rounded,
+                  label: 'Minimize',
+                  onTap: () => run(() {
+                    final window = desktop.windowFor(app);
+                    if (window != null) desktop.minimize(window.id);
+                  }),
+                ),
+                _DockMenuItem(
+                  icon: Icons.power_settings_new_rounded,
+                  label: 'Quit',
+                  destructive: true,
+                  onTap: () => run(() {
+                    for (final window in [...desktop.windows]) {
+                      if (window.app == app) desktop.close(window.id);
+                    }
+                  }),
+                ),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   double _magnification(int index) {
@@ -238,21 +372,17 @@ class _DockState extends State<Dock> with SingleTickerProviderStateMixin {
                                       size: iconSize,
                                       scale: _magnification(index),
                                       onTap: () {
+                                        HapticFeedback.selectionClick();
                                         widget.onInteraction?.call();
                                         widget.onOpen(Dock._apps[index]);
                                       },
                                       onLongPress:
                                           desktop.isRunning(Dock._apps[index])
-                                          ? () {
-                                              for (final window in [
-                                                ...desktop.windows,
-                                              ]) {
-                                                if (window.app ==
-                                                    Dock._apps[index]) {
-                                                  desktop.close(window.id);
-                                                }
-                                              }
-                                            }
+                                          ? () => _showAppMenu(
+                                              context,
+                                              desktop,
+                                              Dock._apps[index],
+                                            )
                                           : null,
                                     ),
                                   ),
@@ -342,6 +472,49 @@ class _DockItemState extends State<_DockItem> {
               ),
               const SizedBox(height: 3),
               RunningDot(active: widget.running),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DockMenuItem extends StatelessWidget {
+  const _DockMenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? Sequoia.closeLight : MicroColors.text;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          child: Row(
+            children: [
+              Icon(icon, size: 19, color: color),
+              const SizedBox(width: 14),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ),

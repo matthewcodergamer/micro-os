@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/desktop_input.dart';
 import '../core/opencode_themes.dart';
+import '../core/shell_mode.dart';
 import '../core/terminal_profiles.dart';
 import '../core/wallpapers.dart';
 
@@ -20,6 +21,7 @@ class SettingsStore extends ChangeNotifier {
   static const _kTerminalProfile = 'terminal.profile';
   static const _kDockAutoHide = 'dock.auto_hide';
   static const _kDockVisibility = 'dock.visibility';
+  static const _kShellMode = 'shell.mode';
   static const _kSystemBarsVisible = 'system.bars_visible';
   static const _kUserName = 'user.name';
   static const _kLoginPassword = 'user.lock_password';
@@ -43,6 +45,7 @@ class SettingsStore extends ChangeNotifier {
   bool loginPasswordMigrationPending = false;
   bool systemBarsVisible = false;
   DockVisibilityMode dockVisibilityMode = DockVisibilityMode.automatic;
+  ShellMode shellMode = ShellMode.automatic;
   DesktopPointerMode desktopPointerMode = DesktopPointerMode.trackpad;
   double desktopCursorSpeed = 1.35;
 
@@ -73,6 +76,7 @@ class SettingsStore extends ChangeNotifier {
               : DockVisibilityMode.alwaysVisible)
         : DockVisibilityModeInfo.fromStorage(storedDockVisibility);
     systemBarsVisible = prefs.getBool(_kSystemBarsVisible) ?? false;
+    shellMode = shellModeFromStorage(prefs.getString(_kShellMode));
     wallpaper = prefs.getString(_kWallpaper) ?? kDefaultWallpaperId;
     desktopPointerMode = DesktopPointerModeInfo.fromStorage(
       prefs.getString(_kDesktopPointerMode),
@@ -178,6 +182,14 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kDockVisibility, value.storageValue);
+  }
+
+  Future<void> setShellMode(ShellMode value) async {
+    if (shellMode == value) return;
+    shellMode = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kShellMode, value.storageValue);
   }
 
   Future<void> setOpenCodeTheme(String value) async {
